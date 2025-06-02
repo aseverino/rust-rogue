@@ -3,9 +3,10 @@ use crate::map::{TILE_SIZE, GRID_WIDTH, GRID_HEIGHT, Map};
 use crate::creature::Creature;
 
 pub struct Player {
-    name: String,
+    pub name: String,
     pub x: usize,
     pub y: usize,
+    pub acted: bool,
 }
 
 impl Player {
@@ -14,21 +15,26 @@ impl Player {
             name: "Player".into(),
             x,
             y,
+            acted: false,
         }
     }
 
     pub fn handle_input(&mut self, map: &Map) {
         if is_key_pressed(KeyCode::Right) && self.x < GRID_WIDTH - 1 && map.is_walkable(self.x + 1, self.y) {
             self.x += 1;
+            self.acted = true;
         }
         if is_key_pressed(KeyCode::Left) && self.x > 0 && map.is_walkable(self.x - 1, self.y) {
             self.x -= 1;
+            self.acted = true;
         }
         if is_key_pressed(KeyCode::Down) && self.y < GRID_HEIGHT - 1 && map.is_walkable(self.x, self.y + 1) {
             self.y += 1;
+            self.acted = true;
         }
         if is_key_pressed(KeyCode::Up) && self.y > 0 && map.is_walkable(self.x, self.y - 1) {
             self.y -= 1;
+            self.acted = true;
         }
     }
 }

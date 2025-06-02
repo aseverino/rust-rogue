@@ -15,7 +15,7 @@ pub struct GameState {
 pub async fn run() {
     let monster_types = load_monster_types().await;
     let player = Rc::new(RefCell::new(Player::new(1, 1)));
-    let game = GameState {
+    let mut game = GameState {
         player: player.clone(),
         map: Map::generate(player.clone(), &monster_types),
     };
@@ -26,10 +26,13 @@ pub async fn run() {
         clear_background(BLACK);
 
         // draw_text("OpenRift - Procedural Map", 10.0, 20.0, 30.0, WHITE);
-
-        game.map.draw();
-
+        game.player.borrow_mut().acted = false;
         game.player.borrow_mut().handle_input(&game.map);
+
+        if game.player.borrow().acted {
+            game.map.update_monsters();
+        }
+        game.map.draw();
         //game.player.draw();
 
         next_frame().await;

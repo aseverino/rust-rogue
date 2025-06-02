@@ -12,6 +12,7 @@ use crate::player::Player;
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
 use std::cell::RefCell;
+use pathfinding::prelude::astar;
 
 pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 30;
@@ -28,7 +29,33 @@ pub struct Map {
     pub tiles: Vec<Vec<Tile>>,
     pub walkable: Vec<(usize, usize)>,
     pub player: Rc<RefCell<Player>>,
-    pub monsters: Vec<Rc<Monster>>,
+    pub monsters: Vec<Rc<RefCell<Monster>>>,
+}
+
+pub fn find_path<F>(start: (usize, usize), goal: (usize, usize), is_walkable: F) -> Option<Vec<(usize, usize)>>
+where
+    F: Fn(usize, usize) -> bool,
+{
+    astar (
+        &start,
+        |&(x, y)| {
+            let mut neighbors = Vec::new();
+            for (nx, ny) in [(0isize, -1), (1, 0), (0, 1), (-1, 0)] {
+                let new_x = x as isize + nx;
+                let new_y = y as isize + ny;
+                if new_x >= 0 && new_y >= 0 {
+                    let (ux, uy) = (new_x as usize, new_y as usize);
+                    if is_walkable(ux, uy) {
+                        neighbors.push(((ux, uy), 1)); // 1 = uniform cost
+                    }
+                }
+            }
+            neighbors
+        },
+        |&(x, y)| (goal.0 as isize - x as isize).abs() + (goal.1 as isize - y as isize).abs(),
+        |&pos| pos == goal,
+    )
+    .map(|(path, _)| path)
 }
 
 impl Map {
@@ -80,7 +107,7 @@ impl Map {
         }
 
         for monster in &self.monsters {
-            monster.draw();
+            monster.borrow().draw();
         }
 
         self.player.borrow().draw();
@@ -113,7 +140,28 @@ impl Map {
                 .clone();
 
             // Wrap the monster in Rc and push to creatures
-            self.monsters.push(Rc::new(Monster::new(x, y, kind)));
+            self.monsters.push(Rc::new(RefCell::new(Monster::new(x, y, kind))));
+        }
+    }
+
+    pub fn update_monsters(&mut self) {
+        let player_pos = self.player.borrow().pos();
+        let tiles = &self.tiles; // Extract immutable reference
+
+        for monster in &mut self.monsters {
+            let mut m = monster.borrow_mut();
+            let monster_pos = m.pos();
+
+            let path = find_path(monster_pos, player_pos, |x, y| {
+                x < GRID_WIDTH && y < GRID_HEIGHT && tiles[y][x] == Tile::Floor
+            });
+
+            if let Some(path) = path {
+                if path.len() > 1 {
+                    let next_step = path[1];
+                    m.set_pos(next_step.0, next_step.1);
+                }
+            }
         }
     }
 }

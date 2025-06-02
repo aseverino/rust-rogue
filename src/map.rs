@@ -8,8 +8,10 @@ use std::collections::HashMap;
 use crate::creature::Creature;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
+use crate::player::Player;
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
+use std::cell::RefCell;
 
 pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 30;
@@ -25,14 +27,15 @@ pub enum Tile {
 pub struct Map {
     pub tiles: Vec<Vec<Tile>>,
     pub walkable: Vec<(usize, usize)>,
-    pub creatures: Vec<Rc<dyn Creature>>,
+    pub player: Rc<RefCell<Player>>,
+    pub monsters: Vec<Rc<Monster>>,
 }
 
 impl Map {
-    pub fn generate() -> Self {
+    pub fn generate(player: Rc<RefCell<Player>>, monster_types: &HashMap<String, Rc<MonsterType>>) -> Self {
         let mut rng = thread_rng();
         let mut tiles = vec![vec![Tile::Wall; GRID_WIDTH]; GRID_HEIGHT];
-        let mut walkable: Vec<(usize, usize)> = Vec::new();
+        let mut walkable= Vec::new();
 
         for y in 1..GRID_HEIGHT - 1 {
             for x in 1..GRID_WIDTH - 1 {
@@ -51,7 +54,9 @@ impl Map {
 
         tiles[1][1] = Tile::Floor;
 
-        Self { tiles, walkable }
+        let mut map = Self { tiles, walkable, monsters: Vec::new(), player };
+        map.add_random_monsters(monster_types, 10);
+        map
     }
 
     pub fn draw(&self) {
@@ -73,6 +78,12 @@ impl Map {
                 );
             }
         }
+
+        for monster in &self.monsters {
+            monster.draw();
+        }
+
+        self.player.borrow().draw();
     }
 
     pub fn is_walkable(&self, x: usize, y: usize) -> bool {
@@ -80,10 +91,10 @@ impl Map {
     }
     
     pub(crate) fn add_random_monsters(
-        &self,
+        &mut self,
         monster_types: &HashMap<String, Rc<MonsterType>>,
         count: usize,
-    ) -> Vec<Monster> {
+    ) {
         let mut rng = thread_rng();
 
         let mut positions = self.walkable.clone(); // clone so we can shuffle safely
@@ -95,15 +106,14 @@ impl Map {
 
         let all_types: Vec<_> = monster_types.values().cloned().collect();
 
-        // 5. Create and return the monsters
-        positions
-            .map(|(x, y)| {
+        for (x, y) in positions {
             let kind = all_types
                 .choose(&mut rng)
                 .expect("Monster type list is empty")
                 .clone();
-            Monster::new(x, y, kind)
-        })
-        .collect()
+
+            // Wrap the monster in Rc and push to creatures
+            self.monsters.push(Rc::new(Monster::new(x, y, kind)));
+        }
     }
 }

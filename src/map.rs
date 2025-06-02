@@ -9,7 +9,7 @@ use crate::creature::Creature;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
 use crate::position::Position;
-use crate::player::{Player, Action};
+use crate::player::{Player, KeyboardAction};
 use crate::tile::{Tile, TileKind, NO_CREATURE, PLAYER_CREATURE_ID};
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
@@ -37,6 +37,7 @@ pub struct Map {
     pub walkable_cache: Vec<Position>,
     pub player: Rc<RefCell<Player>>,
     pub monsters: Vec<Rc<RefCell<Monster>>>,
+    pub hovered: Option<Position>,
 }
 
 pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
@@ -109,7 +110,13 @@ impl Map {
 
         tiles[1][1].kind = TileKind::Floor;
 
-        let mut map = Self { tiles, walkable_cache, monsters: Vec::new(), player };
+        let mut map = Self {
+            tiles,
+            walkable_cache,
+            monsters: Vec::new(),
+            player,
+            hovered: None,
+        };
         map.add_random_monsters(monster_types, 10);
         map
     }
@@ -139,6 +146,17 @@ impl Map {
                         TILE_SIZE - 1.0,
                         TILE_SIZE - 1.0,
                         Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+                    );
+                }
+
+                if let Some(pos) = self.hovered {
+                    draw_rectangle_lines(
+                        pos.x as f32 * TILE_SIZE,
+                        pos.y as f32 * TILE_SIZE + 40.0,
+                        TILE_SIZE,
+                        TILE_SIZE,
+                        2.0,
+                        YELLOW,
                     );
                 }
             }
@@ -182,66 +200,87 @@ impl Map {
         }
     }
 
-    pub fn update(&mut self, player_action: Action, player_direction: Direction) {
+    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, player_goal_position: Option<Position>) {
         let player_pos = self.player.borrow().pos();
+        let mut new_player_pos: Option<Position> = None;
 
-        let new_player_pos = match player_action {
-            Action::Move => {
-                let pos = match player_direction {
-                    Direction::Up => (0, -1),
-                    Direction::Right => (1, 0),
-                    Direction::Down => (0, 1),
-                    Direction::Left => (-1, 0),
-                    Direction::UpRight => (1, -1),
-                    Direction::DownRight => (1, 1),
-                    Direction::DownLeft => (-1, 1),
-                    Direction::UpLeft => (-1, -1),
-                    Direction::None => (0, 0),
-                };
-
-                Position {
-                    x: (player_pos.x as isize + pos.0) as usize,
-                    y: (player_pos.y as isize + pos.1) as usize
-                }
-            }
-            Action::Wait => player_pos,
-            _ => player_pos,
-        };
-
-        self.tiles[player_pos.x][player_pos.y].creature = NO_CREATURE;
-        self.tiles[new_player_pos.x][new_player_pos.y].creature = PLAYER_CREATURE_ID;
-
-        self.player.borrow_mut().set_pos(new_player_pos);
-
-        for (i, monster) in self.monsters.iter().enumerate() {
-            let mut m = monster.borrow_mut();
-            let monster_pos = m.pos();
-
-            let path = find_path(monster_pos, new_player_pos, |pos| {
+        if let Some(player_goal) = player_goal_position {
+            let path = find_path(player_pos, player_goal, |pos| {
                 pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
             });
 
             if let Some(path) = path {
                 if path.len() > 1 {
-                    let next_step = path[1];
-
-                    if next_step == new_player_pos {
-                        m.hp -= 1;
-                        println!("Monster {} hit!", m.name());
-                        if m.hp <= 0 {
-                            self.tiles[monster_pos.x][monster_pos.y].creature = NO_CREATURE;
-                            // self.monsters.remove(i);
-                            // todo death
-                        }
-                        continue;
-                    }
-
-                    self.tiles[monster_pos.x][monster_pos.y].creature = NO_CREATURE;
-                    self.tiles[next_step.x][next_step.y].creature = i as i32;
-                    
-                    m.set_pos(next_step);
+                    new_player_pos = Some(path[1]);
                 }
             }
+
+            self.player.borrow_mut().goal_position = player_goal_position;
+        }
+        else {
+            new_player_pos = Some(match player_action {
+                KeyboardAction::Move => {
+                    let pos = match player_direction {
+                        Direction::Up => (0, -1),
+                        Direction::Right => (1, 0),
+                        Direction::Down => (0, 1),
+                        Direction::Left => (-1, 0),
+                        Direction::UpRight => (1, -1),
+                        Direction::DownRight => (1, 1),
+                        Direction::DownLeft => (-1, 1),
+                        Direction::UpLeft => (-1, -1),
+                        Direction::None => (0, 0),
+                    };
+
+                    Position {
+                        x: (player_pos.x as isize + pos.0) as usize,
+                        y: (player_pos.y as isize + pos.1) as usize
+                    }
+                }
+                KeyboardAction::Wait => player_pos,
+                _ => player_pos,
+            });
+            self.player.borrow_mut().goal_position = None;
+        }
+
+        if let Some(new_player_pos) = new_player_pos {
+            self.tiles[player_pos.x][player_pos.y].creature = NO_CREATURE;
+            self.tiles[new_player_pos.x][new_player_pos.y].creature = PLAYER_CREATURE_ID;
+
+            self.player.borrow_mut().set_pos(new_player_pos);
+
+            for (i, monster) in self.monsters.iter().enumerate() {
+                let mut m = monster.borrow_mut();
+                let monster_pos = m.pos();
+
+                let path = find_path(monster_pos, new_player_pos, |pos| {
+                    pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
+                });
+
+                if let Some(path) = path {
+                    if path.len() > 1 {
+                        let next_step = path[1];
+
+                        if next_step == new_player_pos {
+                            m.hp -= 1;
+                            println!("Monster {} hit!", m.name());
+                            if m.hp <= 0 {
+                                self.tiles[monster_pos.x][monster_pos.y].creature = NO_CREATURE;
+                                // self.monsters.remove(i);
+                                // todo death
+                            }
+                            continue;
+                        }
+
+                        self.tiles[monster_pos.x][monster_pos.y].creature = NO_CREATURE;
+                        self.tiles[next_step.x][next_step.y].creature = i as i32;
+                        
+                        m.set_pos(next_step);
+                    }
+                }
+            }
+        } else {
+            return; // No valid move
         }
     }
 }

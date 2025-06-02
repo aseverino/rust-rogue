@@ -5,16 +5,18 @@ use crate::position::Position;
 use crate::map::Direction;
 
 #[derive(PartialEq)]
-pub enum Action {
+pub enum KeyboardAction {
     None,
     Move,
     Wait,
+    Cancel
 }
 
 pub struct Player {
     pub name: String,
     pub position: Position,
-    pub action: Action,
+    pub keyboard_action: KeyboardAction,
+    pub goal_position: Option<Position>,
 }
 
 impl Player {
@@ -25,51 +27,55 @@ impl Player {
                 x,
                 y,
             },
-            action: Action::None,
+            keyboard_action: KeyboardAction::None,
+            goal_position: None,
         }
     }
 
-    pub fn handle_input(&self, map: &Map) -> (Action, Direction) {
-        let mut action = Action::None;
+    pub fn handle_input(&self, map: &Map) -> (KeyboardAction, Direction) {
+        let mut keyboard_action = KeyboardAction::None;
         let mut direction = Direction::None;
 
         if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Kp6)) && self.position.x < GRID_WIDTH - 1 && map.is_walkable(self.position.x + 1, self.position.y) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::Right;
         }
         if (is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Kp4)) && self.position.x > 0 && map.is_walkable(self.position.x - 1, self.position.y) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::Left;
         }
         if (is_key_pressed(KeyCode::Up) || is_key_pressed(KeyCode::Kp8)) && self.position.y > 0 && map.is_walkable(self.position.x, self.position.y - 1) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::Up;
         }
         if (is_key_pressed(KeyCode::Down) || is_key_pressed(KeyCode::Kp2)) && self.position.y < GRID_HEIGHT - 1 && map.is_walkable(self.position.x, self.position.y + 1) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::Down;
         }
         if is_key_pressed(KeyCode::Kp7) && self.position.x > 0 && self.position.y > 0 && map.is_walkable(self.position.x - 1, self.position.y - 1) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::UpLeft;
         }
         if is_key_pressed(KeyCode::Kp9) && self.position.x < GRID_WIDTH - 1 && self.position.y > 0 && map.is_walkable(self.position.x + 1, self.position.y - 1) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::UpRight;
         }
         if is_key_pressed(KeyCode::Kp1) && self.position.x > 0 && self.position.y < GRID_HEIGHT - 1 && map.is_walkable(self.position.x - 1, self.position.y + 1) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::DownLeft;
         }
         if is_key_pressed(KeyCode::Kp3) && self.position.x < GRID_WIDTH - 1 && self.position.y < GRID_HEIGHT - 1 && map.is_walkable(self.position.x + 1, self.position.y + 1) {
-            action = Action::Move;
+            keyboard_action = KeyboardAction::Move;
             direction = Direction::DownRight;
         }
         if is_key_pressed(KeyCode::Kp5) {
-            action = Action::Wait;
+            keyboard_action = KeyboardAction::Wait;
+        }
+        if is_key_pressed(KeyCode::Escape) {
+            keyboard_action = KeyboardAction::Cancel;
         }
 
-        (action, direction)
+        (keyboard_action, direction)
     }
 }
 

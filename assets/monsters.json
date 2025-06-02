@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Goblin",
+    "glyph": "g",
+    "color": [0, 200, 0],
+    "max_hp": 10
+  },
+  {
+    "name": "Orc",
+    "glyph": "o",
+    "color": [0, 100, 0],
+    "max_hp": 20
+  },
+  {
+    "name": "Demon",
+    "glyph": "D",
+    "color": [200, 0, 0],
+    "max_hp": 50
+  }
+]

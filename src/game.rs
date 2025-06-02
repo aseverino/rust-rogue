@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
-use crate::map::{Map, Tile};
-use crate::player::{Player};
+use crate::map::Map;
+use crate::tile::{Tile, TileKind};
+use crate::player::{Action, Player};
 use crate::creature::Creature;
 use crate::monster_type::load_monster_types;
 
@@ -26,11 +27,11 @@ pub async fn run() {
         clear_background(BLACK);
 
         // draw_text("OpenRift - Procedural Map", 10.0, 20.0, 30.0, WHITE);
-        game.player.borrow_mut().acted = false;
-        game.player.borrow_mut().handle_input(&game.map);
+        game.player.borrow_mut().action = Action::None;
+        let (action, direction) = game.player.borrow_mut().handle_input(&game.map);
 
-        if game.player.borrow().acted {
-            game.map.update_monsters();
+        if action != Action::None {
+            game.map.update(action, direction);
         }
         game.map.draw();
         //game.player.draw();

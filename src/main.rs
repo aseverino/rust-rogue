@@ -1,5 +1,7 @@
 mod game;
 mod map;
+mod position;
+mod tile;
 mod creature;
 mod monster_type;
 mod monster;

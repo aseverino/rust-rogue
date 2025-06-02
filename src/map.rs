@@ -36,23 +36,35 @@ pub fn find_path<F>(start: (usize, usize), goal: (usize, usize), is_walkable: F)
 where
     F: Fn(usize, usize) -> bool,
 {
-    astar (
+    astar(
         &start,
         |&(x, y)| {
             let mut neighbors = Vec::new();
-            for (nx, ny) in [(0isize, -1), (1, 0), (0, 1), (-1, 0)] {
-                let new_x = x as isize + nx;
-                let new_y = y as isize + ny;
-                if new_x >= 0 && new_y >= 0 {
-                    let (ux, uy) = (new_x as usize, new_y as usize);
+            let directions = [
+                (0isize, -1), (1, 0), (0, 1), (-1, 0), // cardinal
+                (-1, -1), (1, -1), (1, 1), (-1, 1),    // diagonals
+            ];
+
+            for (dx, dy) in directions {
+                let nx = x as isize + dx;
+                let ny = y as isize + dy;
+                if nx >= 0 && ny >= 0 {
+                    let (ux, uy) = (nx as usize, ny as usize);
                     if is_walkable(ux, uy) {
-                        neighbors.push(((ux, uy), 1)); // 1 = uniform cost
+                        // Diagonal steps have slightly higher cost
+                        let cost = if dx != 0 && dy != 0 { 14 } else { 10 };
+                        neighbors.push(((ux, uy), cost));
                     }
                 }
             }
+
             neighbors
         },
-        |&(x, y)| (goal.0 as isize - x as isize).abs() + (goal.1 as isize - y as isize).abs(),
+        |&(x, y)| {
+            let dx = (goal.0 as isize - x as isize).abs();
+            let dy = (goal.1 as isize - y as isize).abs();
+            10 * (dx + dy) - 6 * dx.min(dy) // diagonal heuristic
+        },
         |&pos| pos == goal,
     )
     .map(|(path, _)| path)

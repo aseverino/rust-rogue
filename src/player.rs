@@ -20,20 +20,43 @@ impl Player {
     }
 
     pub fn handle_input(&mut self, map: &Map) {
-        if is_key_pressed(KeyCode::Right) && self.x < GRID_WIDTH - 1 && map.is_walkable(self.x + 1, self.y) {
+        if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Kp6)) && self.x < GRID_WIDTH - 1 && map.is_walkable(self.x + 1, self.y) {
             self.x += 1;
             self.acted = true;
         }
-        if is_key_pressed(KeyCode::Left) && self.x > 0 && map.is_walkable(self.x - 1, self.y) {
+        if (is_key_pressed(KeyCode::Left) || is_key_pressed(KeyCode::Kp4)) && self.x > 0 && map.is_walkable(self.x - 1, self.y) {
             self.x -= 1;
             self.acted = true;
         }
-        if is_key_pressed(KeyCode::Down) && self.y < GRID_HEIGHT - 1 && map.is_walkable(self.x, self.y + 1) {
+        if (is_key_pressed(KeyCode::Up) || is_key_pressed(KeyCode::Kp8)) && self.y > 0 && map.is_walkable(self.x, self.y - 1) {
+            self.y -= 1;
+            self.acted = true;
+        }
+        if (is_key_pressed(KeyCode::Down) || is_key_pressed(KeyCode::Kp2)) && self.y < GRID_HEIGHT - 1 && map.is_walkable(self.x, self.y + 1) {
             self.y += 1;
             self.acted = true;
         }
-        if is_key_pressed(KeyCode::Up) && self.y > 0 && map.is_walkable(self.x, self.y - 1) {
+        if is_key_pressed(KeyCode::Kp7) && self.x > 0 && self.y > 0 && map.is_walkable(self.x - 1, self.y - 1) {
+            self.x -= 1;
             self.y -= 1;
+            self.acted = true;
+        }
+        if is_key_pressed(KeyCode::Kp9) && self.x < GRID_WIDTH - 1 && self.y > 0 && map.is_walkable(self.x + 1, self.y - 1) {
+            self.x += 1;
+            self.y -= 1;
+            self.acted = true;
+        }
+        if is_key_pressed(KeyCode::Kp1) && self.x > 0 && self.y < GRID_HEIGHT - 1 && map.is_walkable(self.x - 1, self.y + 1) {
+            self.x -= 1;
+            self.y += 1;
+            self.acted = true;
+        }
+        if is_key_pressed(KeyCode::Kp3) && self.x < GRID_WIDTH - 1 && self.y < GRID_HEIGHT - 1 && map.is_walkable(self.x + 1, self.y + 1) {
+            self.x += 1;
+            self.y += 1;
+            self.acted = true;
+        }
+        if is_key_pressed(KeyCode::Kp5) {
             self.acted = true;
         }
     }

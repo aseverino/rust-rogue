@@ -24,8 +24,8 @@ use macroquad::prelude::*;
 use crate::map::{Map, GRID_WIDTH, GRID_HEIGHT, TILE_SIZE};
 use crate::player::{KeyboardAction, Player};
 use crate::position::Position;
-use crate::creature::Creature;
 use crate::monster_type::load_monster_types;
+use macroquad::time::get_time;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -44,6 +44,9 @@ pub async fn run() {
     };
 
     let mut mouse_down_tile: Option<Position> = None;
+    
+    let mut last_move_time = 0.0;
+    let move_interval = 0.15; // seconds between auto steps
 
     loop {
         clear_background(BLACK);
@@ -69,7 +72,7 @@ pub async fn run() {
                 if down_tile == current_tile {
                     // A full click on the same tile — treat as a click!
                     if down_tile.x < GRID_WIDTH && down_tile.y < GRID_HEIGHT
-                        && game.map.is_walkable(down_tile.x, down_tile.y)
+                        && game.map.is_walkable(down_tile.x, down_tile.y) && down_tile != game.player.borrow().position
                     {
                         goal_position = Some(down_tile);
                     }
@@ -81,9 +84,23 @@ pub async fn run() {
         game.player.borrow_mut().keyboard_action = KeyboardAction::None;
         let (keyboard_action, direction) = game.player.borrow_mut().handle_input(&game.map);
 
-        if keyboard_action != KeyboardAction::None || goal_position.is_some() {
+        let mut do_update = false;
+
+        if keyboard_action != KeyboardAction::None {
+            do_update = true;
+        } else if goal_position.is_some() {
+            let now = get_time();
+            if now - last_move_time >= move_interval {
+                do_update = true;
+                last_move_time = now;
+            }
+        }
+
+        if do_update {
+            println!("do_update");
             game.map.update(keyboard_action, direction, goal_position);
         }
+
         game.map.draw();
         //game.player.draw();
 

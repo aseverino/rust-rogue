@@ -235,9 +235,11 @@ impl Map {
                 if path.len() > 1 {
                     new_player_pos = Some(path[1]);
                 }
+                self.player.borrow_mut().goal_position = player_goal_position;
             }
-
-            self.player.borrow_mut().goal_position = player_goal_position;
+            else {
+                self.player.borrow_mut().goal_position = None; // Clear goal if no path found
+            }
         }
         else {
             new_player_pos = Some(match player_action {
@@ -265,17 +267,21 @@ impl Map {
             self.player.borrow_mut().goal_position = None;
         }
 
-        if let Some(new_player_pos) = new_player_pos {
+        if let Some(pos) = new_player_pos {
             self.tiles[player_pos.x][player_pos.y].creature = NO_CREATURE;
-            self.tiles[new_player_pos.x][new_player_pos.y].creature = PLAYER_CREATURE_ID;
+            self.tiles[pos.x][pos.y].creature = PLAYER_CREATURE_ID;
 
-            self.player.borrow_mut().set_pos(new_player_pos);
+            self.player.borrow_mut().set_pos(pos);
+
+            if new_player_pos == self.player.borrow_mut().goal_position {
+                self.player.borrow_mut().goal_position = None; // Clear goal position if reached
+            }
 
             for (i, monster) in self.monsters.iter().enumerate() {
                 let mut m = monster.borrow_mut();
                 let monster_pos = m.pos();
 
-                let path = find_path(monster_pos, new_player_pos, |pos| {
+                let path = find_path(monster_pos, pos, |pos| {
                     pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
                 });
 
@@ -283,7 +289,7 @@ impl Map {
                     if path.len() > 1 {
                         let next_step = path[1];
 
-                        if next_step == new_player_pos {
+                        if next_step == pos {
                             m.hp -= 1;
                             println!("Monster {} hit!", m.name());
                             if m.hp <= 0 {

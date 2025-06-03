@@ -20,7 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+use std::hash::{Hash, Hasher};
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Position {
     pub x: usize,
     pub y: usize,

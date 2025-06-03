@@ -26,7 +26,8 @@ extern crate rand as external_rand;
 use external_rand::Rng;
 use external_rand::thread_rng;
 
-use std::collections::HashMap;
+use std::cmp::max;
+use std::collections::{ HashMap, HashSet };
 use crate::creature::Creature;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
@@ -37,6 +38,8 @@ use external_rand::seq::SliceRandom;
 use std::rc::Rc;
 use std::cell::RefCell;
 use pathfinding::prelude::astar;
+// use fov::FovAlgorithm;
+// use fov::Map as FovMap;
 
 pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 30;
@@ -62,6 +65,7 @@ pub struct Map {
     pub hovered: Option<Position>,
     pub hovered_changed: bool,
     pub selected_spell: Option<usize>,
+    pub line_of_sight: HashSet<Position>,
 }
 
 pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
@@ -107,6 +111,129 @@ where
 }
 
 impl Map {
+    fn is_opaque(&self, x: isize, y: isize) -> bool {
+        if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
+            true // treat out-of-bounds as walls
+        } else {
+            matches!(self.tiles[x as usize][y as usize].kind, TileKind::Wall)
+        }
+    }
+
+    // fn is_opaque(&self, x: isize, y: isize) -> bool {
+    //     println!("oi?");
+    //     if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
+    //         return true;
+    //     }
+
+    //     let opaque = matches!(self.tiles[x as usize][y as usize].kind, TileKind::Wall);
+    //     println!("Checking ({}, {}) -> opaque = {}", x, y, opaque);
+    //     opaque
+    // }
+
+    fn compute_fov(&self, origin: Position, max_radius: usize) -> HashSet<Position> {
+        let mut visible = HashSet::new();
+        visible.insert(origin); // Always see self
+
+        for octant in 0..8 {
+            self.cast_light(
+                &mut visible,
+                origin.x as isize,
+                origin.y as isize,
+                1,
+                1.0,
+                0.0,
+                max_radius as isize,
+                octant,
+            );
+        }
+
+        visible
+    }
+
+    fn cast_light(
+        &self,
+        visible: &mut HashSet<Position>,
+        cx: isize,
+        cy: isize,
+        row: isize,
+        mut start_slope: f64,
+        end_slope: f64,
+        radius: isize,
+        octant: u8,
+    ) {
+        if start_slope < end_slope {
+            return;
+        }
+
+        let mut next_start_slope = start_slope;
+
+        for i in row..=radius {
+            let mut blocked = false;
+            let mut dx = -i;
+            while dx <= 0 {
+                let dy = -i;
+                let (nx, ny) = match octant {
+                    0 => (cx + dx, cy + dy),
+                    1 => (cx + dy, cy + dx),
+                    2 => (cx + dy, cy - dx),
+                    3 => (cx + dx, cy - dy),
+                    4 => (cx - dx, cy - dy),
+                    5 => (cx - dy, cy - dx),
+                    6 => (cx - dy, cy + dx),
+                    7 => (cx - dx, cy + dy),
+                    _ => (cx, cy),
+                };
+
+                let l_slope = (dx as f64 - 0.5) / (dy as f64 + 0.5);
+                let r_slope = (dx as f64 + 0.5) / (dy as f64 - 0.5);
+
+                if r_slope > start_slope {
+                    dx += 1;
+                    continue;
+                } else if l_slope < end_slope {
+                    break;
+                }
+
+                let distance = dx * dx + dy * dy;
+                if nx >= 0 && ny >= 0 && nx < GRID_WIDTH as isize && ny < GRID_HEIGHT as isize {
+                    let is_blocking = self.is_opaque(nx, ny);
+                    
+                    // Only insert tiles that are not opaque
+                    if !is_blocking && distance <= radius * radius {
+                        visible.insert(Position {
+                            x: nx as usize,
+                            y: ny as usize,
+                        });
+                    }
+                }
+
+                if blocked {
+                    if self.is_opaque(nx, ny) {
+                        next_start_slope = r_slope;
+                        dx += 1;
+                        continue;
+                    } else {
+                        blocked = false;
+                        start_slope = next_start_slope;
+                    }
+                } else {
+                    if self.is_opaque(nx, ny) {
+                        blocked = true;
+                        self.cast_light(visible, cx, cy, i + 1, next_start_slope, l_slope, radius, octant);
+                        next_start_slope = r_slope;
+                    }
+                }
+
+                dx += 1;
+            }
+
+            if blocked {
+                break;
+            }
+        }
+    }
+
+
     pub fn generate(player: Rc<RefCell<Player>>, monster_types: &HashMap<String, Rc<MonsterType>>) -> Self {
         let mut rng = thread_rng();
         let mut walkable_cache= Vec::new();
@@ -142,9 +269,66 @@ impl Map {
             hovered: None,
             hovered_changed: false,
             selected_spell: None,
+            line_of_sight: HashSet::new(),
         };
+        map.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
         map.add_random_monsters(monster_types, 10);
         map
+    }
+
+    fn compute_player_fov(&mut self, radius: usize) {
+        let pos = self.player.borrow().pos();
+
+        //let mut visible = HashSet::new();
+        let visible = self.compute_fov(pos, radius);
+
+        println!("Visible positions: {:?}", visible.len());
+
+        self.line_of_sight = visible;
+    }
+
+    fn has_line_of_sight(&self, from: Position, to: Position) -> bool {
+        let mut x0 = from.x as isize;
+        let mut y0 = from.y as isize;
+        let x1 = to.x as isize;
+        let y1 = to.y as isize;
+
+        let dx = (x1 - x0).abs();
+        let dy = -(y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx + dy;
+
+        loop {
+            if x0 == x1 && y0 == y1 {
+                break; // reached target tile
+            }
+
+            // Skip the origin tile
+            if !(x0 == from.x as isize && y0 == from.y as isize) {
+                // Out of bounds safety
+                if x0 < 0 || y0 < 0 || x0 >= GRID_WIDTH as isize || y0 >= GRID_HEIGHT as isize {
+                    return false;
+                }
+
+                let tile = &self.tiles[x0 as usize][y0 as usize];
+                if matches!(tile.kind, TileKind::Wall) {
+                    return false;
+                }
+            }
+
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x0 += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y0 += sy;
+            }
+        }
+
+        true
     }
 
     pub fn draw(&self) {
@@ -179,7 +363,7 @@ impl Map {
                     let player_pos = self.player.borrow().pos();
                     let tile_pos = Position { x, y };
                     if let Some(spell) = self.player.borrow().spells.get(selected_spell) {
-                        if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) {
+                        if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) && self.line_of_sight.contains(&tile_pos) {
                             draw_rectangle(
                                 x as f32 * TILE_SIZE,
                                 y as f32 * TILE_SIZE + 40.0,
@@ -305,6 +489,7 @@ impl Map {
             self.tiles[pos.x][pos.y].creature = PLAYER_CREATURE_ID;
 
             self.player.borrow_mut().set_pos(pos);
+            self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
 
             if new_player_pos == self.player.borrow_mut().goal_position {
                 self.player.borrow_mut().goal_position = None; // Clear goal position if reached
@@ -345,3 +530,20 @@ impl Map {
         }
     }
 }
+
+// impl FovMap for Map {
+//     fn is_opaque(&self, x: i32, y: i32) -> bool {
+//         if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
+//             return true;
+//         }
+//         matches!(self.tiles[x as usize][y as usize].kind, TileKind::Wall)
+//     }
+// }
+
+// pub fn compute_visible_positions(map: &Map, origin: Position, radius: i32) -> Vec<Position> {
+//     let mut visible = Vec::new();
+//     fov::compute_fov(origin.x as i32, origin.y as i32, radius, &*map, |x, y| {
+//         visible.push(Position { x: x as usize, y: y as usize });
+//     });
+//     visible
+// }

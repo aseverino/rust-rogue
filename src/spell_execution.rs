@@ -20,30 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Position {
-    pub x: usize,
-    pub y: usize,
-}
+use crate::spell_type::SpellType;
+use crate::player_spell::PlayerSpell;
+use crate::creature::Creature;
+use crate::position::Position;
 
-impl Position {
-    pub fn new(x: usize, y: usize) -> Self {
-        Self { x, y }
-    }
-
-    pub fn is_valid(&self, width: usize, height: usize) -> bool {
-        self.x < width && self.y < height
-    }
-
-    pub fn distance_to(&self, other: &Position) -> usize {
-        let dx = (self.x as isize - other.x as isize) as f64;
-        let dy = (self.y as isize - other.y as isize) as f64;
-        (dx * dx + dy * dy).sqrt().floor() as usize
-    }
-
-    pub fn in_range(&self, other: &Position, range: usize) -> bool {
-        let dx = (self.x as isize - other.x as isize) as f64;
-        let dy = (self.y as isize - other.y as isize) as f64;
-        (dx * dx + dy * dy).sqrt() <= range as f64
-    }
+pub struct SpellExecution<'a> {
+    pub spell: PlayerSpell,
+    pub caster: &'a dyn Creature,
+    pub target: Position,
 }

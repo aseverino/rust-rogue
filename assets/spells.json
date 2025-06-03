@@ -1,0 +1,13 @@
+[
+  {
+    "index": 0,
+    "name": "Magic Missile",
+    "kind": "Attack",
+    "area_kind": "Missile",
+    "description": "A basic spell that launches a missile at a target.",
+    "max_charges": 25,
+    "range": 12,
+    "basepower": 11,
+    "cost": 1
+  }
+]

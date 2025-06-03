@@ -27,6 +27,9 @@ mod tile;
 mod creature;
 mod monster_type;
 mod monster;
+mod spell_type;
+mod player_spell;
+mod spell_execution;
 mod player;
 use macroquad::prelude::*;
 

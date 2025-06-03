@@ -60,6 +60,8 @@ pub struct Map {
     pub player: Rc<RefCell<Player>>,
     pub monsters: Vec<Rc<RefCell<Monster>>>,
     pub hovered: Option<Position>,
+    pub hovered_changed: bool,
+    pub selected_spell: Option<usize>,
 }
 
 pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
@@ -138,6 +140,8 @@ impl Map {
             monsters: Vec::new(),
             player,
             hovered: None,
+            hovered_changed: false,
+            selected_spell: None,
         };
         map.add_random_monsters(monster_types, 10);
         map
@@ -148,9 +152,9 @@ impl Map {
             for y in 0..GRID_HEIGHT {
                 let tile = &self.tiles[x][y];
                 let color = match tile.kind {
-                    TileKind::Floor => DARKGREEN,
-                    TileKind::Wall => GRAY,
-                    TileKind::Chasm => DARKBLUE,
+                    TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+                    TileKind::Wall => Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
+                    TileKind::Chasm => Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                 };
 
                 draw_rectangle(
@@ -171,7 +175,22 @@ impl Map {
                     );
                 }
 
-                if let Some(pos) = self.hovered {
+                if let Some(selected_spell) = self.selected_spell {
+                    let player_pos = self.player.borrow().pos();
+                    let tile_pos = Position { x, y };
+                    if let Some(spell) = self.player.borrow().spells.get(selected_spell) {
+                        if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) {
+                            draw_rectangle(
+                                x as f32 * TILE_SIZE,
+                                y as f32 * TILE_SIZE + 40.0,
+                                TILE_SIZE - 1.0,
+                                TILE_SIZE - 1.0,
+                                Color { r: 0.0, g: 1.0, b: 0.0, a: 0.2 },
+                            );
+                        }
+                    }
+                }
+                else if let Some(pos) = self.hovered {
                     draw_rectangle_lines(
                         pos.x as f32 * TILE_SIZE,
                         pos.y as f32 * TILE_SIZE + 40.0,
@@ -222,7 +241,7 @@ impl Map {
         }
     }
 
-    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, player_goal_position: Option<Position>) {
+    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
         let player_pos = self.player.borrow().pos();
         let mut new_player_pos: Option<Position> = None;
 
@@ -240,6 +259,20 @@ impl Map {
             else {
                 self.player.borrow_mut().goal_position = None; // Clear goal if no path found
             }
+        }
+        else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
+            if self.player.borrow().spells.len() < spell_action as usize {
+                println!("No spell selected!");
+                return;
+            }
+            let spell = &self.player.borrow().spells[spell_action as usize - 1];
+            // if spell.charges <= 0 {
+            //     println!("No charges left for this spell!");
+            //     return;
+            // }
+            self.selected_spell = Some(spell_action as usize - 1);
+            println!("Spell selected: {}", spell.spell_type.name);
+            return;
         }
         else {
             new_player_pos = Some(match player_action {

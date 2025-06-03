@@ -25,6 +25,7 @@ use crate::map::{Map, GRID_WIDTH, GRID_HEIGHT, TILE_SIZE};
 use crate::player::{KeyboardAction, Player};
 use crate::position::Position;
 use crate::monster_type::load_monster_types;
+use crate::spell_type;
 use macroquad::time::get_time;
 
 use std::rc::Rc;
@@ -36,8 +37,11 @@ pub struct GameState {
 }
 
 pub async fn run() {
+    let spell_types = spell_type::load_spell_types().await;
+    spell_type::set_global_spell_types(spell_types);
+
     let monster_types = load_monster_types().await;
-    let player = Rc::new(RefCell::new(Player::new(1, 1)));
+    let player = Rc::new(RefCell::new(Player::new(Position::new(1, 1))));
     let mut game = GameState {
         player: player.clone(),
         map: Map::generate(player.clone(), &monster_types),
@@ -61,11 +65,20 @@ pub async fn run() {
             mouse_down_tile = Some(current_tile);
         }
 
+        let mut hover_changed = game.map.hovered != Some(current_tile);
+
         if hover_x < GRID_WIDTH && hover_y < GRID_HEIGHT {
             game.map.hovered = Some(current_tile);
         } else {
-            game.map.hovered = None;
+            if game.map.hovered == None {
+                hover_changed = false;
+            }
+            else {
+                game.map.hovered = None;
+            }
         }
+
+        game.map.hovered_changed = hover_changed;
 
         if is_mouse_button_released(MouseButton::Left) {
             if let Some(down_tile) = mouse_down_tile.take() {
@@ -82,7 +95,7 @@ pub async fn run() {
 
         // draw_text("OpenRift - Procedural Map", 10.0, 20.0, 30.0, WHITE);
         game.player.borrow_mut().keyboard_action = KeyboardAction::None;
-        let (keyboard_action, direction) = game.player.borrow_mut().handle_input(&game.map);
+        let (keyboard_action, direction, spell_action) = game.player.borrow_mut().handle_input(&game.map);
 
         let mut do_update = false;
 
@@ -98,7 +111,7 @@ pub async fn run() {
 
         if do_update {
             println!("do_update");
-            game.map.update(keyboard_action, direction, goal_position);
+            game.map.update(keyboard_action, direction, spell_action, goal_position);
         }
 
         game.map.draw();

@@ -25,13 +25,16 @@ use crate::map::{TILE_SIZE, GRID_WIDTH, GRID_HEIGHT, Map};
 use crate::creature::Creature;
 use crate::position::Position;
 use crate::map::Direction;
+use crate::player_spell::PlayerSpell;
+use crate::spell_type;
 
 #[derive(PartialEq)]
 pub enum KeyboardAction {
     None,
     Move,
     Wait,
-    Cancel
+    Cancel,
+    SpellSelect,
 }
 
 pub struct Player {
@@ -39,24 +42,37 @@ pub struct Player {
     pub position: Position,
     pub keyboard_action: KeyboardAction,
     pub goal_position: Option<Position>,
+    pub spells: Vec<PlayerSpell>,
 }
 
 impl Player {
-    pub fn new(x: usize, y: usize) -> Self {
+    pub fn new(pos: Position) -> Self {
+        let first_spell = spell_type::get_spell_types()[0].clone();
+        let mut spells: Vec<PlayerSpell> = Vec::new();
+
+        if let Some(spell) = first_spell {
+            let max_charges = spell.max_charges;
+            spells = vec![
+                PlayerSpell {
+                    spell_type: spell,
+                    charges: max_charges,
+                }
+            ];
+        }
+
         Self {
             name: "Player".into(),
-            position: Position {
-                x,
-                y,
-            },
+            position: pos,
             keyboard_action: KeyboardAction::None,
             goal_position: None,
+            spells: spells,
         }
     }
 
-    pub fn handle_input(&self, map: &Map) -> (KeyboardAction, Direction) {
+    pub fn handle_input(&self, map: &Map) -> (KeyboardAction, Direction, i32) {
         let mut keyboard_action = KeyboardAction::None;
         let mut direction = Direction::None;
+        let mut spell_action = 0;
 
         if (is_key_pressed(KeyCode::Right) || is_key_pressed(KeyCode::Kp6)) && self.position.x < GRID_WIDTH - 1 && map.is_walkable(self.position.x + 1, self.position.y) {
             keyboard_action = KeyboardAction::Move;
@@ -96,8 +112,12 @@ impl Player {
         if is_key_pressed(KeyCode::Escape) {
             keyboard_action = KeyboardAction::Cancel;
         }
+        if is_key_pressed(KeyCode::Key1) {
+            keyboard_action = KeyboardAction::SpellSelect;
+            spell_action = 1;
+        }
 
-        (keyboard_action, direction)
+        (keyboard_action, direction, spell_action)
     }
 }
 

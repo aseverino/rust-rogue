@@ -119,17 +119,6 @@ impl Map {
         }
     }
 
-    // fn is_opaque(&self, x: isize, y: isize) -> bool {
-    //     println!("oi?");
-    //     if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
-    //         return true;
-    //     }
-
-    //     let opaque = matches!(self.tiles[x as usize][y as usize].kind, TileKind::Wall);
-    //     println!("Checking ({}, {}) -> opaque = {}", x, y, opaque);
-    //     opaque
-    // }
-
     fn compute_fov(&self, origin: Position, max_radius: usize) -> HashSet<Position> {
         let mut visible = HashSet::new();
         visible.insert(origin); // Always see self
@@ -277,13 +266,10 @@ impl Map {
     }
 
     fn compute_player_fov(&mut self, radius: usize) {
-        let pos = self.player.borrow().pos();
-
-        //let mut visible = HashSet::new();
+        let pos = {
+            self.player.borrow().pos()
+        };
         let visible = self.compute_fov(pos, radius);
-
-        println!("Visible positions: {:?}", visible.len());
-
         self.line_of_sight = visible;
     }
 
@@ -374,7 +360,8 @@ impl Map {
                         }
                     }
                 }
-                else if let Some(pos) = self.hovered {
+                
+                if let Some(pos) = self.hovered {
                     draw_rectangle_lines(
                         pos.x as f32 * TILE_SIZE,
                         pos.y as f32 * TILE_SIZE + 40.0,
@@ -426,23 +413,42 @@ impl Map {
     }
 
     pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
-        let player_pos = self.player.borrow().pos();
+        let player_pos = {
+            self.player.borrow().pos()
+        };
+
         let mut new_player_pos: Option<Position> = None;
 
         if let Some(player_goal) = player_goal_position {
-            let path = find_path(player_pos, player_goal, |pos| {
-                pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
-            });
-
-            if let Some(path) = path {
-                if path.len() > 1 {
-                    new_player_pos = Some(path[1]);
+            if self.selected_spell.is_some() {
+                let spell = { &mut self.player.borrow_mut().spells[self.selected_spell.unwrap()] };
+                if self.line_of_sight.contains(&player_goal) && player_pos.in_range(&player_goal, spell.spell_type.range as usize) {
+                    // If the player has a spell selected and the goal is in range, we can cast the spell
+                    
+                    if spell.charges > 0 {
+                        // Cast the spell logic here
+                        println!("Casting spell: {}", spell.spell_type.name);
+                        spell.charges -= 1;
+                        // self.do_combat(player_pos, player_goal, spell);
+                    }
                 }
-                self.player.borrow_mut().goal_position = player_goal_position;
             }
             else {
-                self.player.borrow_mut().goal_position = None; // Clear goal if no path found
+                let path = find_path(player_pos, player_goal, |pos| {
+                    pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
+                });
+
+                if let Some(path) = path {
+                    if path.len() > 1 {
+                        new_player_pos = Some(path[1]);
+                    }
+                    self.player.borrow_mut().goal_position = player_goal_position;
+                }
+                else {
+                    self.player.borrow_mut().goal_position = None; // Clear goal if no path found
+                }
             }
+            
         }
         else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
             if self.player.borrow().spells.len() < spell_action as usize {
@@ -489,11 +495,12 @@ impl Map {
             self.tiles[pos.x][pos.y].creature = PLAYER_CREATURE_ID;
 
             self.player.borrow_mut().set_pos(pos);
-            self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
-
+            
             if new_player_pos == self.player.borrow_mut().goal_position {
                 self.player.borrow_mut().goal_position = None; // Clear goal position if reached
             }
+
+            self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
 
             for (i, monster) in self.monsters.iter().enumerate() {
                 let mut m = monster.borrow_mut();

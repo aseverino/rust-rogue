@@ -84,11 +84,11 @@ pub async fn run() {
             if let Some(down_tile) = mouse_down_tile.take() {
                 if down_tile == current_tile {
                     // A full click on the same tile — treat as a click!
-                    if down_tile.x < GRID_WIDTH && down_tile.y < GRID_HEIGHT
-                        && game.map.is_walkable(down_tile.x, down_tile.y) && down_tile != game.player.borrow().position
-                    {
+                    // if down_tile.x < GRID_WIDTH && down_tile.y < GRID_HEIGHT
+                        // && game.map.is_walkable(down_tile.x, down_tile.y) && down_tile != game.player.borrow().position
+                    // {
                         goal_position = Some(down_tile);
-                    }
+                    // }
                 }
             }
         }
@@ -102,10 +102,14 @@ pub async fn run() {
         if keyboard_action != KeyboardAction::None {
             do_update = true;
         } else if goal_position.is_some() {
-            let now = get_time();
-            if now - last_move_time >= move_interval {
+            if game.map.selected_spell.is_some() {
                 do_update = true;
-                last_move_time = now;
+            } else {
+                let now = get_time();
+                if now - last_move_time >= move_interval {
+                    do_update = true;
+                    last_move_time = now;
+                }
             }
         }
 

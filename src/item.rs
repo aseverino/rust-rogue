@@ -20,36 +20,58 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::item::*;
+use crate::map::Map;
 
-pub const NO_CREATURE: i32 = -1;
-pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
+// pub enum ItemType {
+//     Portal,
+//     Orb,
+//     Consumable,
+//     Chest,
+//     Health,
+// }
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum TileKind {
-    Chasm,
-    Wall,
-    Floor,
+pub trait Item {
+   fn pickup(&self); 
 }
 
 #[derive(Clone)]
-pub struct Tile {
-    pub kind: TileKind,
-    pub creature: i32, // Index of creatures on this tile
-    pub item: Option<ItemKind>
+pub enum ItemKind {
+    Orb(Orb),
+    Portal(Portal),
 }
 
-impl Tile {
-    pub fn new(kind: TileKind) -> Self {
-        Self { kind, creature: NO_CREATURE, item: None }
+impl Item for ItemKind {
+    fn pickup(&self) {
+        match self {
+            ItemKind::Orb(orb) => orb.pickup(),
+            ItemKind::Portal(portal) => portal.pickup(),
+        }
     }
+}
 
-    pub fn is_walkable(&self) -> bool {
-        self.kind == TileKind::Floor && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
+#[derive(Clone)]
+pub struct Orb {
+    //
+}
+
+impl Item for Orb {
+    fn pickup(&self) {
+        //ItemType::Orb
     }
+}
 
-    pub fn add_orb(&mut self) {
-        let orb = Orb {};
-        self.item = Some(ItemKind::Orb(orb));
+// pub trait Consumable: Item {
+//     fn use_item(&mut self);
+// }
+
+#[derive(Clone)]
+pub struct Portal {
+    // pub destination: Option<Map>,
+    pub active: bool,
+}
+
+impl Item for Portal {
+    fn pickup(&self) {
+        //ItemType::Orb
     }
 }

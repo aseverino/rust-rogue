@@ -23,6 +23,7 @@
 mod input;
 mod ui;
 mod game;
+mod item;
 mod map;
 mod map_generator;
 mod position;

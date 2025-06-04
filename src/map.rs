@@ -140,6 +140,10 @@ impl Map {
         (self.player.hp, self.player.max_hp)
     }
 
+    pub fn get_player_sp(&self) -> u32 {
+        self.player.spell_points
+    }
+
     pub async fn init(&mut self) {
         self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
         let monster_types = load_monster_types().await;

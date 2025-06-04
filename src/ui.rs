@@ -25,6 +25,7 @@ use macroquad::prelude::*;
 pub struct Ui {
     player_hp: i32,
     player_max_hp: i32,
+    player_sp: u32,
 }
 
 impl Ui {
@@ -32,12 +33,17 @@ impl Ui {
         Ui {
             player_hp: 0,
             player_max_hp: 0,
+            player_sp: 0,
         }
     }
 
     pub fn set_player_hp(&mut self, hp: i32, max_hp: i32) {
         self.player_hp = hp;
         self.player_max_hp = max_hp;
+    }
+
+    pub fn set_player_sp(&mut self, sp: u32) {
+        self.player_sp = sp;
     }
 
     pub fn set_last_action(&mut self, _action: &str) {
@@ -75,7 +81,7 @@ impl Ui {
         draw_text(&text,offset.0,offset.1,30.0,YELLOW);
         text_offset = start_of_health;
 
-        text = "0".to_string();
+        text = format!("{}", self.player_sp);
         draw_text(&text,text_offset,offset.1,30.0,YELLOW);
 
         draw_rectangle_lines(

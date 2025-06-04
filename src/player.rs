@@ -31,6 +31,7 @@ use std::collections::HashSet;
 pub struct Player {
     pub hp: i32,
     pub max_hp: i32,
+    pub spell_points: u32,
     pub position: Position,
     pub goal_position: Option<Position>,
     pub spells: Vec<PlayerSpell>,
@@ -56,6 +57,7 @@ impl Player {
         Self {
             hp: 50,
             max_hp: 50,
+            spell_points: 1,
             position: pos,
             goal_position: None,
             spells: spells,

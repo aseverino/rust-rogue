@@ -504,30 +504,34 @@ impl Map {
             self.player.goal_position = None; // Clear goal position
             return true;
         }
-        else if player_action == KeyboardAction::Move || player_action == KeyboardAction::Wait {
-            new_player_pos = Some(match player_action {
-                KeyboardAction::Move => {
-                    let pos = match player_direction {
-                        Direction::Up => (0, -1),
-                        Direction::Right => (1, 0),
-                        Direction::Down => (0, 1),
-                        Direction::Left => (-1, 0),
-                        Direction::UpRight => (1, -1),
-                        Direction::DownRight => (1, 1),
-                        Direction::DownLeft => (-1, 1),
-                        Direction::UpLeft => (-1, -1),
-                        Direction::None => (0, 0),
-                    };
+        else if player_action == KeyboardAction::Move {
+            let pos_change = match player_direction {
+                Direction::Up => (0, -1),
+                Direction::Right => (1, 0),
+                Direction::Down => (0, 1),
+                Direction::Left => (-1, 0),
+                Direction::UpRight => (1, -1),
+                Direction::DownRight => (1, 1),
+                Direction::DownLeft => (-1, 1),
+                Direction::UpLeft => (-1, -1),
+                Direction::None => (0, 0),
+            };
 
-                    Position {
-                        x: (player_pos.x as isize + pos.0) as usize,
-                        y: (player_pos.y as isize + pos.1) as usize
-                    }
-                }
-                KeyboardAction::Wait => player_pos,
-                _ => player_pos,
-            });
+            let pos = Position {
+                x: (player_pos.x as isize + pos_change.0) as usize,
+                y: (player_pos.y as isize + pos_change.1) as usize
+            };
+
+            if self.is_tile_walkable(pos) {
+                new_player_pos = Some(pos);
+                update_monsters = true; // Update monsters if player moves
+            }
+
             self.player.goal_position = None;
+        }
+        else if player_action == KeyboardAction::Wait {
+            new_player_pos = Some(player_pos); // Stay in place
+            self.player.goal_position = None; // Clear goal position
         }
 
         if let Some(pos) = new_player_pos {

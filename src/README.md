@@ -1,0 +1,1 @@
+OpenRift is a free open-source classic roguelike loosely based on Rift Wizard.

@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
-use crate::map::{Map, GRID_WIDTH, GRID_HEIGHT, TILE_SIZE};
+use crate::map::{Map, TILE_SIZE, PlayerEvent};
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
@@ -46,12 +46,20 @@ pub async fn run() {
         map: Map::generate(player, &monster_types),
     };
     
-    // let mut last_move_time = 0.0;
-    // let move_interval = 0.15; // seconds between auto steps
+    let mut last_move_time = 0.0;
+    let move_interval = 0.15; // seconds between auto steps
+    let mut goal_position: Option<Position> = None;
 
     loop {
-        let input = Input::poll();
+        let now = get_time();
+        if now - last_move_time < move_interval {
+            // If the last move was too recent, skip this frame
+            game.map.draw();
+            next_frame().await;
+            continue;
+        }
         clear_background(BLACK);
+        let input = Input::poll();
 
         let mouse_pos = input.mouse;
         let hover_x = (mouse_pos.0 / TILE_SIZE) as usize;
@@ -61,30 +69,16 @@ pub async fn run() {
         game.map.hovered_changed = game.map.hovered != Some(current_tile);
         game.map.hovered = Some(current_tile);
 
-        let goal_position = if let Some(_click) = input.click {
-            Some(current_tile)
-        } else {
-            None
+        if let Some(_click) = input.click {
+            goal_position = Some(current_tile)
         };
 
-        // let mut do_update = false;
+        game.map.update(input.keyboard_action, input.direction, input.spell, goal_position);
 
-        // if input.keyboard_action != KeyboardAction::None {
-        //     do_update = true;
-        // } else if goal_position.is_some() {
-        //     if game.player.borrow().selected_spell.is_some() {
-        //         do_update = true;
-        //     } else {
-        //         let now = get_time();
-        //         if now - last_move_time >= move_interval {
-        //             do_update = true;
-        //             last_move_time = now;
-        //         }
-        //     }
-        // }
-
-        if game.map.update(input.keyboard_action, input.direction, input.spell, goal_position) {
-            //
+        if game.map.last_player_event == Some(PlayerEvent::AutoMove) {
+            last_move_time = now; // Update last move time for auto step
+        } else {
+            goal_position = None;
         }
 
         game.map.draw();

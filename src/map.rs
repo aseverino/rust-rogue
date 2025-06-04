@@ -49,6 +49,17 @@ pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 30;
 pub const GRID_HEIGHT: usize = 20;
 
+#[derive(PartialEq)]
+pub enum PlayerEvent {
+    Move,
+    AutoMove,
+    AutoMoveEnd,
+    Wait,
+    Cancel,
+    SpellSelect,
+    SpellCast,
+}
+
 pub struct Map {
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
@@ -56,6 +67,7 @@ pub struct Map {
     pub monsters: Vec<Monster>,
     pub hovered: Option<Position>,
     pub hovered_changed: bool,
+    pub last_player_event: Option<PlayerEvent>,
 }
 
 pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
@@ -247,6 +259,7 @@ impl Map {
             player,
             hovered: None,
             hovered_changed: false,
+            last_player_event: None,
         };
 
         map.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
@@ -424,7 +437,8 @@ impl Map {
         }
     }
 
-    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) -> bool {
+    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
+        self.last_player_event = None;
         let player_pos = {
             self.player.position
         };
@@ -466,6 +480,7 @@ impl Map {
 
                 self.player.selected_spell = None;
                 self.player.goal_position = None; // Clear goal position
+                self.last_player_event = Some(PlayerEvent::SpellCast);
             }
             else {
                 let path = find_path(player_pos, player_goal, |pos| {
@@ -475,12 +490,19 @@ impl Map {
                 if let Some(path) = path {
                     if path.len() > 1 {
                         new_player_pos = Some(path[1]);
+                        self.last_player_event = Some(PlayerEvent::AutoMove);
+                    }
+                    else {
+                        self.last_player_event = Some(PlayerEvent::AutoMoveEnd);
                     }
                     self.player.goal_position = player_goal_position;
                 }
                 else {
                     self.player.goal_position = None; // Clear goal if no path found
+                    self.last_player_event = Some(PlayerEvent::AutoMoveEnd);
                 }
+
+                
             }
             
         }
@@ -493,16 +515,17 @@ impl Map {
             if let Some(name) = spell_name {
                 self.player.selected_spell = Some(index);
                 println!("Spell selected: {}", name);
-                return true;
             } else {
                 println!("No spell selected!");
-                return false;
             }
+
+            self.last_player_event = Some(PlayerEvent::SpellSelect);
         }
         else if player_action == KeyboardAction::Cancel {
             self.player.selected_spell = None;
             self.player.goal_position = None; // Clear goal position
-            return true;
+
+            self.last_player_event = Some(PlayerEvent::Cancel);
         }
         else if player_action == KeyboardAction::Move {
             let pos_change = match player_direction {
@@ -528,10 +551,13 @@ impl Map {
             }
 
             self.player.goal_position = None;
+            self.last_player_event = Some(PlayerEvent::Move);
         }
         else if player_action == KeyboardAction::Wait {
             new_player_pos = Some(player_pos); // Stay in place
             self.player.goal_position = None; // Clear goal position
+
+            self.last_player_event = Some(PlayerEvent::Wait);
         }
 
         if let Some(pos) = new_player_pos {
@@ -582,8 +608,6 @@ impl Map {
                 }
             }
         }
-
-        true
     }
 }
 

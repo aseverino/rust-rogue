@@ -324,16 +324,6 @@ impl Map {
                     color,
                 );
 
-                if self.tiles[Position::new(x, y)].creature != NO_CREATURE {
-                        draw_rectangle(
-                        x as f32 * TILE_SIZE,
-                        y as f32 * TILE_SIZE + 40.0,
-                        TILE_SIZE - 1.0,
-                        TILE_SIZE - 1.0,
-                        Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
-                    );
-                }
-
                 if let Some(selected_spell) = { self.player.selected_spell } {
                     let player_pos = self.player.pos();
                     let tile_pos = Position { x, y };
@@ -419,7 +409,7 @@ impl Map {
             return;
         }
 
-        let mut target = self.monsters.get_mut(target_creature as usize)
+        let target = self.monsters.get_mut(target_creature as usize)
             .expect("Target creature not found");
         target.hp -= damage;
         println!("{} takes {} damage!", target.name(), damage);
@@ -459,9 +449,12 @@ impl Map {
                 if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
                     if let Some(spell) = self.player.spells.get_mut(index) {
                         if spell.charges > 0 {
-                            println!("Casting spell");
                             spell.charges -= 1;
+                            println!("Casting spell charges {}", spell.charges);
                             should_cast = true;
+                        }
+                        else {
+                            println!("No charges left for this spell!");
                         }
                     }
                 }
@@ -470,6 +463,9 @@ impl Map {
                     self.do_combat(player_pos, player_goal, index);
                     update_monsters = true;
                 }
+
+                self.player.selected_spell = None;
+                self.player.goal_position = None; // Clear goal position
             }
             else {
                 let path = find_path(player_pos, player_goal, |pos| {
@@ -502,6 +498,11 @@ impl Map {
                 println!("No spell selected!");
                 return false;
             }
+        }
+        else if player_action == KeyboardAction::Cancel {
+            self.player.selected_spell = None;
+            self.player.goal_position = None; // Clear goal position
+            return true;
         }
         else if player_action == KeyboardAction::Move || player_action == KeyboardAction::Wait {
             new_player_pos = Some(match player_action {
@@ -545,6 +546,9 @@ impl Map {
 
         if update_monsters {
             for (i, monster) in self.monsters.iter_mut().enumerate() {
+                if monster.hp <= 0 {
+                    continue; // Skip dead monsters
+                }
                 let monster_pos = monster.pos();
 
                 let path = find_path(monster_pos, self.player.position, |pos| {

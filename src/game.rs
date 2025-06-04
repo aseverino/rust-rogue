@@ -34,7 +34,6 @@ use std::cell::RefCell;
 
 pub struct GameState {
     pub map: Map,
-    pub player: Rc<RefCell<Player>>,
 }
 
 pub async fn run() {
@@ -42,10 +41,9 @@ pub async fn run() {
     spell_type::set_global_spell_types(spell_types);
 
     let monster_types = load_monster_types().await;
-    let player = Rc::new(RefCell::new(Player::new(Position::new(1, 1))));
+    let player = Player::new(Position::new(1, 1));
     let mut game = GameState {
-        player: player.clone(),
-        map: Map::generate(player.clone(), &monster_types),
+        map: Map::generate(player, &monster_types),
     };
     
     // let mut last_move_time = 0.0;

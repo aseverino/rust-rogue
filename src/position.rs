@@ -20,7 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash};
+
+#[derive(Clone)]
+pub enum Direction {
+    Up,
+    Right,
+    Down,
+    Left,
+    UpRight,
+    DownRight,
+    DownLeft,
+    UpLeft,
+    None,
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Position {
@@ -48,4 +61,50 @@ impl Position {
         let dy = (self.y as isize - other.y as isize) as f64;
         (dx * dx + dy * dy).sqrt() <= range as f64
     }
+    pub fn north(&self) -> Option<Self> {
+        if self.y == 0 {
+            None
+        } else {
+            Some(Self { x: self.x, y: self.y - 1 })
+        }
+    }
+    pub fn east(&self) -> Self {
+        Self { x: self.x + 1, y: self.y }
+    }
+    pub fn south(&self) -> Self {
+        Self { x: self.x, y: self.y + 1 }
+    }
+    pub fn west(&self) -> Option<Self> {
+        if self.x == 0 {
+            None
+        } else {
+            Some(Self { x: self.x - 1, y: self.y })
+        }
+    }
+    pub fn north_east(&self) -> Option<Self> {
+        if self.x == 0 {
+            None
+        } else {
+            Some(Self { x: self.x - 1, y: self.y - 1 })
+        }
+    }
+    pub fn south_east(&self) -> Self {
+        Self { x: self.x + 1, y: self.y + 1 }
+    }
+    pub fn south_west(&self) -> Option<Self> {
+        if self.y == 0 {
+            None
+        } else {
+            Some(Self { x: self.x - 1, y: self.y + 1 })
+        }
+    }
+    pub fn north_west(&self) -> Option<Self> {
+        if self.x == 0 || self.y == 0 {
+            None
+        } else {
+            Some(Self { x: self.x - 1, y: self.y - 1 })
+        }
+    }
 }
+
+pub static POSITION_INVALID: Position = Position { x: usize::MAX, y: usize::MAX };

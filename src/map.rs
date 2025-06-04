@@ -31,13 +31,16 @@ use std::collections::{ HashMap, HashSet };
 use crate::creature::Creature;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
-use crate::position::Position;
-use crate::player::{Player, KeyboardAction};
+use crate::position::{ Position, Direction };
+use crate::input::KeyboardAction;
+use crate::player::Player;
 use crate::tile::{Tile, TileKind, NO_CREATURE, PLAYER_CREATURE_ID};
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
 use std::cell::RefCell;
 use pathfinding::prelude::astar;
+use crate::tile_map::TileMap;
+
 // use fov::FovAlgorithm;
 // use fov::Map as FovMap;
 
@@ -45,27 +48,13 @@ pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 30;
 pub const GRID_HEIGHT: usize = 20;
 
-pub enum Direction {
-    Up,
-    Right,
-    Down,
-    Left,
-    UpRight,
-    DownRight,
-    DownLeft,
-    UpLeft,
-    None,
-}
-
 pub struct Map {
-    pub tiles: Vec<Vec<Tile>>,
+    pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
     pub player: Rc<RefCell<Player>>,
     pub monsters: Vec<Rc<RefCell<Monster>>>,
     pub hovered: Option<Position>,
     pub hovered_changed: bool,
-    pub selected_spell: Option<usize>,
-    pub line_of_sight: HashSet<Position>,
 }
 
 pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
@@ -115,7 +104,7 @@ impl Map {
         if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
             true // treat out-of-bounds as walls
         } else {
-            matches!(self.tiles[x as usize][y as usize].kind, TileKind::Wall)
+            matches!(self.tiles[Position::new(x as usize, y as usize)].kind, TileKind::Wall)
         }
     }
 
@@ -243,7 +232,7 @@ impl Map {
                 if kind == TileKind::Floor {
                     walkable_cache.push(pos);
                 }
-                column.push(Tile::new(pos, kind));
+                column.push(Tile::new(kind));
             }
             tiles.push(column);
         }
@@ -251,15 +240,14 @@ impl Map {
         tiles[1][1].kind = TileKind::Floor;
 
         let mut map = Self {
-            tiles,
+            tiles: TileMap::new(tiles),
             walkable_cache,
             monsters: Vec::new(),
             player,
             hovered: None,
             hovered_changed: false,
-            selected_spell: None,
-            line_of_sight: HashSet::new(),
         };
+
         map.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
         map.add_random_monsters(monster_types, 10);
         map
@@ -270,7 +258,7 @@ impl Map {
             self.player.borrow().pos()
         };
         let visible = self.compute_fov(pos, radius);
-        self.line_of_sight = visible;
+        self.player.borrow_mut().line_of_sight = visible;
     }
 
     fn has_line_of_sight(&self, from: Position, to: Position) -> bool {
@@ -297,7 +285,7 @@ impl Map {
                     return false;
                 }
 
-                let tile = &self.tiles[x0 as usize][y0 as usize];
+                let tile = &self.tiles[Position::new(x0 as usize, y0 as usize)];
                 if matches!(tile.kind, TileKind::Wall) {
                     return false;
                 }
@@ -320,7 +308,7 @@ impl Map {
     pub fn draw(&self) {
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
-                let tile = &self.tiles[x][y];
+                let tile = &self.tiles[Position::new(x, y)];
                 let color = match tile.kind {
                     TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
                     TileKind::Wall => Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
@@ -335,7 +323,7 @@ impl Map {
                     color,
                 );
 
-                if self.tiles[x][y].creature != NO_CREATURE {
+                if self.tiles[Position::new(x, y)].creature != NO_CREATURE {
                         draw_rectangle(
                         x as f32 * TILE_SIZE,
                         y as f32 * TILE_SIZE + 40.0,
@@ -345,11 +333,12 @@ impl Map {
                     );
                 }
 
-                if let Some(selected_spell) = self.selected_spell {
+                if let Some(selected_spell) = { self.player.borrow().selected_spell } {
                     let player_pos = self.player.borrow().pos();
                     let tile_pos = Position { x, y };
                     if let Some(spell) = self.player.borrow().spells.get(selected_spell) {
-                        if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) && self.line_of_sight.contains(&tile_pos) {
+                        if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) &&
+                        self.player.borrow().line_of_sight.contains(&tile_pos) {
                             draw_rectangle(
                                 x as f32 * TILE_SIZE,
                                 y as f32 * TILE_SIZE + 40.0,
@@ -381,8 +370,8 @@ impl Map {
         self.player.borrow().draw();
     }
 
-    pub fn is_walkable(&self, x: usize, y: usize) -> bool {
-        x < GRID_WIDTH && y < GRID_HEIGHT && self.tiles[x][y].is_walkable()
+    pub fn is_tile_walkable(&self, pos: Position) -> bool {
+        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
     }
     
     pub(crate) fn add_random_monsters(
@@ -412,30 +401,37 @@ impl Map {
         }
     }
 
-    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
+    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) -> bool {
         let player_pos = {
-            self.player.borrow().pos()
+            self.player.borrow().position
         };
 
         let mut new_player_pos: Option<Position> = None;
 
         if let Some(player_goal) = player_goal_position {
-            if self.selected_spell.is_some() {
-                let spell = { &mut self.player.borrow_mut().spells[self.selected_spell.unwrap()] };
-                if self.line_of_sight.contains(&player_goal) && player_pos.in_range(&player_goal, spell.spell_type.range as usize) {
-                    // If the player has a spell selected and the goal is in range, we can cast the spell
-                    
-                    if spell.charges > 0 {
-                        // Cast the spell logic here
-                        println!("Casting spell: {}", spell.spell_type.name);
-                        spell.charges -= 1;
-                        // self.do_combat(player_pos, player_goal, spell);
+            let spell_index = { self.player.borrow().selected_spell };
+
+            if let Some(index) = spell_index {
+                let (in_line_of_sight, spell_range) = {
+                    let player = self.player.borrow();
+                    let spell = player.spells.get(index).expect("Selected spell index out of bounds");
+                    (player.line_of_sight.contains(&player_goal), spell.spell_type.range)
+                };
+
+                if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
+                    let mut player = self.player.borrow_mut();
+                    if let Some(spell) = player.spells.get_mut(index) {
+                        if spell.charges > 0 {
+                            println!("Casting spell");
+                            spell.charges -= 1;
+                            // self.do_combat(player_pos, player_goal, spell);
+                        }
                     }
                 }
             }
             else {
                 let path = find_path(player_pos, player_goal, |pos| {
-                    pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
+                    self.is_tile_walkable(pos)
                 });
 
                 if let Some(path) = path {
@@ -451,20 +447,23 @@ impl Map {
             
         }
         else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
-            if self.player.borrow().spells.len() < spell_action as usize {
+            let index = spell_action as usize - 1;
+
+            let spell_name = {
+                let player = self.player.borrow();
+                player.spells.get(index).map(|spell| spell.spell_type.name.clone())
+            };
+            if let Some(name) = spell_name {
+                let mut player = self.player.borrow_mut();
+                player.selected_spell = Some(index);
+                println!("Spell selected: {}", name);
+                return true;
+            } else {
                 println!("No spell selected!");
-                return;
+                return false;
             }
-            let spell = &self.player.borrow().spells[spell_action as usize - 1];
-            // if spell.charges <= 0 {
-            //     println!("No charges left for this spell!");
-            //     return;
-            // }
-            self.selected_spell = Some(spell_action as usize - 1);
-            println!("Spell selected: {}", spell.spell_type.name);
-            return;
         }
-        else {
+        else if player_action == KeyboardAction::Move || player_action == KeyboardAction::Wait {
             new_player_pos = Some(match player_action {
                 KeyboardAction::Move => {
                     let pos = match player_direction {
@@ -491,8 +490,8 @@ impl Map {
         }
 
         if let Some(pos) = new_player_pos {
-            self.tiles[player_pos.x][player_pos.y].creature = NO_CREATURE;
-            self.tiles[pos.x][pos.y].creature = PLAYER_CREATURE_ID;
+            self.tiles[player_pos].creature = NO_CREATURE;
+            self.tiles[pos].creature = PLAYER_CREATURE_ID;
 
             self.player.borrow_mut().set_pos(pos);
             
@@ -507,7 +506,7 @@ impl Map {
                 let monster_pos = m.pos();
 
                 let path = find_path(monster_pos, pos, |pos| {
-                    pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos.x][pos.y].is_walkable()
+                    pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
                 });
 
                 if let Some(path) = path {
@@ -518,22 +517,23 @@ impl Map {
                             m.hp -= 1;
                             println!("Monster {} hit!", m.name());
                             if m.hp <= 0 {
-                                self.tiles[monster_pos.x][monster_pos.y].creature = NO_CREATURE;
+                                self.tiles[monster_pos].creature = NO_CREATURE;
                                 // self.monsters.remove(i);
                                 // todo death
                             }
                             continue;
                         }
 
-                        self.tiles[monster_pos.x][monster_pos.y].creature = NO_CREATURE;
-                        self.tiles[next_step.x][next_step.y].creature = i as i32;
+                        self.tiles[monster_pos].creature = NO_CREATURE;
+                        self.tiles[next_step].creature = i as i32;
                         
                         m.set_pos(next_step);
                     }
                 }
             }
+            return true;
         } else {
-            return; // No valid move
+            return false; // No valid move
         }
     }
 }

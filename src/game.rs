@@ -22,7 +22,8 @@
 
 use macroquad::prelude::*;
 use crate::map::{Map, GRID_WIDTH, GRID_HEIGHT, TILE_SIZE};
-use crate::player::{KeyboardAction, Player};
+use crate::player::Player;
+use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
 use crate::monster_type::load_monster_types;
 use crate::spell_type;
@@ -46,80 +47,49 @@ pub async fn run() {
         player: player.clone(),
         map: Map::generate(player.clone(), &monster_types),
     };
-
-    let mut mouse_down_tile: Option<Position> = None;
     
-    let mut last_move_time = 0.0;
-    let move_interval = 0.15; // seconds between auto steps
+    // let mut last_move_time = 0.0;
+    // let move_interval = 0.15; // seconds between auto steps
 
     loop {
+        let input = Input::poll();
         clear_background(BLACK);
 
-        let mouse_pos = mouse_position();
+        let mouse_pos = input.mouse;
         let hover_x = (mouse_pos.0 / TILE_SIZE) as usize;
         let hover_y = ((mouse_pos.1 - 40.0) / TILE_SIZE) as usize;
         let current_tile = Position { x: hover_x, y: hover_y };
-        let mut goal_position = game.player.borrow().goal_position;
 
-        if is_mouse_button_pressed(MouseButton::Left) {
-            mouse_down_tile = Some(current_tile);
-        }
+        game.map.hovered_changed = game.map.hovered != Some(current_tile);
+        game.map.hovered = Some(current_tile);
 
-        let mut hover_changed = game.map.hovered != Some(current_tile);
-
-        if hover_x < GRID_WIDTH && hover_y < GRID_HEIGHT {
-            game.map.hovered = Some(current_tile);
+        let goal_position = if let Some(_click) = input.click {
+            Some(current_tile)
         } else {
-            if game.map.hovered == None {
-                hover_changed = false;
-            }
-            else {
-                game.map.hovered = None;
-            }
-        }
+            None
+        };
 
-        game.map.hovered_changed = hover_changed;
+        // let mut do_update = false;
 
-        if is_mouse_button_released(MouseButton::Left) {
-            if let Some(down_tile) = mouse_down_tile.take() {
-                if down_tile == current_tile {
-                    // A full click on the same tile — treat as a click!
-                    // if down_tile.x < GRID_WIDTH && down_tile.y < GRID_HEIGHT
-                        // && game.map.is_walkable(down_tile.x, down_tile.y) && down_tile != game.player.borrow().position
-                    // {
-                        goal_position = Some(down_tile);
-                    // }
-                }
-            }
-        }
+        // if input.keyboard_action != KeyboardAction::None {
+        //     do_update = true;
+        // } else if goal_position.is_some() {
+        //     if game.player.borrow().selected_spell.is_some() {
+        //         do_update = true;
+        //     } else {
+        //         let now = get_time();
+        //         if now - last_move_time >= move_interval {
+        //             do_update = true;
+        //             last_move_time = now;
+        //         }
+        //     }
+        // }
 
-        // draw_text("OpenRift - Procedural Map", 10.0, 20.0, 30.0, WHITE);
-        game.player.borrow_mut().keyboard_action = KeyboardAction::None;
-        let (keyboard_action, direction, spell_action) = game.player.borrow_mut().handle_input(&game.map);
-
-        let mut do_update = false;
-
-        if keyboard_action != KeyboardAction::None {
-            do_update = true;
-        } else if goal_position.is_some() {
-            if game.map.selected_spell.is_some() {
-                do_update = true;
-            } else {
-                let now = get_time();
-                if now - last_move_time >= move_interval {
-                    do_update = true;
-                    last_move_time = now;
-                }
-            }
-        }
-
-        if do_update {
-            println!("do_update");
-            game.map.update(keyboard_action, direction, spell_action, goal_position);
+        if game.map.update(input.keyboard_action, input.direction, input.spell, goal_position) {
+            //
         }
 
         game.map.draw();
-        //game.player.draw();
 
         next_frame().await;
     }

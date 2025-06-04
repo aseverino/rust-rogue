@@ -20,30 +20,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::tile::Tile;
 use crate::position::Position;
+use std::ops::{Index, IndexMut};
 
-pub const NO_CREATURE: i32 = -1;
-pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum TileKind {
-    Chasm,
-    Wall,
-    Floor,
+pub struct TileMap {
+    tiles: Vec<Vec<Tile>>,
 }
 
-#[derive(Clone)]
-pub struct Tile {
-    pub kind: TileKind,
-    pub creature: i32, // Index of creatures on this tile
-}
-
-impl Tile {
-    pub fn new(kind: TileKind) -> Self {
-        Self { kind, creature: NO_CREATURE }
+impl TileMap {
+    pub fn new(tiles: Vec<Vec<Tile>>) -> Self {
+        Self { tiles }
     }
 
-    pub fn is_walkable(&self) -> bool {
-        self.kind == TileKind::Floor && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
+    pub fn in_bounds(&self, pos: Position) -> bool {
+        pos.x < self.tiles.len() && pos.y < self.tiles[0].len()
+    }
+}
+
+impl Index<Position> for TileMap {
+    type Output = Tile;
+
+    fn index(&self, pos: Position) -> &Self::Output {
+        &self.tiles[pos.x][pos.y]
+    }
+}
+
+impl IndexMut<Position> for TileMap {
+    fn index_mut(&mut self, pos: Position) -> &mut Self::Output {
+        &mut self.tiles[pos.x][pos.y]
     }
 }

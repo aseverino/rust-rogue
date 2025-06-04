@@ -20,10 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+mod input;
 mod game;
 mod map;
 mod position;
 mod tile;
+mod tile_map;
 mod creature;
 mod monster_type;
 mod monster;

@@ -23,7 +23,7 @@
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
-use crate::map::{Map, GRID_WIDTH, GRID_HEIGHT};
+use crate::map::{Map, SpellFovCache, GRID_WIDTH, GRID_HEIGHT};
 use crate::tile::{Tile, TileKind, PLAYER_CREATURE_ID};
 use crate::tile_map::TileMap;
 use crate::position::Position;
@@ -227,6 +227,8 @@ pub fn generate(player: Player) -> Map {
         hovered: None,
         hovered_changed: false,
         last_player_event: None,
+        spell_fov_cache: SpellFovCache::new(),
+        should_draw_spell_fov: false,
     };
 
     map

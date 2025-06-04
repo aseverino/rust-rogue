@@ -56,6 +56,20 @@ impl Creature for Monster {
         self.position = pos;
     }
 
+    fn add_health(&mut self, amount: i32) {
+        self.hp += amount;
+        if self.hp > self.kind.max_hp {
+            self.hp = self.kind.max_hp; // Cap health at max
+        }
+        else if self.hp < 0 {
+            self.hp = 0; // Ensure health doesn't go below 0
+        }
+    }
+
+    fn get_health(&self) -> i32 {
+        self.hp
+    }
+
     fn draw(&self) {
         if self.hp <= 0 {
             return; // Don't draw dead monsters

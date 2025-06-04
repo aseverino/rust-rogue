@@ -40,7 +40,7 @@ pub struct Player {
 
 impl Player {
     pub fn new(pos: Position) -> Self {
-        let first_spell = spell_type::get_spell_types()[0].clone();
+        let first_spell = spell_type::get_spell_types()[1].clone();
         let mut spells: Vec<PlayerSpell> = Vec::new();
 
         if let Some(spell) = first_spell {
@@ -54,8 +54,8 @@ impl Player {
         }
 
         Self {
-            hp: 10,
-            max_hp: 10,
+            hp: 50,
+            max_hp: 50,
             position: pos,
             goal_position: None,
             spells: spells,
@@ -76,6 +76,20 @@ impl Creature for Player {
 
     fn set_pos(&mut self, pos: Position) {
         self.position = pos;
+    }
+
+    fn add_health(&mut self, amount: i32) {
+        self.hp += amount;
+        if self.hp > self.max_hp {
+            self.hp = self.max_hp; // Cap health at max
+        }
+        else if self.hp < 0 {
+            self.hp = 0; // Ensure health doesn't go below 0
+        }
+    }
+
+    fn get_health(&self) -> i32 {
+        self.hp
     }
 
     fn draw(&self) {

@@ -50,6 +50,7 @@ pub struct SpellType {
     pub name: String,
     pub kind: SpellKind,
     pub area_kind: SpellAreaKind,
+    pub area_radius: Option<u32>,
     pub description: String,
     pub max_charges: u32, // Number of charges available
     pub range: u32, // Range in tiles

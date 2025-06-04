@@ -29,9 +29,11 @@ use ::rand::rngs::ThreadRng;
 
 use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
+use crate::creature;
 use crate::creature::Creature;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
+use crate::position::POSITION_INVALID;
 use crate::position::{ Position, Direction };
 use crate::input::KeyboardAction;
 use crate::player::Player;
@@ -63,6 +65,22 @@ pub enum PlayerEvent {
     Death,
 }
 
+pub struct SpellFovCache {
+    pub radius: u32,
+    pub origin: Position,
+    pub area: HashSet<Position>,
+}
+
+impl SpellFovCache {
+    pub fn new() -> Self {
+        Self {
+            radius: 0,
+            origin: POSITION_INVALID,
+            area: HashSet::new(),
+        }
+    }
+}
+
 pub struct Map {
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
@@ -71,6 +89,8 @@ pub struct Map {
     pub hovered: Option<Position>,
     pub hovered_changed: bool,
     pub last_player_event: Option<PlayerEvent>,
+    pub spell_fov_cache: SpellFovCache,
+    pub should_draw_spell_fov: bool,
 }
 
 pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
@@ -285,7 +305,50 @@ impl Map {
         true
     }
 
-    pub fn draw(&self) {
+    fn in_spell_area(&self, pos: Position) -> bool {
+        // compute_fov(self, pos, , GRID_HEIGHT));
+        if let Some(selected_spell) = self.player.selected_spell {
+            if let Some(spell) = self.player.spells.get(selected_spell) {
+                let player_pos = self.player.pos();
+                if spell.spell_type.range > 0 && player_pos.in_range(&pos, spell.spell_type.range as usize) &&
+                self.player.line_of_sight.contains(&pos) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+
+    fn update_spell_fov_cache(&mut self) {
+        self.should_draw_spell_fov = false;
+        let mut spell_fov_needs_update = false;
+        if let Some(selected_spell) = self.player.selected_spell {
+            if let Some(player_spell) = self.player.spells.get(selected_spell) {
+                if let Some(hovered) = self.hovered {
+                    let spell_type = &player_spell.spell_type;
+                    let radius = self.spell_fov_cache.radius;
+                    if spell_type.area_radius != Some(radius) {
+                        spell_fov_needs_update = true;
+                    }
+                    else if hovered != self.spell_fov_cache.origin {
+                        spell_fov_needs_update = true;
+                    }
+                    self.should_draw_spell_fov = true;
+                }
+            }
+        }
+
+        if spell_fov_needs_update {
+            self.spell_fov_cache.radius = self.player.spells[self.player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
+            self.spell_fov_cache.origin = self.hovered.unwrap_or(POSITION_INVALID);
+            self.spell_fov_cache.area = self.compute_fov(self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
+        }
+    }
+
+    pub fn draw(&mut self) {
+        self.update_spell_fov_cache();
+
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
                 let tile = &self.tiles[Position::new(x, y)];
@@ -303,10 +366,10 @@ impl Map {
                     color,
                 );
 
-                if let Some(selected_spell) = { self.player.selected_spell } {
+                if self.should_draw_spell_fov {
                     let player_pos = self.player.pos();
                     let tile_pos = Position { x, y };
-                    if let Some(spell) = self.player.spells.get(selected_spell) {
+                    if let Some(spell) = self.player.spells.get(self.player.selected_spell.unwrap()) {
                         if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) &&
                         self.player.line_of_sight.contains(&tile_pos) {
                             draw_rectangle(
@@ -318,17 +381,29 @@ impl Map {
                             );
                         }
                     }
+
+                    if self.spell_fov_cache.area.contains(&Position { x, y }) {
+                        draw_rectangle(
+                            x as f32 * TILE_SIZE,
+                            y as f32 * TILE_SIZE + 40.0,
+                            TILE_SIZE - 1.0,
+                            TILE_SIZE - 1.0,
+                            Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 });
+                    }
                 }
                 
-                if let Some(pos) = self.hovered {
-                    draw_rectangle_lines(
-                        pos.x as f32 * TILE_SIZE,
-                        pos.y as f32 * TILE_SIZE + 40.0,
-                        TILE_SIZE,
-                        TILE_SIZE,
-                        2.0,
-                        YELLOW,
-                    );
+                if self.player.selected_spell.is_some() {
+                    self.in_spell_area(Position { x, y });
+                    if let Some(pos) = self.hovered {
+                        draw_rectangle_lines(
+                            pos.x as f32 * TILE_SIZE,
+                            pos.y as f32 * TILE_SIZE + 40.0,
+                            TILE_SIZE,
+                            TILE_SIZE,
+                            2.0,
+                            YELLOW,
+                        );
+                    }
                 }
             }
         }
@@ -371,7 +446,28 @@ impl Map {
         }
     }
 
-    pub fn do_combat(&mut self, attacker_pos: Position, target_pos: Position, spell_index: usize) {
+    fn do_damage(&mut self, target_id: u32, damage: i32) {
+        let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
+            &mut self.player
+        } else {
+            self.monsters.get_mut(target_id as usize)
+                .expect("Target creature not found")
+        };
+        
+        target.add_health(-damage);
+        println!("{} takes {} damage!", target.name(), damage);
+
+        if target.get_health() <= 0 {
+            self.tiles[target.pos()].creature = NO_CREATURE; // Remove monster from tile
+            println!("{} has been defeated!", target.name());
+            // Optionally, remove the monster from the list
+            // self.monsters.remove(target_creature as usize);
+        } else {
+            println!("{} has {} HP left.", target.name(), target.get_health());
+        }
+    }
+
+    fn do_combat(&mut self, attacker_pos: Position, target_pos: Position, spell_index: usize) {
         if !self.has_line_of_sight(attacker_pos, target_pos) {
             println!("Target is out of line of sight!");
             return;
@@ -381,26 +477,35 @@ impl Map {
             .expect("Selected spell index out of bounds");
 
         let damage = spell.spell_type.basepower as i32;
-        let target_creature = self.tiles[target_pos].creature;
+        
+        let mut target_positions: Vec<Position> = Vec::new();
+        let mut target_creatures: Vec<u32> = Vec::new();
 
-        if target_creature == NO_CREATURE || target_creature == PLAYER_CREATURE_ID {
-            println!("No monster at target position to attack!");
-            return;
+        self.spell_fov_cache.area.iter().for_each(|&pos| {
+            target_positions.push(pos);
+            let creature_id = self.tiles[pos].creature;
+            if creature_id >= 0 {
+                target_creatures.push(creature_id as u32);
+            }
+        });
+
+        for target_creature in target_creatures {
+            self.do_damage(target_creature, damage);
         }
 
-        let target = self.monsters.get_mut(target_creature as usize)
-            .expect("Target creature not found");
-        target.hp -= damage;
-        println!("{} takes {} damage!", target.name(), damage);
+        // let target = self.monsters.get_mut(target_creature as usize)
+        //     .expect("Target creature not found");
+        // target.hp -= damage;
+        // println!("{} takes {} damage!", target.name(), damage);
 
-        if target.hp <= 0 {
-            self.tiles[target_pos].creature = NO_CREATURE; // Remove monster from tile
-            println!("{} has been defeated!", target.name());
-            // Optionally, remove the monster from the list
-            // self.monsters.remove(target_creature as usize);
-        } else {
-            println!("{} has {} HP left.", target.name(), target.hp);
-        }
+        // if target.hp <= 0 {
+        //     self.tiles[target_pos].creature = NO_CREATURE; // Remove monster from tile
+        //     println!("{} has been defeated!", target.name());
+        //     // Optionally, remove the monster from the list
+        //     // self.monsters.remove(target_creature as usize);
+        // } else {
+        //     println!("{} has {} HP left.", target.name(), target.hp);
+        // }
     }
 
     pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {

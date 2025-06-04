@@ -92,11 +92,11 @@ impl Creature for Player {
         self.hp
     }
 
-    fn draw(&self) {
+    fn draw(&self, offset: (f32, f32)) {
         // Base colored rectangle
         draw_rectangle(
-            self.position.x as f32 * TILE_SIZE + 4.0,
-            self.position.y as f32 * TILE_SIZE + 44.0,
+            offset.0 + self.position.x as f32 * TILE_SIZE + 4.0,
+            offset.1 + self.position.y as f32 * TILE_SIZE + 4.0,
             TILE_SIZE - 8.0,
             TILE_SIZE - 8.0,
             BLUE,
@@ -105,8 +105,8 @@ impl Creature for Player {
         // Glyph overlay
         draw_text(
             "@",
-            self.position.x as f32 * TILE_SIZE + 10.0,
-            self.position.y as f32 * TILE_SIZE + 60.0,
+            offset.0 + self.position.x as f32 * TILE_SIZE + 10.0,
+            offset.1 + self.position.y as f32 * TILE_SIZE + 20.0,
             18.0,
             WHITE,
         );

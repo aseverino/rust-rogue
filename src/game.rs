@@ -22,6 +22,7 @@
 
 use macroquad::prelude::*;
 use crate::map::{Map, TILE_SIZE, PlayerEvent};
+use crate::ui::Ui;
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
@@ -35,6 +36,7 @@ use std::cell::RefCell;
 
 pub struct GameState {
     pub map: Map,
+    pub ui: Ui,
 }
 
 pub async fn run() {
@@ -44,6 +46,7 @@ pub async fn run() {
     let player = Player::new(Position::new(1, 1));
     let mut game = GameState {
         map: map_generator::generate(player),
+        ui: Ui::new(),
     };
 
     game.map.init().await;
@@ -51,12 +54,13 @@ pub async fn run() {
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
+    let game_interface_offset = ( 410.0, 10.0 );
 
     loop {
         let now = get_time();
         if now - last_move_time < move_interval {
             // If the last move was too recent, skip this frame
-            game.map.draw();
+            game.map.draw(game_interface_offset);
             next_frame().await;
             continue;
         }
@@ -70,9 +74,9 @@ pub async fn run() {
 
         let input = Input::poll();
 
-        let mouse_pos = input.mouse;
+        let mouse_pos = (input.mouse.0 - game_interface_offset.0, input.mouse.1 - game_interface_offset.1);
         let hover_x = (mouse_pos.0 / TILE_SIZE) as usize;
-        let hover_y = ((mouse_pos.1 - 40.0) / TILE_SIZE) as usize;
+        let hover_y = ((mouse_pos.1) / TILE_SIZE) as usize;
         let current_tile = Position { x: hover_x, y: hover_y };
 
         game.map.hovered_changed = game.map.hovered != Some(current_tile);
@@ -90,7 +94,13 @@ pub async fn run() {
             goal_position = None;
         }
 
-        game.map.draw();
+        game.map.draw(game_interface_offset);
+        let resolution = (screen_width(), screen_height());
+
+        let (hp, max_hp) = game.map.get_player_hp();
+        game.ui.set_player_hp(hp, max_hp);
+
+        game.ui.draw(resolution);
 
         next_frame().await;
     }

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 mod input;
+mod ui;
 mod game;
 mod map;
 mod map_generator;
@@ -39,7 +40,7 @@ use macroquad::prelude::*;
 fn window_conf() -> Conf {
     Conf {
         window_title: "OpenRift".to_string(),
-        window_width: 1100,
+        window_width: 1920,
         window_height: 1100,
         fullscreen: false,
         ..Default::default()

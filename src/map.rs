@@ -136,6 +136,10 @@ where
 }
 
 impl Map {
+    pub fn get_player_hp(&self) -> (i32, i32) {
+        (self.player.hp, self.player.max_hp)
+    }
+
     pub async fn init(&mut self) {
         self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
         let monster_types = load_monster_types().await;
@@ -346,7 +350,7 @@ impl Map {
         }
     }
 
-    pub fn draw(&mut self) {
+    pub fn draw(&mut self, offset: (f32, f32)) {
         self.update_spell_fov_cache();
 
         for x in 0..GRID_WIDTH {
@@ -359,8 +363,8 @@ impl Map {
                 };
 
                 draw_rectangle(
-                    x as f32 * TILE_SIZE,
-                    y as f32 * TILE_SIZE + 40.0,
+                    offset.0 + x as f32 * TILE_SIZE,
+                    offset.1 + y as f32 * TILE_SIZE,
                     TILE_SIZE - 1.0,
                     TILE_SIZE - 1.0,
                     color,
@@ -373,8 +377,8 @@ impl Map {
                         if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) &&
                         self.player.line_of_sight.contains(&tile_pos) {
                             draw_rectangle(
-                                x as f32 * TILE_SIZE,
-                                y as f32 * TILE_SIZE + 40.0,
+                                offset.0 + x as f32 * TILE_SIZE,
+                                offset.1 + y as f32 * TILE_SIZE,
                                 TILE_SIZE - 1.0,
                                 TILE_SIZE - 1.0,
                                 Color { r: 0.0, g: 1.0, b: 0.0, a: 0.2 },
@@ -384,35 +388,35 @@ impl Map {
 
                     if self.spell_fov_cache.area.contains(&Position { x, y }) {
                         draw_rectangle(
-                            x as f32 * TILE_SIZE,
-                            y as f32 * TILE_SIZE + 40.0,
+                            offset.0 + x as f32 * TILE_SIZE,
+                            offset.1 + y as f32 * TILE_SIZE,
                             TILE_SIZE - 1.0,
                             TILE_SIZE - 1.0,
                             Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 });
                     }
                 }
                 
-                if self.player.selected_spell.is_some() {
-                    self.in_spell_area(Position { x, y });
-                    if let Some(pos) = self.hovered {
-                        draw_rectangle_lines(
-                            pos.x as f32 * TILE_SIZE,
-                            pos.y as f32 * TILE_SIZE + 40.0,
-                            TILE_SIZE,
-                            TILE_SIZE,
-                            2.0,
-                            YELLOW,
-                        );
-                    }
-                }
+                // if self.player.selected_spell.is_some() {
+                //     self.in_spell_area(Position { x, y });
+                //     if let Some(pos) = self.hovered {
+                //         draw_rectangle_lines(
+                //             offset.0 + x as f32 * TILE_SIZE,
+                //             offset.1 + y as f32 * TILE_SIZE,
+                //             TILE_SIZE,
+                //             TILE_SIZE,
+                //             2.0,
+                //             YELLOW,
+                //         );
+                //     }
+                // }
             }
         }
 
         for monster in &self.monsters {
-            monster.draw();
+            monster.draw(offset);
         }
 
-        self.player.draw();
+        self.player.draw(offset);
     }
 
     pub fn is_tile_walkable(&self, pos: Position) -> bool {

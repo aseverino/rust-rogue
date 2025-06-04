@@ -70,13 +70,13 @@ impl Creature for Monster {
         self.hp
     }
 
-    fn draw(&self) {
+    fn draw(&self, offset: (f32, f32)) {
         if self.hp <= 0 {
             return; // Don't draw dead monsters
         }
         draw_rectangle(
-            self.position.x as f32 * TILE_SIZE + 8.0,
-            self.position.y as f32 * TILE_SIZE + 48.0,
+            offset.0 + self.position.x as f32 * TILE_SIZE + 8.0,
+            offset.1 + self.position.y as f32 * TILE_SIZE + 8.0,
             TILE_SIZE - 16.0,
             TILE_SIZE - 16.0,
             self.kind.color(),
@@ -84,7 +84,7 @@ impl Creature for Monster {
 
         // Optional glyph drawing
         let glyph = self.kind.glyph.to_string();
-        draw_text(&glyph, self.position.x as f32 * TILE_SIZE + 12.0, self.position.y as f32 * TILE_SIZE + 60.0, 16.0, WHITE);
+        draw_text(&glyph, offset.0 + self.position.x as f32 * TILE_SIZE + 12.0, offset.1 + self.position.y as f32 * TILE_SIZE + 20.0, 16.0, WHITE);
     }
 
     fn is_monster(&self) -> bool { true }

@@ -25,8 +25,9 @@ use crate::map::{Map, TILE_SIZE, PlayerEvent};
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
-use crate::monster_type::load_monster_types;
+
 use crate::spell_type;
+use crate::map_generator;
 use macroquad::time::get_time;
 
 use std::rc::Rc;
@@ -40,11 +41,12 @@ pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
-    let monster_types = load_monster_types().await;
     let player = Player::new(Position::new(1, 1));
     let mut game = GameState {
-        map: Map::generate(player, &monster_types),
+        map: map_generator::generate(player),
     };
+
+    game.map.init().await;
     
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps

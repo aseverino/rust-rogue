@@ -25,6 +25,7 @@ extern crate rand as external_rand;
 
 use external_rand::Rng;
 use external_rand::thread_rng;
+use ::rand::rngs::ThreadRng;
 
 use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
@@ -41,13 +42,14 @@ use std::cell::RefCell;
 use pathfinding::prelude::astar;
 use crate::tile_map::TileMap;
 use crate::player_spell::PlayerSpell;
+use crate::monster_type::load_monster_types;
 
 // use fov::FovAlgorithm;
 // use fov::Map as FovMap;
 
 pub const TILE_SIZE: f32 = 32.0;
-pub const GRID_WIDTH: usize = 30;
-pub const GRID_HEIGHT: usize = 20;
+pub const GRID_WIDTH: usize = 33;
+pub const GRID_HEIGHT: usize = 33;
 
 #[derive(PartialEq)]
 pub enum PlayerEvent {
@@ -114,6 +116,12 @@ where
 }
 
 impl Map {
+    pub async fn init(&mut self) {
+        self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
+        let monster_types = load_monster_types().await;
+        self.add_random_monsters(&monster_types, 10);
+    }
+
     fn is_opaque(&self, x: isize, y: isize) -> bool {
         if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
             true // treat out-of-bounds as walls
@@ -223,49 +231,6 @@ impl Map {
                 break;
             }
         }
-    }
-
-
-    pub fn generate(player: Player, monster_types: &HashMap<String, Rc<MonsterType>>) -> Self {
-        let mut rng = thread_rng();
-        let mut walkable_cache= Vec::new();
-
-        let mut tiles = Vec::with_capacity(GRID_WIDTH);
-        for x in 0..GRID_WIDTH {
-            let mut column = Vec::with_capacity(GRID_HEIGHT);
-            for y in 0..GRID_HEIGHT {
-                let roll = rng.gen_range(0..100);
-                let kind = match roll {
-                    0..=65 => TileKind::Floor,
-                    66..=85 => TileKind::Wall,
-                    _ => TileKind::Chasm,
-                };
-
-                let pos = Position { x, y };
-                
-                if kind == TileKind::Floor {
-                    walkable_cache.push(pos);
-                }
-                column.push(Tile::new(kind));
-            }
-            tiles.push(column);
-        }
-
-        tiles[1][1].kind = TileKind::Floor;
-
-        let mut map = Self {
-            tiles: TileMap::new(tiles),
-            walkable_cache,
-            monsters: Vec::new(),
-            player,
-            hovered: None,
-            hovered_changed: false,
-            last_player_event: None,
-        };
-
-        map.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
-        map.add_random_monsters(monster_types, 10);
-        map
     }
 
     fn compute_player_fov(&mut self, radius: usize) {

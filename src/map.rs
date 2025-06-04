@@ -40,6 +40,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use pathfinding::prelude::astar;
 use crate::tile_map::TileMap;
+use crate::player_spell::PlayerSpell;
 
 // use fov::FovAlgorithm;
 // use fov::Map as FovMap;
@@ -401,12 +402,45 @@ impl Map {
         }
     }
 
+    pub fn do_combat(&mut self, attacker_pos: Position, target_pos: Position, spell_index: usize) {
+        if !self.has_line_of_sight(attacker_pos, target_pos) {
+            println!("Target is out of line of sight!");
+            return;
+        }
+
+        let mut player = self.player.borrow_mut();
+        let spell = player.spells.get_mut(spell_index)
+            .expect("Selected spell index out of bounds");
+
+        let damage = spell.spell_type.basepower as i32;
+        let target_creature = self.tiles[target_pos].creature;
+
+        if target_creature == NO_CREATURE || target_creature == PLAYER_CREATURE_ID {
+            println!("No monster at target position to attack!");
+            return;
+        }
+
+        let mut target = self.monsters[target_creature as usize].borrow_mut();
+        target.hp -= damage;
+        println!("{} takes {} damage!", target.name(), damage);
+
+        if target.hp <= 0 {
+            self.tiles[target_pos].creature = NO_CREATURE; // Remove monster from tile
+            println!("{} has been defeated!", target.name());
+            // Optionally, remove the monster from the list
+            // self.monsters.remove(target_creature as usize);
+        } else {
+            println!("{} has {} HP left.", target.name(), target.hp);
+        }
+    }
+
     pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) -> bool {
         let player_pos = {
             self.player.borrow().position
         };
 
         let mut new_player_pos: Option<Position> = None;
+        let mut update_monsters = false;
 
         if let Some(player_goal) = player_goal_position {
             let spell_index = { self.player.borrow().selected_spell };
@@ -414,9 +448,14 @@ impl Map {
             if let Some(index) = spell_index {
                 let (in_line_of_sight, spell_range) = {
                     let player = self.player.borrow();
-                    let spell = player.spells.get(index).expect("Selected spell index out of bounds");
-                    (player.line_of_sight.contains(&player_goal), spell.spell_type.range)
+                    let in_line_of_sight = player.line_of_sight.contains(&player_goal);
+                    let spell_range = player.spells.get(index)
+                        .expect("Selected spell index out of bounds")
+                        .spell_type.range;
+                    (in_line_of_sight, spell_range)
                 };
+
+                let mut should_cast = false;
 
                 if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
                     let mut player = self.player.borrow_mut();
@@ -424,9 +463,14 @@ impl Map {
                         if spell.charges > 0 {
                             println!("Casting spell");
                             spell.charges -= 1;
-                            // self.do_combat(player_pos, player_goal, spell);
+                            should_cast = true;
                         }
                     }
+                }
+
+                if should_cast {
+                    self.do_combat(player_pos, player_goal, index);
+                    update_monsters = true;
                 }
             }
             else {
@@ -500,12 +544,15 @@ impl Map {
             }
 
             self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
+            update_monsters = true;
+        }
 
+        if update_monsters {
             for (i, monster) in self.monsters.iter().enumerate() {
                 let mut m = monster.borrow_mut();
                 let monster_pos = m.pos();
 
-                let path = find_path(monster_pos, pos, |pos| {
+                let path = find_path(monster_pos, self.player.borrow().position, |pos| {
                     pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
                 });
 
@@ -513,7 +560,7 @@ impl Map {
                     if path.len() > 1 {
                         let next_step = path[1];
 
-                        if next_step == pos {
+                        if next_step == self.player.borrow().position {
                             m.hp -= 1;
                             println!("Monster {} hit!", m.name());
                             if m.hp <= 0 {
@@ -531,10 +578,9 @@ impl Map {
                     }
                 }
             }
-            return true;
-        } else {
-            return false; // No valid move
         }
+
+        true
     }
 }
 

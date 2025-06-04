@@ -57,6 +57,9 @@ impl Creature for Monster {
     }
 
     fn draw(&self) {
+        if self.hp <= 0 {
+            return; // Don't draw dead monsters
+        }
         draw_rectangle(
             self.position.x as f32 * TILE_SIZE + 8.0,
             self.position.y as f32 * TILE_SIZE + 48.0,

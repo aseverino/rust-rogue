@@ -59,6 +59,13 @@ pub async fn run() {
             continue;
         }
         clear_background(BLACK);
+
+        if game.map.last_player_event == Some(PlayerEvent::Death) {
+            draw_text("Game Over!", 10.0, 20.0, 30.0, WHITE);
+            next_frame().await;
+            continue;
+        }
+
         let input = Input::poll();
 
         let mouse_pos = input.mouse;

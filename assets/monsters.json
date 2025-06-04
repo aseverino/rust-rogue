@@ -3,18 +3,21 @@
     "name": "Goblin",
     "glyph": "g",
     "color": [0, 200, 0],
-    "max_hp": 10
+    "max_hp": 10,
+    "melee_damage": 10
   },
   {
     "name": "Orc",
     "glyph": "o",
     "color": [0, 100, 0],
-    "max_hp": 20
+    "max_hp": 20,
+    "melee_damage": 10
   },
   {
     "name": "Demon",
     "glyph": "D",
     "color": [200, 0, 0],
-    "max_hp": 50
+    "max_hp": 50,
+    "melee_damage": 10
   }
 ]

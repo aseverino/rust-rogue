@@ -58,6 +58,7 @@ pub enum PlayerEvent {
     Cancel,
     SpellSelect,
     SpellCast,
+    Death,
 }
 
 pub struct Map {
@@ -590,12 +591,12 @@ impl Map {
                         let next_step = path[1];
 
                         if next_step == self.player.position {
-                            monster.hp -= 1;
-                            println!("Monster {} hit!", monster.name());
-                            if monster.hp <= 0 {
-                                self.tiles[monster_pos].creature = NO_CREATURE;
-                                // self.monsters.remove(i);
-                                // todo death
+                            println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
+                            self.player.hp -= monster.kind.melee_damage;
+                            if self.player.hp <= 0 {
+                                println!("Player has been defeated!");
+                                self.last_player_event = Some(PlayerEvent::Death);
+                                return;
                             }
                             continue;
                         }

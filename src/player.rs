@@ -29,7 +29,8 @@ use crate::spell_type;
 use std::collections::HashSet;
 
 pub struct Player {
-    pub name: String,
+    pub hp: i32,
+    pub max_hp: i32,
     pub position: Position,
     pub goal_position: Option<Position>,
     pub spells: Vec<PlayerSpell>,
@@ -53,7 +54,8 @@ impl Player {
         }
 
         Self {
-            name: "Player".into(),
+            hp: 10,
+            max_hp: 10,
             position: pos,
             goal_position: None,
             spells: spells,
@@ -65,7 +67,7 @@ impl Player {
 
 impl Creature for Player {
     fn name(&self) -> &str {
-        &self.name
+        "Player"
     }
 
     fn pos(&self) -> Position {

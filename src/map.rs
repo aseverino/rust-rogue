@@ -31,6 +31,7 @@ use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
 use crate::creature;
 use crate::creature::Creature;
+use crate::item::ItemKind;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
 use crate::navigator::Navigator;
@@ -450,6 +451,22 @@ impl Map {
 
             self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
             update_monsters = true;
+
+            let tile = &mut self.tiles[pos];
+            
+
+            if let Some(item) = &tile.item {
+                match item {
+                    ItemKind::Orb(_) => {
+                        tile.remove_item();
+                        println!("Player picked up an orb!");
+                        player.spell_points += 1; // Increase spell points
+                    }
+                    ItemKind::Portal(_) => {
+                        
+                    }
+                }
+            }
         }
 
         if update_monsters {

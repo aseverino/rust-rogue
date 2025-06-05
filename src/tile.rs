@@ -55,6 +55,10 @@ impl Tile {
         self.item = Some(ItemKind::Orb(orb));
     }
 
+    pub fn remove_item(&mut self) -> Option<ItemKind> {
+        self.item.take()
+    }
+
     pub fn draw(&self, pos: Position, offset: (f32, f32)) {
         let color = match self.kind {
             TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },

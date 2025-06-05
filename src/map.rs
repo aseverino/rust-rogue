@@ -84,7 +84,7 @@ impl SpellFovCache {
 pub struct Map {
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
-    pub player: Player,
+    pub available_walkable_cache: Vec<Position>,
     pub monsters: Vec<Monster>,
     pub hovered: Option<Position>,
     pub hovered_changed: bool,
@@ -136,18 +136,11 @@ where
 }
 
 impl Map {
-    pub fn get_player_hp(&self) -> (i32, i32) {
-        (self.player.hp, self.player.max_hp)
-    }
-
-    pub fn get_player_sp(&self) -> u32 {
-        self.player.spell_points
-    }
-
-    pub async fn init(&mut self) {
-        self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
-        let monster_types = load_monster_types().await;
-        self.add_random_monsters(&monster_types, 10);
+    pub async fn init(&mut self, player: &mut Player) {
+        self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
+        // let monster_types = load_monster_types().await;
+        // self.add_random_monsters(&monster_types, 10);
+        
     }
 
     fn is_opaque(&self, x: isize, y: isize) -> bool {
@@ -261,12 +254,12 @@ impl Map {
         }
     }
 
-    fn compute_player_fov(&mut self, radius: usize) {
+    fn compute_player_fov(&mut self, player: &mut Player, radius: usize) {
         let pos = {
-            self.player.pos()
+            player.pos()
         };
         let visible = self.compute_fov(pos, radius);
-        self.player.line_of_sight = visible;
+        player.line_of_sight = visible;
     }
 
     fn has_line_of_sight(&self, from: Position, to: Position) -> bool {
@@ -313,13 +306,13 @@ impl Map {
         true
     }
 
-    fn in_spell_area(&self, pos: Position) -> bool {
+    fn in_spell_area(&self, player: &Player, pos: Position) -> bool {
         // compute_fov(self, pos, , GRID_HEIGHT));
-        if let Some(selected_spell) = self.player.selected_spell {
-            if let Some(spell) = self.player.spells.get(selected_spell) {
-                let player_pos = self.player.pos();
+        if let Some(selected_spell) = player.selected_spell {
+            if let Some(spell) = player.spells.get(selected_spell) {
+                let player_pos = player.pos();
                 if spell.spell_type.range > 0 && player_pos.in_range(&pos, spell.spell_type.range as usize) &&
-                self.player.line_of_sight.contains(&pos) {
+                player.line_of_sight.contains(&pos) {
                     return true;
                 }
             }
@@ -328,11 +321,11 @@ impl Map {
     }
 
 
-    fn update_spell_fov_cache(&mut self) {
+    fn update_spell_fov_cache(&mut self, player: &Player) {
         self.should_draw_spell_fov = false;
         let mut spell_fov_needs_update = false;
-        if let Some(selected_spell) = self.player.selected_spell {
-            if let Some(player_spell) = self.player.spells.get(selected_spell) {
+        if let Some(selected_spell) = player.selected_spell {
+            if let Some(player_spell) = player.spells.get(selected_spell) {
                 if let Some(hovered) = self.hovered {
                     let spell_type = &player_spell.spell_type;
                     let radius = self.spell_fov_cache.radius;
@@ -348,14 +341,14 @@ impl Map {
         }
 
         if spell_fov_needs_update {
-            self.spell_fov_cache.radius = self.player.spells[self.player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
+            self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
             self.spell_fov_cache.origin = self.hovered.unwrap_or(POSITION_INVALID);
             self.spell_fov_cache.area = self.compute_fov(self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
         }
     }
 
-    pub fn draw(&mut self, offset: (f32, f32)) {
-        self.update_spell_fov_cache();
+    pub fn draw(&mut self, player: &Player, offset: (f32, f32)) {
+        self.update_spell_fov_cache(player);
 
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
@@ -375,11 +368,11 @@ impl Map {
                 );
 
                 if self.should_draw_spell_fov {
-                    let player_pos = self.player.pos();
+                    let player_pos = player.pos();
                     let tile_pos = Position { x, y };
-                    if let Some(spell) = self.player.spells.get(self.player.selected_spell.unwrap()) {
+                    if let Some(spell) = player.spells.get(player.selected_spell.unwrap()) {
                         if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) &&
-                        self.player.line_of_sight.contains(&tile_pos) {
+                        player.line_of_sight.contains(&tile_pos) {
                             draw_rectangle(
                                 offset.0 + x as f32 * TILE_SIZE,
                                 offset.1 + y as f32 * TILE_SIZE,
@@ -420,7 +413,7 @@ impl Map {
             monster.draw(offset);
         }
 
-        self.player.draw(offset);
+        player.draw(offset);
     }
 
     pub fn is_tile_walkable(&self, pos: Position) -> bool {
@@ -434,29 +427,36 @@ impl Map {
     ) {
         let mut rng = thread_rng();
 
-        let mut positions = self.walkable_cache.clone(); // clone so we can shuffle safely
+        // let mut positions = self.walkable_cache.clone(); // clone so we can shuffle safely
         // 2. Shuffle the positions randomly
-        positions.shuffle(&mut rng);
+        // positions.shuffle(&mut rng);
 
         // 3. Pick up to `count` positions
-        let positions = positions.into_iter().take(count);
+        //let positions = self.walkable_cache.take(count);
 
         let all_types: Vec<_> = monster_types.values().cloned().collect();
 
-        for pos in positions {
+        let mut i = 0;
+        for pos in &self.walkable_cache {
             let kind = all_types
                 .choose(&mut rng)
                 .expect("Monster type list is empty")
                 .clone();
 
             // Wrap the monster in Rc and push to creatures
-            self.monsters.push(Monster::new(pos, kind));
+            self.monsters.push(Monster::new(pos.clone(), kind));
+            i += 1;
+            if i >= count {
+                break;
+            }
         }
+
+        self.walkable_cache.shuffle(&mut rng);
     }
 
-    fn do_damage(&mut self, target_id: u32, damage: i32) {
+    fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32) {
         let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
-            &mut self.player
+            player
         } else {
             self.monsters.get_mut(target_id as usize)
                 .expect("Target creature not found")
@@ -475,13 +475,13 @@ impl Map {
         }
     }
 
-    fn do_combat(&mut self, attacker_pos: Position, target_pos: Position, spell_index: usize) {
+    fn do_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position, spell_index: usize) {
         if !self.has_line_of_sight(attacker_pos, target_pos) {
             println!("Target is out of line of sight!");
             return;
         }
 
-        let spell = self.player.spells.get_mut(spell_index)
+        let spell = player.spells.get_mut(spell_index)
             .expect("Selected spell index out of bounds");
 
         let damage = spell.spell_type.basepower as i32;
@@ -498,7 +498,7 @@ impl Map {
         });
 
         for target_creature in target_creatures {
-            self.do_damage(target_creature, damage);
+            self.do_damage(player, target_creature, damage);
         }
 
         // let target = self.monsters.get_mut(target_creature as usize)
@@ -516,22 +516,22 @@ impl Map {
         // }
     }
 
-    pub fn update(&mut self, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
+    pub fn update(&mut self, player: &mut Player, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
         self.last_player_event = None;
         let player_pos = {
-            self.player.position
+            player.position
         };
 
         let mut new_player_pos: Option<Position> = None;
         let mut update_monsters = false;
 
         if let Some(player_goal) = player_goal_position {
-            let spell_index = { self.player.selected_spell };
+            let spell_index = { player.selected_spell };
 
             if let Some(index) = spell_index {
                 let (in_line_of_sight, spell_range) = {
-                    let in_line_of_sight = self.player.line_of_sight.contains(&player_goal);
-                    let spell_range = self.player.spells.get(index)
+                    let in_line_of_sight = player.line_of_sight.contains(&player_goal);
+                    let spell_range = player.spells.get(index)
                         .expect("Selected spell index out of bounds")
                         .spell_type.range;
                     (in_line_of_sight, spell_range)
@@ -540,7 +540,7 @@ impl Map {
                 let mut should_cast = false;
 
                 if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
-                    if let Some(spell) = self.player.spells.get_mut(index) {
+                    if let Some(spell) = player.spells.get_mut(index) {
                         if spell.charges > 0 {
                             spell.charges -= 1;
                             println!("Casting spell charges {}", spell.charges);
@@ -553,12 +553,12 @@ impl Map {
                 }
 
                 if should_cast {
-                    self.do_combat(player_pos, player_goal, index);
+                    self.do_combat(player, player_pos, player_goal, index);
                     update_monsters = true;
                 }
 
-                self.player.selected_spell = None;
-                self.player.goal_position = None; // Clear goal position
+                player.selected_spell = None;
+                player.goal_position = None; // Clear goal position
                 self.last_player_event = Some(PlayerEvent::SpellCast);
             }
             else {
@@ -574,10 +574,10 @@ impl Map {
                     else {
                         self.last_player_event = Some(PlayerEvent::AutoMoveEnd);
                     }
-                    self.player.goal_position = player_goal_position;
+                    player.goal_position = player_goal_position;
                 }
                 else {
-                    self.player.goal_position = None; // Clear goal if no path found
+                    player.goal_position = None; // Clear goal if no path found
                     self.last_player_event = Some(PlayerEvent::AutoMoveEnd);
                 }
 
@@ -589,10 +589,10 @@ impl Map {
             let index = spell_action as usize - 1;
 
             let spell_name = {
-                self.player.spells.get(index).map(|spell| spell.spell_type.name.clone())
+                player.spells.get(index).map(|spell| spell.spell_type.name.clone())
             };
             if let Some(name) = spell_name {
-                self.player.selected_spell = Some(index);
+                player.selected_spell = Some(index);
                 println!("Spell selected: {}", name);
             } else {
                 println!("No spell selected!");
@@ -601,8 +601,8 @@ impl Map {
             self.last_player_event = Some(PlayerEvent::SpellSelect);
         }
         else if player_action == KeyboardAction::Cancel {
-            self.player.selected_spell = None;
-            self.player.goal_position = None; // Clear goal position
+            player.selected_spell = None;
+            player.goal_position = None; // Clear goal position
 
             self.last_player_event = Some(PlayerEvent::Cancel);
         }
@@ -629,12 +629,12 @@ impl Map {
                 update_monsters = true; // Update monsters if player moves
             }
 
-            self.player.goal_position = None;
+            player.goal_position = None;
             self.last_player_event = Some(PlayerEvent::Move);
         }
         else if player_action == KeyboardAction::Wait {
             new_player_pos = Some(player_pos); // Stay in place
-            self.player.goal_position = None; // Clear goal position
+            player.goal_position = None; // Clear goal position
 
             self.last_player_event = Some(PlayerEvent::Wait);
         }
@@ -643,13 +643,13 @@ impl Map {
             self.tiles[player_pos].creature = NO_CREATURE;
             self.tiles[pos].creature = PLAYER_CREATURE_ID;
 
-            self.player.set_pos(pos);
+            player.set_pos(pos);
             
-            if new_player_pos == self.player.goal_position {
-                self.player.goal_position = None; // Clear goal position if reached
+            if new_player_pos == player.goal_position {
+                player.goal_position = None; // Clear goal position if reached
             }
 
-            self.compute_player_fov(max(GRID_WIDTH, GRID_HEIGHT));
+            self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
             update_monsters = true;
         }
 
@@ -660,7 +660,7 @@ impl Map {
                 }
                 let monster_pos = monster.pos();
 
-                let path = find_path(monster_pos, self.player.position, |pos| {
+                let path = find_path(monster_pos, player.position, |pos| {
                     pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
                 });
 
@@ -668,10 +668,10 @@ impl Map {
                     if path.len() > 1 {
                         let next_step = path[1];
 
-                        if next_step == self.player.position {
+                        if next_step == player.position {
                             println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
-                            self.player.hp -= monster.kind.melee_damage;
-                            if self.player.hp <= 0 {
+                            player.hp -= monster.kind.melee_damage;
+                            if player.hp <= 0 {
                                 println!("Player has been defeated!");
                                 self.last_player_event = Some(PlayerEvent::Death);
                                 return;

@@ -24,11 +24,10 @@ use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
 use crate::map::{Map, SpellFovCache, GRID_WIDTH, GRID_HEIGHT};
-use crate::tile::{Tile, TileKind, PLAYER_CREATURE_ID};
+use crate::tile::{Tile, TileKind};
 use crate::tile_map::TileMap;
 use crate::position::Position;
-use crate::creature::Creature;
-use crate::player::Player;
+use rand::seq::SliceRandom;
 
 fn carve_tile(tiles: &mut Vec<Vec<Tile>>, x: usize, y: usize, walkable_cache: &mut Vec<Position>) {
     if x >= GRID_WIDTH || y >= GRID_HEIGHT {
@@ -124,7 +123,7 @@ fn carve_jagged_path(
     }
 }
 
-pub fn generate(player: Player) -> Map {
+pub fn generate() -> Map {
     let mut rng = thread_rng();
 
     let tile_type = if rng.gen_bool(0.5) {
@@ -213,17 +212,20 @@ pub fn generate(player: Player) -> Map {
     }
 
     // Place player at one of the center-most islands
-    let player_pos = *start_positions.first().unwrap_or(&Position { x: GRID_WIDTH / 2, y: GRID_HEIGHT / 2 });
-    let mut player = player;
-    player.set_pos(player_pos);
-    tiles[player_pos.x][player_pos.y].kind = TileKind::Floor;
-    tiles[player_pos.x][player_pos.y].creature = PLAYER_CREATURE_ID;
+    // let player_pos = *start_positions.first().unwrap_or(&Position { x: GRID_WIDTH / 2, y: GRID_HEIGHT / 2 });
+    // let mut player = player;
+    // player.set_pos(player_pos);
+    // tiles[player_pos.x][player_pos.y].kind = TileKind::Floor;
+    // tiles[player_pos.x][player_pos.y].creature = PLAYER_CREATURE_ID;
+
+    let mut available_walkable_cache = walkable_cache.clone();
+    available_walkable_cache.shuffle(&mut rng);
 
     let map = Map {
         tiles: TileMap::new(tiles),
-        walkable_cache,
+        available_walkable_cache: available_walkable_cache,
+        walkable_cache: walkable_cache,
         monsters: Vec::new(),
-        player,
         hovered: None,
         hovered_changed: false,
         last_player_event: None,

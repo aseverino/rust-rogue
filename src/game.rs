@@ -35,21 +35,32 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 pub struct GameState {
+    pub player: Player,
     pub map: Map,
     pub ui: Ui,
+}
+
+impl GameState {
+    pub fn get_player_hp(&self) -> (i32, i32) {
+        (self.player.hp, self.player.max_hp)
+    }
+
+    pub fn get_player_sp(&self) -> u32 {
+        self.player.spell_points
+    }
 }
 
 pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
-    let player = Player::new(Position::new(1, 1));
     let mut game = GameState {
-        map: map_generator::generate(player),
+        player: Player::new(Position::new(1, 1)),
+        map: map_generator::generate(),
         ui: Ui::new(),
     };
 
-    game.map.init().await;
+    game.map.init(&mut game.player).await;
     
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps
@@ -60,7 +71,7 @@ pub async fn run() {
         let now = get_time();
         if now - last_move_time < move_interval {
             // If the last move was too recent, skip this frame
-            game.map.draw(game_interface_offset);
+            game.map.draw(&game.player, game_interface_offset);
             next_frame().await;
             continue;
         }
@@ -86,7 +97,7 @@ pub async fn run() {
             goal_position = Some(current_tile)
         };
 
-        game.map.update(input.keyboard_action, input.direction, input.spell, goal_position);
+        game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
 
         if game.map.last_player_event == Some(PlayerEvent::AutoMove) {
             last_move_time = now; // Update last move time for auto step
@@ -94,11 +105,13 @@ pub async fn run() {
             goal_position = None;
         }
 
-        game.map.draw(game_interface_offset);
+        game.map.draw(&game.player, game_interface_offset);
         let resolution = (screen_width(), screen_height());
 
-        let (hp, max_hp) = game.map.get_player_hp();
+        let (hp, max_hp) = game.get_player_hp();
+        let sp = game.get_player_sp();
         game.ui.set_player_hp(hp, max_hp);
+        game.ui.set_player_sp(sp);
 
         game.ui.draw(resolution);
 

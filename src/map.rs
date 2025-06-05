@@ -33,6 +33,7 @@ use crate::creature;
 use crate::creature::Creature;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
+use crate::navigator::Navigator;
 use crate::position::POSITION_INVALID;
 use crate::position::{ Position, Direction };
 use crate::input::KeyboardAction;
@@ -93,53 +94,24 @@ pub struct Map {
     pub should_draw_spell_fov: bool,
 }
 
-pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
-where
-    F: Fn(Position) -> bool,
-{
-    let start = (start_pos.x, start_pos.y);
-    let goal = (goal_pos.x, goal_pos.y);
-    let path = astar(
-        &start,
-        |&(x, y)| {
-            let mut neighbors = Vec::new();
-            let directions = [
-                (0isize, -1), (1, 0), (0, 1), (-1, 0), // cardinal
-                (-1, -1), (1, -1), (1, 1), (-1, 1),    // diagonals
-            ];
-
-            for (dx, dy) in directions {
-                let nx = x as isize + dx;
-                let ny = y as isize + dy;
-                if nx >= 0 && ny >= 0 {
-                    let (ux, uy) = (nx as usize, ny as usize);
-                    if is_walkable(Position { x: ux, y: uy }) {
-                        // Diagonal steps have slightly higher cost
-                        let cost = if dx != 0 && dy != 0 { 14 } else { 10 };
-                        neighbors.push(((ux, uy), cost));
-                    }
-                }
-            }
-
-            neighbors
-        },
-        |&(x, y)| {
-            let dx = (goal.0 as isize - x as isize).abs();
-            let dy = (goal.1 as isize - y as isize).abs();
-            10 * (dx + dy) - 6 * dx.min(dy) // diagonal heuristic
-        },
-        |&pos| pos == goal,
-    )
-    .map(|(path, _)| path);
-
-    path.map(|p| p.into_iter().map(|(x, y)| Position { x, y }).collect())
-}
-
 impl Map {
+    pub fn new(tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
+        Self {
+            tiles: TileMap::new(tiles),
+            walkable_cache,
+            available_walkable_cache,
+            monsters: Vec::new(),
+            hovered: None,
+            hovered_changed: false,
+            last_player_event: None,
+            spell_fov_cache: SpellFovCache::new(),
+            should_draw_spell_fov: false
+        }
+    }
     pub async fn init(&mut self, player: &mut Player) {
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
-        let monster_types = load_monster_types().await;
-        self.add_random_monsters(&monster_types, 10);
+        //let monster_types = load_monster_types().await;
+        //self.add_random_monsters(&monster_types, 10);
         
         let len = self.available_walkable_cache.len();
         let positions: Vec<Position> = self.available_walkable_cache
@@ -159,183 +131,13 @@ impl Map {
         player.set_pos(pos);
     }
 
-    fn is_opaque(&self, x: isize, y: isize) -> bool {
-        if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
-            true // treat out-of-bounds as walls
-        } else {
-            matches!(self.tiles[Position::new(x as usize, y as usize)].kind, TileKind::Wall)
-        }
-    }
-
-    fn compute_fov(&self, origin: Position, max_radius: usize) -> HashSet<Position> {
-        let mut visible = HashSet::new();
-        visible.insert(origin); // Always see self
-
-        for octant in 0..8 {
-            self.cast_light(
-                &mut visible,
-                origin.x as isize,
-                origin.y as isize,
-                1,
-                1.0,
-                0.0,
-                max_radius as isize,
-                octant,
-            );
-        }
-
-        visible
-    }
-
-    fn cast_light(
-        &self,
-        visible: &mut HashSet<Position>,
-        cx: isize,
-        cy: isize,
-        row: isize,
-        mut start_slope: f64,
-        end_slope: f64,
-        radius: isize,
-        octant: u8,
-    ) {
-        if start_slope < end_slope {
-            return;
-        }
-
-        let mut next_start_slope = start_slope;
-
-        for i in row..=radius {
-            let mut blocked = false;
-            let mut dx = -i;
-            while dx <= 0 {
-                let dy = -i;
-                let (nx, ny) = match octant {
-                    0 => (cx + dx, cy + dy),
-                    1 => (cx + dy, cy + dx),
-                    2 => (cx + dy, cy - dx),
-                    3 => (cx + dx, cy - dy),
-                    4 => (cx - dx, cy - dy),
-                    5 => (cx - dy, cy - dx),
-                    6 => (cx - dy, cy + dx),
-                    7 => (cx - dx, cy + dy),
-                    _ => (cx, cy),
-                };
-
-                let l_slope = (dx as f64 - 0.5) / (dy as f64 + 0.5);
-                let r_slope = (dx as f64 + 0.5) / (dy as f64 - 0.5);
-
-                if r_slope > start_slope {
-                    dx += 1;
-                    continue;
-                } else if l_slope < end_slope {
-                    break;
-                }
-
-                let distance = dx * dx + dy * dy;
-                if nx >= 0 && ny >= 0 && nx < GRID_WIDTH as isize && ny < GRID_HEIGHT as isize {
-                    let is_blocking = self.is_opaque(nx, ny);
-                    
-                    // Only insert tiles that are not opaque
-                    if !is_blocking && distance <= radius * radius {
-                        visible.insert(Position {
-                            x: nx as usize,
-                            y: ny as usize,
-                        });
-                    }
-                }
-
-                if blocked {
-                    if self.is_opaque(nx, ny) {
-                        next_start_slope = r_slope;
-                        dx += 1;
-                        continue;
-                    } else {
-                        blocked = false;
-                        start_slope = next_start_slope;
-                    }
-                } else {
-                    if self.is_opaque(nx, ny) {
-                        blocked = true;
-                        self.cast_light(visible, cx, cy, i + 1, next_start_slope, l_slope, radius, octant);
-                        next_start_slope = r_slope;
-                    }
-                }
-
-                dx += 1;
-            }
-
-            if blocked {
-                break;
-            }
-        }
-    }
-
     fn compute_player_fov(&mut self, player: &mut Player, radius: usize) {
         let pos = {
             player.pos()
         };
-        let visible = self.compute_fov(pos, radius);
+        let visible = Navigator::compute_fov(&self.tiles, pos, radius);
         player.line_of_sight = visible;
     }
-
-    fn has_line_of_sight(&self, from: Position, to: Position) -> bool {
-        let mut x0 = from.x as isize;
-        let mut y0 = from.y as isize;
-        let x1 = to.x as isize;
-        let y1 = to.y as isize;
-
-        let dx = (x1 - x0).abs();
-        let dy = -(y1 - y0).abs();
-        let sx = if x0 < x1 { 1 } else { -1 };
-        let sy = if y0 < y1 { 1 } else { -1 };
-        let mut err = dx + dy;
-
-        loop {
-            if x0 == x1 && y0 == y1 {
-                break; // reached target tile
-            }
-
-            // Skip the origin tile
-            if !(x0 == from.x as isize && y0 == from.y as isize) {
-                // Out of bounds safety
-                if x0 < 0 || y0 < 0 || x0 >= GRID_WIDTH as isize || y0 >= GRID_HEIGHT as isize {
-                    return false;
-                }
-
-                let tile = &self.tiles[Position::new(x0 as usize, y0 as usize)];
-                if matches!(tile.kind, TileKind::Wall) {
-                    return false;
-                }
-            }
-
-            let e2 = 2 * err;
-            if e2 >= dy {
-                err += dy;
-                x0 += sx;
-            }
-            if e2 <= dx {
-                err += dx;
-                y0 += sy;
-            }
-        }
-
-        true
-    }
-
-    fn in_spell_area(&self, player: &Player, pos: Position) -> bool {
-        // compute_fov(self, pos, , GRID_HEIGHT));
-        if let Some(selected_spell) = player.selected_spell {
-            if let Some(spell) = player.spells.get(selected_spell) {
-                let player_pos = player.pos();
-                if spell.spell_type.range > 0 && player_pos.in_range(&pos, spell.spell_type.range as usize) &&
-                player.line_of_sight.contains(&pos) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
 
     fn update_spell_fov_cache(&mut self, player: &Player) {
         self.should_draw_spell_fov = false;
@@ -359,7 +161,7 @@ impl Map {
         if spell_fov_needs_update {
             self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
             self.spell_fov_cache.origin = self.hovered.unwrap_or(POSITION_INVALID);
-            self.spell_fov_cache.area = self.compute_fov(self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
+            self.spell_fov_cache.area = Navigator::compute_fov(&self.tiles, self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
         }
     }
 
@@ -478,11 +280,6 @@ impl Map {
     }
 
     fn do_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position, spell_index: usize) {
-        if !self.has_line_of_sight(attacker_pos, target_pos) {
-            println!("Target is out of line of sight!");
-            return;
-        }
-
         let spell = player.spells.get_mut(spell_index)
             .expect("Selected spell index out of bounds");
 
@@ -564,7 +361,7 @@ impl Map {
                 self.last_player_event = Some(PlayerEvent::SpellCast);
             }
             else {
-                let path = find_path(player_pos, player_goal, |pos| {
+                let path = Navigator::find_path(player_pos, player_goal, |pos| {
                     self.is_tile_walkable(pos)
                 });
 
@@ -662,7 +459,7 @@ impl Map {
                 }
                 let monster_pos = monster.pos();
 
-                let path = find_path(monster_pos, player.position, |pos| {
+                let path = Navigator::find_path(monster_pos, player.position, |pos| {
                     pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
                 });
 

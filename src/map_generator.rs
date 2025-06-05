@@ -221,17 +221,7 @@ pub fn generate() -> Map {
     let mut available_walkable_cache = walkable_cache.clone();
     available_walkable_cache.shuffle(&mut rng);
 
-    let map = Map {
-        tiles: TileMap::new(tiles),
-        walkable_cache: walkable_cache,
-        available_walkable_cache: available_walkable_cache,
-        monsters: Vec::new(),
-        hovered: None,
-        hovered_changed: false,
-        last_player_event: None,
-        spell_fov_cache: SpellFovCache::new(),
-        should_draw_spell_fov: false,
-    };
+    let map = Map::new(tiles, walkable_cache, available_walkable_cache);
 
     map
 }

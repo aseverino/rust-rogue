@@ -20,7 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::item::*;
+use macroquad::prelude::*;
+
+use crate::{item::*, map::TILE_SIZE, position::Position};
 
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
@@ -51,5 +53,43 @@ impl Tile {
     pub fn add_orb(&mut self) {
         let orb = Orb {};
         self.item = Some(ItemKind::Orb(orb));
+    }
+
+    pub fn draw(&self, pos: Position, offset: (f32, f32)) {
+        let color = match self.kind {
+            TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+            TileKind::Wall => Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
+            TileKind::Chasm => Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        };
+
+        draw_rectangle(
+            offset.0 + pos.x as f32 * TILE_SIZE,
+            offset.1 + pos.y as f32 * TILE_SIZE,
+            TILE_SIZE - 1.0,
+            TILE_SIZE - 1.0,
+            color,
+        );
+
+        if let Some(item) = &self.item {
+            match item {
+                ItemKind::Orb(_) => {
+                    draw_circle(
+                        offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+                        offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+                        TILE_SIZE / 4.0,
+                        Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+                    );
+                }
+                ItemKind::Portal(_) => {
+                    draw_rectangle(
+                        offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+                        offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+                        TILE_SIZE / 2.0,
+                        TILE_SIZE / 2.0,
+                        Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 },
+                    );
+                }
+            }
+        }
     }
 }

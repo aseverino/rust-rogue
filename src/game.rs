@@ -61,6 +61,7 @@ pub async fn run() {
     };
 
     game.map.init(&mut game.player).await;
+    game.map.set_player_random_position(&mut game.player);
     
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps

@@ -138,9 +138,25 @@ where
 impl Map {
     pub async fn init(&mut self, player: &mut Player) {
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
-        // let monster_types = load_monster_types().await;
-        // self.add_random_monsters(&monster_types, 10);
+        let monster_types = load_monster_types().await;
+        self.add_random_monsters(&monster_types, 10);
         
+        let len = self.available_walkable_cache.len();
+        let positions: Vec<Position> = self.available_walkable_cache
+            .drain(len.saturating_sub(2)..)
+            .collect();
+
+        for pos in positions {
+            self.tiles[pos].add_orb();
+        }
+    }
+
+    pub fn set_player_random_position(&mut self, player: &mut Player) {
+        let pos = self.available_walkable_cache.pop()
+            .unwrap_or_else(|| Position::new(1, 1)); // Default to (1, 1) if no walkable positions
+
+        self.tiles[pos].creature = PLAYER_CREATURE_ID;
+        player.set_pos(pos);
     }
 
     fn is_opaque(&self, x: isize, y: isize) -> bool {
@@ -353,19 +369,7 @@ impl Map {
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
                 let tile = &self.tiles[Position::new(x, y)];
-                let color = match tile.kind {
-                    TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
-                    TileKind::Wall => Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
-                    TileKind::Chasm => Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                };
-
-                draw_rectangle(
-                    offset.0 + x as f32 * TILE_SIZE,
-                    offset.1 + y as f32 * TILE_SIZE,
-                    TILE_SIZE - 1.0,
-                    TILE_SIZE - 1.0,
-                    color,
-                );
+                tile.draw(Position::new(x, y), offset);
 
                 if self.should_draw_spell_fov {
                     let player_pos = player.pos();
@@ -432,12 +436,14 @@ impl Map {
         // positions.shuffle(&mut rng);
 
         // 3. Pick up to `count` positions
-        //let positions = self.walkable_cache.take(count);
+        let len = self.available_walkable_cache.len();
+        let positions: Vec<Position> = self.available_walkable_cache
+            .drain(len.saturating_sub(count)..)
+            .collect();
 
         let all_types: Vec<_> = monster_types.values().cloned().collect();
 
-        let mut i = 0;
-        for pos in &self.walkable_cache {
+        for pos in positions {
             let kind = all_types
                 .choose(&mut rng)
                 .expect("Monster type list is empty")
@@ -445,10 +451,6 @@ impl Map {
 
             // Wrap the monster in Rc and push to creatures
             self.monsters.push(Monster::new(pos.clone(), kind));
-            i += 1;
-            if i >= count {
-                break;
-            }
         }
 
         self.walkable_cache.shuffle(&mut rng);

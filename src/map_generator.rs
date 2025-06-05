@@ -223,8 +223,8 @@ pub fn generate() -> Map {
 
     let map = Map {
         tiles: TileMap::new(tiles),
-        available_walkable_cache: available_walkable_cache,
         walkable_cache: walkable_cache,
+        available_walkable_cache: available_walkable_cache,
         monsters: Vec::new(),
         hovered: None,
         hovered_changed: false,

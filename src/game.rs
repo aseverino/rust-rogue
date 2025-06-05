@@ -50,6 +50,21 @@ impl GameState {
     }
 }
 
+fn draw(game: &mut GameState, game_interface_offset: (f32, f32)) {
+    if !game.ui.is_focused {
+        game.map.draw(&game.player, game_interface_offset);
+    }
+    
+    let resolution = (screen_width(), screen_height());
+
+    let (hp, max_hp) = game.get_player_hp();
+    let sp = game.get_player_sp();
+    game.ui.set_player_hp(hp, max_hp);
+    game.ui.set_player_sp(sp);
+
+    game.ui.draw(resolution);
+}
+
 pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
@@ -71,8 +86,7 @@ pub async fn run() {
     loop {
         let now = get_time();
         if now - last_move_time < move_interval {
-            // If the last move was too recent, skip this frame
-            game.map.draw(&game.player, game_interface_offset);
+            draw(&mut game, game_interface_offset);
             next_frame().await;
             continue;
         }
@@ -98,7 +112,19 @@ pub async fn run() {
             goal_position = Some(current_tile)
         };
 
-        game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+        if game.ui.is_focused {
+            if input.keyboard_action == KeyboardAction::Cancel {
+                game.ui.hide();
+            }
+        }
+        else {
+            if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
+                game.ui.show_character_sheet();
+            }
+            else {
+                game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+            }   
+        }
 
         if game.map.last_player_event == Some(PlayerEvent::AutoMove) {
             last_move_time = now; // Update last move time for auto step
@@ -106,16 +132,7 @@ pub async fn run() {
             goal_position = None;
         }
 
-        game.map.draw(&game.player, game_interface_offset);
-        let resolution = (screen_width(), screen_height());
-
-        let (hp, max_hp) = game.get_player_hp();
-        let sp = game.get_player_sp();
-        game.ui.set_player_hp(hp, max_hp);
-        game.ui.set_player_sp(sp);
-
-        game.ui.draw(resolution);
-
+        draw(&mut game, game_interface_offset);
         next_frame().await;
     }
 }

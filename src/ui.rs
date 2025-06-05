@@ -26,6 +26,9 @@ pub struct Ui {
     player_hp: i32,
     player_max_hp: i32,
     player_sp: u32,
+
+    pub is_character_sheet_visible: bool,
+    pub is_focused: bool,
 }
 
 impl Ui {
@@ -34,6 +37,8 @@ impl Ui {
             player_hp: 0,
             player_max_hp: 0,
             player_sp: 0,
+            is_character_sheet_visible: false,
+            is_focused: false,
         }
     }
 
@@ -50,7 +55,17 @@ impl Ui {
 
     }
 
-    pub fn draw(&mut self, resolution: (f32, f32)) {
+    pub fn show_character_sheet(&mut self) {
+        self.is_character_sheet_visible = true;
+        self.is_focused = true;
+    }
+
+    pub fn hide(&mut self) {
+        self.is_character_sheet_visible = false;
+        self.is_focused = false;
+    }
+
+    fn draw_left_panel(&mut self, resolution: (f32, f32)) {
         draw_rectangle_lines(
             0.0,
             0.0,
@@ -83,7 +98,9 @@ impl Ui {
 
         text = format!("{}", self.player_sp);
         draw_text(&text,text_offset,offset.1,30.0,YELLOW);
+    }
 
+    fn draw_right_panel(&mut self, resolution: (f32, f32)) {
         draw_rectangle_lines(
             resolution.0 - 400.0,
             0.0,
@@ -94,5 +111,36 @@ impl Ui {
         );
 
         draw_text("UI 2", resolution.0 - 400.0, 20.0, 30.0, WHITE);
+    }
+
+    fn draw_character_sheet(&mut self, resolution: (f32, f32)) {
+        draw_rectangle_lines(
+            400.0,
+            0.0,
+            resolution.0 - 400.0,
+            resolution.1,
+            2.0,
+            WHITE,
+        );
+
+        let mut offset = (420.0, 30.0);
+
+        draw_text("Spells", offset.0, offset.1, 30.0, WHITE);
+        offset.1 += 30.0;
+        draw_text("Learn New Spell (S)", offset.0, offset.1, 30.0, WHITE);
+
+        offset = (resolution.0 - resolution.0 / 2.0, 30.0);
+        draw_text("Skills", offset.0, offset.1, 30.0, WHITE);
+        offset.1 += 30.0;
+        draw_text("Learn New Skill (K)", offset.0, offset.1, 30.0, WHITE);
+    }
+
+    pub fn draw(&mut self, resolution: (f32, f32)) {
+        self.draw_left_panel(resolution);
+        self.draw_right_panel(resolution);
+        
+        if self.is_character_sheet_visible {
+            self.draw_character_sheet(resolution);
+        }
     }
 }

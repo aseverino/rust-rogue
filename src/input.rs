@@ -32,6 +32,7 @@ pub enum KeyboardAction {
     Wait,
     Cancel,
     SpellSelect,
+    OpenCharacterSheet,
 }
 
 pub struct Input {
@@ -99,6 +100,9 @@ impl Input {
         if is_key_pressed(KeyCode::Key1) {
             keyboard_action = KeyboardAction::SpellSelect;
             spell_action = 1;
+        }
+        if is_key_down(KeyCode::C) {
+            keyboard_action = KeyboardAction::OpenCharacterSheet;
         }
 
         self.keyboard_action = keyboard_action;

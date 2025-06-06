@@ -20,41 +20,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod input;
-mod ui;
-mod game;
-mod item;
-mod navigator;
-mod map;
-mod map_generator;
-mod position;
-mod tile;
-mod tile_map;
-mod creature;
-mod monster_type;
-mod monster;
-mod spell_type;
-mod player_spell;
-mod spell_execution;
-mod player;
-use std::sync::Mutex;
-
-use macroquad::prelude::*;
-
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "OpenRift".to_string(),
-        window_width: 1920,
-        window_height: 1100,
-        fullscreen: false,
-        ..Default::default()
-    }
+#[derive(Copy, Clone, Debug)]
+pub struct SizeF {
+    pub w: f32,
+    pub h: f32,
 }
 
-//use crate::ui::{Ui};
+impl SizeF {
+    pub fn new(width: f32, height: f32) -> Self {
+        SizeF { w: width, h: height }
+    }
 
-#[macroquad::main(window_conf)]
-async fn main() {
-    //UI.set(Mutex::new(Ui::new())).unwrap();
-    game::run().await;
+    pub fn zero() -> Self {
+        SizeF { w: 0.0, h: 0.0 }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.w == 0.0 && self.h == 0.0
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.w > 0.0 && self.h > 0.0
+    }
 }

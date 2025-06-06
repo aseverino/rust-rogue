@@ -22,6 +22,7 @@
 
 use macroquad::prelude::*;
 use crate::map::{Map, TILE_SIZE, PlayerEvent};
+use crate::ui::size_f::SizeF;
 use crate::ui::Ui;
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
@@ -55,14 +56,14 @@ fn draw(game: &mut GameState, game_interface_offset: (f32, f32)) {
         game.map.draw(&game.player, game_interface_offset);
     }
     
-    let resolution = (screen_width(), screen_height());
+    game.ui.update_geometry(SizeF::new(screen_width(), screen_height()));
 
     let (hp, max_hp) = game.get_player_hp();
     let sp = game.get_player_sp();
     game.ui.set_player_hp(hp, max_hp);
     game.ui.set_player_sp(sp);
 
-    game.ui.draw(resolution);
+    game.ui.draw();
 }
 
 pub async fn run() {

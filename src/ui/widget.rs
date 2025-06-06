@@ -49,6 +49,7 @@ pub struct WidgetBase {
     pub anchors: Vec<Anchor>,
     pub position: PointF,
     pub size: SizeF,
+    pub margin: QuadF,
     pub computed_quad: RwLock<Option<QuadF>>,
     pub dirty: AtomicBool,
     pub visible: bool,
@@ -64,6 +65,7 @@ impl WidgetBase {
             anchors: Vec::new(),
             position: PointF::zero(),
             size: SizeF::zero(),
+            margin: QuadF::zero(),
             computed_quad: RwLock::new(None),
             dirty: AtomicBool::new(true),
             visible: true,
@@ -86,10 +88,23 @@ pub trait Widget: Send + Sync {
     fn set_color(&mut self, color: Color);
     fn get_size(&self) -> SizeF;
     fn set_size(&mut self, size: SizeF);
+
     fn get_top(&self, ui: &Ui) -> f32;
     fn get_left(&self, ui: &Ui) -> f32;
     fn get_right(&self, ui: &Ui) -> f32;
     fn get_bottom(&self, ui: &Ui) -> f32;
+
+    fn get_margin_top(&self) -> f32;
+    fn get_margin_left(&self) -> f32;
+    fn get_margin_right(&self) -> f32;
+    fn get_margin_bottom(&self) -> f32;
+    fn get_margin(&self) -> QuadF;
+
+    fn set_margin_top(&mut self, margin: f32);
+    fn set_margin_left(&mut self, margin: f32);
+    fn set_margin_right(&mut self, margin: f32);
+    fn set_margin_bottom(&mut self, margin: f32);
+    fn set_margin(&mut self, margin: QuadF);
 
     fn get_coords(&self) -> QuadF;
 
@@ -98,6 +113,7 @@ pub trait Widget: Send + Sync {
 
     fn get_id(&self) -> u32;
     fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind);
+    fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind);
     fn get_drawing_coords(&self, ui: &Ui) -> QuadF;
     fn recompute_quad(&self, ui: &Ui) -> QuadF;
 }
@@ -156,6 +172,43 @@ macro_rules! impl_widget {
                 q.y + q.h
             }
 
+            fn get_margin_top(&self) -> f32 {
+                self.$base.margin.y
+            }
+            fn get_margin_left(&self) -> f32 {
+                self.$base.margin.x
+            }
+            fn get_margin_right(&self) -> f32 {
+                self.$base.margin.x + self.$base.margin.w
+            }
+            fn get_margin_bottom(&self) -> f32 {
+                self.$base.margin.y + self.$base.margin.h
+            }
+            fn get_margin(&self) -> QuadF {
+                self.$base.margin
+            }
+
+            fn set_margin_top(&mut self, margin: f32) {
+                self.$base.margin.y = margin;
+                self.$base.dirty.store(true, Ordering::SeqCst);
+            }
+            fn set_margin_left(&mut self, margin: f32) {
+                self.$base.margin.x = margin;
+                self.$base.dirty.store(true, Ordering::SeqCst);
+            }
+            fn set_margin_right(&mut self, margin: f32) {
+                self.$base.margin.w = margin;
+                self.$base.dirty.store(true, Ordering::SeqCst);
+            }
+            fn set_margin_bottom(&mut self, margin: f32) {
+                self.$base.margin.h = margin;
+                self.$base.dirty.store(true, Ordering::SeqCst);
+            }
+            fn set_margin(&mut self, margin: QuadF) {
+                self.$base.margin = margin;
+                self.$base.dirty.store(true, Ordering::SeqCst);
+            }
+
             fn get_coords(&self) -> QuadF {
                 // Return a copy of the computed quad, or a zero quad if not set
                 self.$base.computed_quad.read().unwrap().unwrap_or_else(QuadF::zero)
@@ -180,6 +233,16 @@ macro_rules! impl_widget {
                 });
                 self.$base.dirty.store(true, Ordering::SeqCst);
             }
+
+            fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind) {
+                self.$base.anchors.push(Anchor {
+                    anchor_this: this,
+                    anchor_widget_id: self.$base.parent_id.unwrap_or(0),
+                    anchor_to: other_side,
+                });
+                self.$base.dirty.store(true, Ordering::SeqCst);
+            }
+
             fn set_size(&mut self, sz: SizeF) {
                 self.$base.size = sz;
                 self.$base.dirty.store(true, Ordering::SeqCst);
@@ -262,6 +325,8 @@ macro_rules! impl_widget {
                     quad.h = self.$base.size.h;
                 }
 
+                quad.x += self.$base.margin.x;
+                quad.y += self.$base.margin.y;
                 quad
             }
         }

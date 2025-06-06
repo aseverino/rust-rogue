@@ -38,7 +38,6 @@ pub struct WidgetText {
     pub is_clickable: bool,
 
     pub text: String,
-    pub color: Color,
     pub position: PointF,
 }
 
@@ -52,15 +51,27 @@ impl WidgetText {
             is_visible: true,
             is_clickable: true,
             text: "".to_string(),
-            color: BLANK,
             position: PointF::zero(),
         }
     }
 
-    pub fn draw(&self, ui: &Ui) {
-        if self.is_visible {
-            draw_text(&self.text, self.position.x, self.position.y, 30.0, WHITE);
+    pub fn draw(&self, _ui: &Ui) {
+        let quad_opt = self.base.computed_quad.read().unwrap();
+
+        // 2) Early‐exit if the widget is invisible
+        // if !self.base.visible {
+        //     return;
+        // }
+
+        if let Some(drawing_coords) = *quad_opt {
+            draw_text(&self.text, drawing_coords.x, drawing_coords.y, 30.0, self.base.color);
         }
+    }
+
+    pub fn set_text(&mut self, text: &String) {
+        self.text = text.to_string();
+        let dim = measure_text(&text, None, 30, 1.0);
+        self.base.size = SizeF::new(dim.width, dim.height);
     }
 }
 

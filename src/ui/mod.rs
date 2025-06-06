@@ -35,7 +35,7 @@ use std::{cell::RefCell, rc::Rc, sync::Mutex};
 use macroquad::prelude::*;
 use once_cell::sync::OnceCell;
 
-use crate::ui::{point_f::PointF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget}, widget_panel::WidgetPanel};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget}, widget_panel::WidgetPanel, widget_text::WidgetText};
 use std::fmt::Debug;
 
 trait WidgetDebug: Widget + Debug {}
@@ -138,13 +138,23 @@ impl Ui {
         let mut left_panel: WidgetPanel = WidgetPanel::new(self.id_counter, Some(ROOT_ID));
         left_panel.set_size(SizeF::new(400.0, 0.0));
         left_panel.set_border(WHITE, 2.0);
-        left_panel.add_anchor(AnchorKind::Top, ROOT_ID, AnchorKind::Top);
-        left_panel.add_anchor(AnchorKind::Bottom, ROOT_ID, AnchorKind::Bottom);
-        left_panel.add_anchor(AnchorKind::Left, ROOT_ID, AnchorKind::Left);
+        left_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+        left_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+        left_panel.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         // left_panel.set_visible(false);
         self.widgets.push(Box::new(left_panel));
         self.id_counter += 1;
 
+        let text: String = "HP".to_string();
+        let true_red = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+        let mut hp_label: WidgetText = WidgetText::new(self.id_counter, self.left_panel_id);
+        hp_label.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+        hp_label.set_text(&text);
+        hp_label.set_color(true_red);
+        hp_label.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+        hp_label.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        self.widgets.push(Box::new(hp_label));
+        self.id_counter += 1;
 
         // self.widgets.push(Box::new(WidgetPanel::new(
         //     (0.0, 0.0),
@@ -191,9 +201,9 @@ impl Ui {
         let mut right_panel: WidgetPanel = WidgetPanel::new(self.id_counter, Some(ROOT_ID));
         right_panel.set_size(SizeF::new(400.0, 0.0));
         right_panel.set_border(WHITE, 2.0);
-        right_panel.add_anchor(AnchorKind::Top, ROOT_ID, AnchorKind::Top);
-        right_panel.add_anchor(AnchorKind::Bottom, ROOT_ID, AnchorKind::Bottom);
-        right_panel.add_anchor(AnchorKind::Right, ROOT_ID, AnchorKind::Right);
+        right_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+        right_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+        right_panel.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
         // right_panel.set_visible(false);
         self.widgets.push(Box::new(right_panel));
         self.id_counter += 1;
@@ -204,11 +214,12 @@ impl Ui {
         let mut character_sheet: WidgetPanel = WidgetPanel::new(self.id_counter, Some(ROOT_ID));
         character_sheet.set_size(SizeF::new(400.0, 0.0));
         character_sheet.set_border(WHITE, 2.0);
-        character_sheet.add_anchor(AnchorKind::Top, ROOT_ID, AnchorKind::Top);
-        character_sheet.add_anchor(AnchorKind::Bottom, ROOT_ID, AnchorKind::Bottom);
+        character_sheet.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+        character_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
         character_sheet.add_anchor(AnchorKind::Left, self.left_panel_id, AnchorKind::Right);
         character_sheet.add_anchor(AnchorKind::Right, self.right_panel_id, AnchorKind::Left);
         character_sheet.set_color(BLACK);
+        character_sheet.set_visible(false);
         self.widgets.push(Box::new(character_sheet));
         self.id_counter += 1;
     }

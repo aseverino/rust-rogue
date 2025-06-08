@@ -30,7 +30,7 @@ mod widget;
 pub mod widget_panel;
 pub mod widget_text;
 
-use std::{cell::RefCell, rc::Rc, sync::Mutex};
+use std::{cell::RefCell, rc::Weak, rc::Rc, sync::Mutex};
 
 use macroquad::prelude::*;
 use once_cell::sync::OnceCell;
@@ -38,8 +38,8 @@ use once_cell::sync::OnceCell;
 use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget}, widget_panel::WidgetPanel, widget_text::WidgetText};
 use std::fmt::Debug;
 
-trait WidgetDebug: Widget + Debug {}
-impl<T: Widget + Debug> WidgetDebug for T {}
+// trait WidgetDebug: Widget + Debug {}
+// impl<T: Widget + Debug> WidgetDebug for T {}
 
 static ROOT_ID: u32 = 0;
 
@@ -57,7 +57,7 @@ pub struct Ui {
     pub character_sheet_id: u32,
 
     id_counter: u32,
-    pub widgets: Vec<Box<dyn WidgetDebug>>,
+    pub widgets: Vec<Rc<RefCell<dyn Widget>>>,
 }
 
 impl Ui {
@@ -76,7 +76,7 @@ impl Ui {
             widgets: Vec::new(),
         };
 
-        ui.widgets.push(Box::new(root));
+        ui.widgets.push(root);
 
         ui.create_left_panel();
         ui.create_right_panel();
@@ -84,29 +84,13 @@ impl Ui {
         ui
     }
 
-    pub fn update_geometry(&mut self, resolution: SizeF) {
-        // Step 1: resize the root widget by &mut borrow
-        if let Some(root) = self
-            .widgets
-            .iter()
-            .find(|w| w.get_id() == ROOT_ID)
-        {
-            // We know `root` is a &Widget, not &mut Widget. But we want &mut Widget to set_size.
-            // In practice, you can retrieve the index or split_mut. Easiest is:
-            let root_idx = self
-                .widgets
-                .iter()
-                .position(|w| w.get_id() == ROOT_ID)
-                .unwrap();
-            self.widgets[root_idx].set_size(SizeF::new(resolution.w, resolution.h));
-        }
-
-        // Step 2: recompute drawing_coords for every widget, using only &self
-        // (interior mutability takes care of writing into computed_quad).
+    pub fn update_geometry(&self, resolution: SizeF) {
+        self.widgets[ROOT_ID as usize].borrow_mut().set_size(SizeF::new(resolution.w, resolution.h));
+        
         for widget in &self.widgets {
             // This only needs `&self`, not `&mut self`.
             // Each call to `update_drawing_coords` will write into that widget's Cell.
-            widget.get_drawing_coords(self);
+            widget.borrow_mut().get_drawing_coords(self);
         }
     }
 
@@ -133,85 +117,118 @@ impl Ui {
         self.is_focused = false;
     }
 
+    fn create_widget<T: Widget + 'static>(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<T>> {
+        let widget = T::new(self.id_counter, parent);
+        let widget_dyn: Rc<RefCell<dyn Widget>> = widget.clone();
+
+        self.widgets.push(widget_dyn);
+        self.id_counter += 1;
+
+        widget
+    }
+
     fn create_left_panel(&mut self) {
         self.left_panel_id = self.id_counter;
-        let mut left_panel: WidgetPanel = WidgetPanel::new(self.id_counter, Some(ROOT_ID));
-        left_panel.set_size(SizeF::new(400.0, 0.0));
-        left_panel.set_border(WHITE, 2.0);
-        left_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-        left_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
-        left_panel.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
-        // left_panel.set_visible(false);
-        self.widgets.push(Box::new(left_panel));
-        self.id_counter += 1;
+        let left_panel_rc = self.create_widget::<WidgetPanel>(
+            Some(Rc::downgrade(&self.widgets[ROOT_ID as usize]))
+        );
 
-        let text: String = "HP".to_string();
-        let true_red = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
-        let mut hp_label: WidgetText = WidgetText::new(self.id_counter, self.left_panel_id);
-        hp_label.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
-        hp_label.set_text(&text);
-        hp_label.set_color(true_red);
-        hp_label.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-        hp_label.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
-        self.widgets.push(Box::new(hp_label));
-        self.id_counter += 1;
+        {
+            let mut left_panel = left_panel_rc.borrow_mut();
+            left_panel.set_size(SizeF::new(400.0, 0.0));
+            left_panel.set_border(WHITE, 2.0);
+            left_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            left_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            left_panel.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        } // ← mutable borrow of `left_panel_rc` ends here
 
-        // self.widgets.push(Box::new(WidgetPanel::new(
-        //     (0.0, 0.0),
-        //     (400.0, -1.0),
-        //     WHITE,
-        // )));
+        let parent_dyn = Rc::clone(&self.widgets[self.left_panel_id as usize]);
 
-        // draw_rectangle_lines(
-        //     0.0,
-        //     0.0,
-        //     400.0,
-        //     resolution.1,
-        //     2.0,
-        //     WHITE,
-        // );
+        // HP label
+        let hp_label = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = hp_label.borrow_mut();
+            lbl.set_text(&"HP".to_string());
+            lbl.set_color(Color { r:1.0, g:0.0, b:0.0, a:1.0 });
+            lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            lbl.add_anchor_to_parent(AnchorKind::Top,    AnchorKind::Top);
+            lbl.add_anchor_to_parent(AnchorKind::Left,   AnchorKind::Left);
+        }
 
-        // let mut offset: (f32, f32) = (10.0, 30.0);
+        // Current‐HP value
+        let hp_value = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut val = hp_value.borrow_mut();
+            val.set_text(&format!("{}", self.player_hp));
+            val.set_margin_left(10.0);
+            // Anchor it relative to the "HP" label we just made
+            val.add_anchor(AnchorKind::Top,  hp_label.borrow().get_id(), AnchorKind::Top);
+            val.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
+        }
 
-        // let mut text: String = "HP".to_string();
-        // let true_red = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0};
-        // draw_text(&text, offset.0, offset.1, 30.0, true_red);
-        // let mut text_offset = measure_text(&text, None, 30, 1.0).width;
-        // text_offset += offset.0 + 10.0;
-        // let start_of_health = text_offset;
+        // Max‐HP value
+        let hp_max_value = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut val = hp_max_value.borrow_mut();
+            val.set_text(&format!("/{}", self.player_max_hp));
+            // Anchor it relative to the "HP" label we just made
+            val.add_anchor(AnchorKind::Top,  hp_value.borrow().get_id(), AnchorKind::Top);
+            val.add_anchor(AnchorKind::Left, hp_value.borrow().get_id(), AnchorKind::Right);
+        }
 
-        // text = format!("{}", self.player_hp);
-        // draw_text(&text, text_offset, offset.1, 30.0, if self.player_hp < self.player_max_hp / 2 { true_red } else { WHITE });
-        // text_offset += measure_text(&text, None, 30, 1.0).width;
+        let sp_label = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = sp_label.borrow_mut();
+            lbl.set_text(&"SP".to_string());
+            lbl.set_color(YELLOW);
+            lbl.set_margin_top(10.0);
+            lbl.add_anchor(AnchorKind::Top, hp_label.borrow().get_id(), AnchorKind::Bottom);
+            lbl.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Left);
+        }
 
-        // text = format!("/{}", self.player_max_hp);
-        // draw_text(&text,text_offset,offset.1,30.0,WHITE);
-
-        // offset.1 += 30.0;
-        // text = "SP".to_string();
-        // draw_text(&text,offset.0,offset.1,30.0,YELLOW);
-        // text_offset = start_of_health;
-
-        // text = format!("{}", self.player_sp);
-        // draw_text(&text,text_offset,offset.1,30.0,YELLOW);
+        // Current‐SP value
+        let sp_value = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut val = sp_value.borrow_mut();
+            val.set_text(&format!("{}", self.player_sp));
+            val.set_margin_left(10.0);
+            // Anchor it relative to the "HP" label we just made
+            val.add_anchor(AnchorKind::Top,  sp_label.borrow().get_id(), AnchorKind::Top);
+            val.add_anchor(AnchorKind::Left, sp_label.borrow().get_id(), AnchorKind::Right);
+        }
     }
 
     fn create_right_panel(&mut self) {
         self.right_panel_id = self.id_counter;
-        let mut right_panel: WidgetPanel = WidgetPanel::new(self.id_counter, Some(ROOT_ID));
-        right_panel.set_size(SizeF::new(400.0, 0.0));
-        right_panel.set_border(WHITE, 2.0);
-        right_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-        right_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
-        right_panel.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        let right_panel_rc = WidgetPanel::new(self.id_counter, Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
+        {
+            let mut right_panel = right_panel_rc.borrow_mut();
+            right_panel.set_size(SizeF::new(400.0, 0.0));
+            right_panel.set_border(WHITE, 2.0);
+            right_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            right_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            right_panel.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        }
+        
         // right_panel.set_visible(false);
-        self.widgets.push(Box::new(right_panel));
+        self.widgets.push(right_panel_rc);
         self.id_counter += 1;
     }
 
     fn create_character_sheet(&mut self) {
         self.character_sheet_id = self.id_counter;
-        let mut character_sheet: WidgetPanel = WidgetPanel::new(self.id_counter, Some(ROOT_ID));
+        let character_sheet = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
+        let mut character_sheet = character_sheet.borrow_mut();
         character_sheet.set_size(SizeF::new(400.0, 0.0));
         character_sheet.set_border(WHITE, 2.0);
         character_sheet.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
@@ -220,8 +237,6 @@ impl Ui {
         character_sheet.add_anchor(AnchorKind::Right, self.right_panel_id, AnchorKind::Left);
         character_sheet.set_color(BLACK);
         character_sheet.set_visible(false);
-        self.widgets.push(Box::new(character_sheet));
-        self.id_counter += 1;
     }
 
     fn draw_right_panel(&mut self, resolution: (f32, f32)) {
@@ -263,11 +278,13 @@ impl Ui {
         let ui_ref = self as &Ui;
 
         // PRE-EXTRACT widgets to avoid borrow overlap:
-        let widgets = self.widgets.iter().collect::<Vec<_>>();
+        // let widgets = self.widgets.iter().collect::<Vec<_>>();
 
-        for widget in widgets {
-            widget.draw(ui_ref);
-        }
+        // for widget in widgets {
+        //     widget.draw(ui_ref);
+        // }
+
+        self.widgets[ROOT_ID as usize].borrow_mut().draw(ui_ref);
     }
 }
 

@@ -111,8 +111,8 @@ impl Map {
     }
     pub async fn init(&mut self, player: &mut Player) {
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
-        //let monster_types = load_monster_types().await;
-        //self.add_random_monsters(&monster_types, 10);
+        let monster_types = load_monster_types().await;
+        self.add_random_monsters(&monster_types, 10);
         
         let len = self.available_walkable_cache.len();
         let positions: Vec<Position> = self.available_walkable_cache

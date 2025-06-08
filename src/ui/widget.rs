@@ -20,8 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::sync::{RwLock, atomic::{AtomicBool, Ordering}};
-use std::{cell::RefCell, rc::Rc};
+use std::fmt::Debug;
+
+use std::{cell::RefCell, rc::{Weak, Rc}};
 use macroquad::color::{Color, BLANK};
 
 use crate::ui::{Ui};
@@ -36,48 +37,71 @@ pub enum AnchorKind {
     Bottom,
 }
 
+#[derive(Debug)]
 pub struct Anchor {
     pub anchor_this: AnchorKind,
     pub anchor_to: AnchorKind,
     pub anchor_widget_id: u32, // ID of the widget to anchor to
 }
 
+#[derive(Debug)]
 pub struct WidgetBase {
     pub id: u32,
-    pub parent_id: Option<u32>,
-    pub children: Vec<u32>,
+    pub parent: Option<Weak<RefCell<dyn Widget>>>,
+    pub children: Vec<Weak<RefCell<dyn Widget>>>,
     pub anchors: Vec<Anchor>,
     pub position: PointF,
     pub size: SizeF,
     pub margin: QuadF,
-    pub computed_quad: RwLock<Option<QuadF>>,
-    pub dirty: AtomicBool,
+    pub computed_quad: Option<QuadF>,
+    pub dirty: bool,
     pub visible: bool,
     pub color: Color,
 }
 
 impl WidgetBase {
-    pub fn new(id: u32, parent_id: Option<u32>) -> Self {
+    pub fn new(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self {
         WidgetBase {
             id,
-            parent_id,
+            parent: parent,
             children: Vec::new(),
             anchors: Vec::new(),
             position: PointF::zero(),
             size: SizeF::zero(),
             margin: QuadF::zero(),
-            computed_quad: RwLock::new(None),
-            dirty: AtomicBool::new(true),
+            computed_quad: None,
+            dirty: true,
             visible: true,
             color: BLANK,
         }
     }
 }
 
-pub trait Widget: Send + Sync {
-    fn parent(&self) -> Option<u32>;
-    fn children(&self) -> &[u32];
-    fn children_mut(&mut self) -> &mut Vec<u32>;
+pub trait WidgetBasicConstructor: Debug + 'static {
+    fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self where Self: Sized;
+}
+
+pub trait Widget: WidgetBasicConstructor + Debug + 'static {
+    fn new(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+        let w = Rc::new(RefCell::new(Self::basic_constructor(id, parent.clone())));
+
+        // Cast to trait object for correct type
+        let w_dyn: Rc<RefCell<dyn Widget>> = w.clone();
+
+        if let Some(parent_weak) = parent {
+            if let Some(parent_rc) = parent_weak.upgrade() {
+                parent_rc.borrow_mut().add_child(Rc::downgrade(&w_dyn));
+            }
+        }
+
+        w
+    }
+
+    fn get_parent(&self) -> &Option<Weak<RefCell<dyn Widget>>>;
+    fn get_parent_mut(&mut self) -> &mut Option<Weak<RefCell<dyn Widget>>>;
+    fn get_children(&self) -> &[Weak<RefCell<dyn Widget>>];
+    fn get_children_mut(&mut self) -> &mut Vec<Weak<RefCell<dyn Widget>>>;
+    fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>);
     fn draw(&self, ui: &Ui);
     // fn update(&mut self);
     // fn handle_input(&mut self);
@@ -89,10 +113,10 @@ pub trait Widget: Send + Sync {
     fn get_size(&self) -> SizeF;
     fn set_size(&mut self, size: SizeF);
 
-    fn get_top(&self, ui: &Ui) -> f32;
-    fn get_left(&self, ui: &Ui) -> f32;
-    fn get_right(&self, ui: &Ui) -> f32;
-    fn get_bottom(&self, ui: &Ui) -> f32;
+    fn get_top(&mut self, ui: &Ui) -> f32;
+    fn get_left(&mut self, ui: &Ui) -> f32;
+    fn get_right(&mut self, ui: &Ui) -> f32;
+    fn get_bottom(&mut self, ui: &Ui) -> f32;
 
     fn get_margin_top(&self) -> f32;
     fn get_margin_left(&self) -> f32;
@@ -114,7 +138,7 @@ pub trait Widget: Send + Sync {
     fn get_id(&self) -> u32;
     fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind);
     fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind);
-    fn get_drawing_coords(&self, ui: &Ui) -> QuadF;
+    fn get_drawing_coords(&mut self, ui: &Ui) -> QuadF;
     fn recompute_quad(&self, ui: &Ui) -> QuadF;
 }
 
@@ -131,16 +155,24 @@ pub trait Widget: Send + Sync {
 macro_rules! impl_widget {
     ($t:ty, $base:ident) => {
         impl Widget for $t {
-            fn parent(&self) -> Option<u32> {
-                self.$base.parent_id
+            fn get_parent(&self) -> &Option<Weak<RefCell<dyn Widget>>> {
+                &self.$base.parent
             }
-
-            fn children(&self) -> &[u32] {
+        
+            fn get_parent_mut(&mut self) -> &mut Option<Weak<RefCell<dyn Widget>>> {
+                &mut self.$base.parent
+            }
+        
+            fn get_children(&self) -> &[Weak<RefCell<dyn Widget>>] {
                 &self.$base.children
             }
-
-            fn children_mut(&mut self) -> &mut Vec<u32> {
+        
+            fn get_children_mut(&mut self) -> &mut Vec<Weak<RefCell<dyn Widget>>> {
                 &mut self.$base.children
+            }
+
+            fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>) {
+                self.get_children_mut().push(child);
             }
 
             fn draw(&self, ui: &Ui) {
@@ -155,19 +187,19 @@ macro_rules! impl_widget {
                 self.$base.size
             }
 
-            fn get_left(&self, ui: &Ui) -> f32 {
+            fn get_left(&mut self, ui: &Ui) -> f32 {
                 let q = self.get_drawing_coords(ui);
                 q.x
             }
-            fn get_right(&self, ui: &Ui) -> f32 {
+            fn get_right(&mut self, ui: &Ui) -> f32 {
                 let q = self.get_drawing_coords(ui);
                 q.x + q.w
             }
-            fn get_top(&self, ui: &Ui) -> f32 {
+            fn get_top(&mut self, ui: &Ui) -> f32 {
                 let q = self.get_drawing_coords(ui);
                 q.y
             }
-            fn get_bottom(&self, ui: &Ui) -> f32 {
+            fn get_bottom(&mut self, ui: &Ui) -> f32 {
                 let q = self.get_drawing_coords(ui);
                 q.y + q.h
             }
@@ -190,28 +222,28 @@ macro_rules! impl_widget {
 
             fn set_margin_top(&mut self, margin: f32) {
                 self.$base.margin.y = margin;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
             fn set_margin_left(&mut self, margin: f32) {
                 self.$base.margin.x = margin;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
             fn set_margin_right(&mut self, margin: f32) {
                 self.$base.margin.w = margin;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
             fn set_margin_bottom(&mut self, margin: f32) {
                 self.$base.margin.h = margin;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
             fn set_margin(&mut self, margin: QuadF) {
                 self.$base.margin = margin;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
 
             fn get_coords(&self) -> QuadF {
                 // Return a copy of the computed quad, or a zero quad if not set
-                self.$base.computed_quad.read().unwrap().unwrap_or_else(QuadF::zero)
+                self.$base.computed_quad.unwrap_or_else(QuadF::zero)
             }
 
             fn get_id(&self) -> u32 {
@@ -231,40 +263,50 @@ macro_rules! impl_widget {
                     anchor_widget_id: other_id,
                     anchor_to: other_side,
                 });
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
 
             fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind) {
-                self.$base.anchors.push(Anchor {
+                let parent_id = match &self.base.parent {
+                    Some(weak_parent) => {
+                        if let Some(parent_rc) = weak_parent.upgrade() {
+                            parent_rc.borrow().get_id()
+                        } else {
+                            0  // parent was dropped
+                        }
+                    }
+                    None => 0,
+                };
+
+                self.base.anchors.push(Anchor {
                     anchor_this: this,
-                    anchor_widget_id: self.$base.parent_id.unwrap_or(0),
+                    anchor_widget_id: parent_id,
                     anchor_to: other_side,
                 });
-                self.$base.dirty.store(true, Ordering::SeqCst);
+
+                self.base.dirty = true;
             }
 
             fn set_size(&mut self, sz: SizeF) {
                 self.$base.size = sz;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
             fn set_position(&mut self, pos: PointF) {
                 self.$base.position = pos;
-                self.$base.dirty.store(true, Ordering::SeqCst);
+                self.$base.dirty = true;
             }
             fn set_color(&mut self, color: Color) {
                 self.$base.color = color;
             }
 
-            fn get_drawing_coords(&self, ui: &Ui) -> QuadF {
-                if self.$base.dirty.load(Ordering::SeqCst) {
+            fn get_drawing_coords(&mut self, ui: &Ui) -> QuadF {
+                if self.$base.dirty || self.$base.computed_quad.is_none() {
                     let quad = self.recompute_quad(ui);
-                    let mut lock = self.$base.computed_quad.write().unwrap();
-                    *lock = Some(quad);
-                    self.$base.dirty.store(false, Ordering::SeqCst);
+                    self.$base.computed_quad = Some(quad);
+                    self.$base.dirty = false;
                     quad
                 } else {
-                    // Already computed_QuadF must be Some(_).
-                    self.$base.computed_quad.read().unwrap().unwrap()
+                    self.$base.computed_quad.unwrap()
                 }
             }
 
@@ -280,10 +322,10 @@ macro_rules! impl_widget {
                 for anchor in &self.base.anchors {
                     let anchor_widget = &ui.widgets[anchor.anchor_widget_id as usize];
                     let anchor_pos = match anchor.anchor_to {
-                        AnchorKind::Left => anchor_widget.get_left(ui),
-                        AnchorKind::Right => anchor_widget.get_right(ui),
-                        AnchorKind::Top => anchor_widget.get_top(ui),
-                        AnchorKind::Bottom => anchor_widget.get_bottom(ui),
+                        AnchorKind::Left => anchor_widget.borrow_mut().get_left(ui),
+                        AnchorKind::Right => anchor_widget.borrow_mut().get_right(ui),
+                        AnchorKind::Top => anchor_widget.borrow_mut().get_top(ui),
+                        AnchorKind::Bottom => anchor_widget.borrow_mut().get_bottom(ui),
                     };
 
                     match anchor.anchor_this {
@@ -332,34 +374,3 @@ macro_rules! impl_widget {
         }
     };
 }
-
-// #[macro_export]
-// macro_rules! impl_widget {
-//     ($t:ty, $base:ident, $position_getter:expr, $position_setter:expr, $draw_expr:expr) => {
-//         impl Widget for $t {
-//             fn parent(&self) -> Option<Rc<RefCell<dyn Widget>>> {
-//                 self.$base.parent.as_ref().map(Rc::clone)
-//             }
-
-//             fn children(&self) -> &[Rc<RefCell<dyn Widget>>] {
-//                 &self.$base.children
-//             }
-
-//             fn children_mut(&mut self) -> &mut Vec<Rc<RefCell<dyn Widget>>> {
-//                 &mut self.$base.children
-//             }
-
-//             fn draw(&self, offset: (f32, f32)) {
-//                 ($draw_expr)(self, offset);
-//             }
-
-//             fn get_position(&self) -> (f32, f32) {
-//                 ($position_getter)(self)
-//             }
-
-//             fn set_position(&mut self, position: (f32, f32)) {
-//                 ($position_setter)(self, position)
-//             }
-//         }
-//     };
-// }

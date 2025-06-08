@@ -24,9 +24,9 @@ use std::fmt;
 
 use macroquad::prelude::*;
 
-use std::sync::{RwLock, atomic::{AtomicBool, Ordering}};
+use std::{cell::RefCell, rc::{Weak, Rc}};
 
-use crate::ui::{Ui, point_f::PointF, size_f::SizeF, quad_f::QuadF, widget::{Widget, WidgetBase, Anchor, AnchorKind}};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, Ui};
 
 pub struct WidgetPanel {
     pub base: WidgetBase,
@@ -35,24 +35,15 @@ pub struct WidgetPanel {
 }
 
 impl WidgetPanel {
-    pub fn new(id: u32, parent_id: Option<u32>) -> Self {
-        WidgetPanel {
-            base: WidgetBase::new(id, parent_id),
-            border_color: None,
-            border_thickness: None,
-        }
-    }
-
     pub fn draw(&self, ui: &Ui) {
-        // 1) Acquire a read lock on computed_quad
-        let quad_opt = self.base.computed_quad.read().unwrap();
+        let quad_opt = self.base.computed_quad;
 
         // 2) Early‐exit if the widget is invisible
         if !self.base.visible {
             return;
         }
 
-        if let Some(drawing_coords) = *quad_opt {
+        if let Some(drawing_coords) = quad_opt {
             if let Some(border_color) = self.border_color {
                 if let Some(border_thickness) = self.border_thickness {
                     if self.base.color != BLANK {
@@ -72,11 +63,9 @@ impl WidgetPanel {
                         border_thickness,
                         border_color,
                     );
-                    return;
                 }
             }
-            
-            if self.base.color != BLANK {
+            else if self.base.color != BLANK {
                 draw_rectangle(
                     drawing_coords.x,
                     drawing_coords.y,
@@ -84,6 +73,12 @@ impl WidgetPanel {
                     drawing_coords.h,
                     self.base.color,
                 );
+            }
+        }
+        
+        for child in &self.base.children {
+            if let Some(child_widget) = child.upgrade() {
+                child_widget.borrow().draw(ui);
             }
         }
     }
@@ -99,6 +94,16 @@ impl fmt::Debug for WidgetPanel {
         f.debug_struct("WidgetPanel")
             // You can add fields here if you want more detailed debug output
             .finish()
+    }
+}
+
+impl WidgetBasicConstructor for WidgetPanel {
+    fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self {
+        WidgetPanel {
+            base: WidgetBase::new(id, parent),
+            border_color: None,
+            border_thickness: None,
+        }
     }
 }
 

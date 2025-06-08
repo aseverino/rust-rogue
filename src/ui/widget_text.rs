@@ -24,9 +24,9 @@ use std::fmt;
 
 use macroquad::prelude::*;
 
-use crate::ui::{Ui, point_f::PointF, size_f::SizeF, quad_f::QuadF, widget::{Widget, WidgetBase, Anchor, AnchorKind}};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, Ui};
 
-use std::sync::{RwLock, atomic::{AtomicBool, Ordering}};
+use std::{cell::RefCell, rc::{Weak, Rc}};
 
 pub struct WidgetText {
     base: WidgetBase,
@@ -42,28 +42,8 @@ pub struct WidgetText {
 }
 
 impl WidgetText {
-    pub fn new(id: u32, parent_id: u32) -> Self {
-        WidgetText {
-            base: WidgetBase::new(id, Some(parent_id)),
-            is_focused: false,
-            is_enabled: true,
-            is_hovered: false,
-            is_visible: true,
-            is_clickable: true,
-            text: "".to_string(),
-            position: PointF::zero(),
-        }
-    }
-
     pub fn draw(&self, _ui: &Ui) {
-        let quad_opt = self.base.computed_quad.read().unwrap();
-
-        // 2) Early‐exit if the widget is invisible
-        // if !self.base.visible {
-        //     return;
-        // }
-
-        if let Some(drawing_coords) = *quad_opt {
+        if let Some(drawing_coords) = self.base.computed_quad {
             draw_text(&self.text, drawing_coords.x, drawing_coords.y, 30.0, self.base.color);
         }
     }
@@ -77,9 +57,26 @@ impl WidgetText {
 
 impl fmt::Debug for WidgetText {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("WidgetText")
-            // You can add fields here if you want more detailed debug output
-            .finish()
+        f.debug_struct("WidgetText").finish()
+    }
+}
+
+impl WidgetBasicConstructor for WidgetText {
+    fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self {
+        let mut w = WidgetText {
+            base: WidgetBase::new(id, parent),
+            is_focused: false,
+            is_enabled: true,
+            is_hovered: false,
+            is_visible: true,
+            is_clickable: true,
+            text: "".to_string(),
+            position: PointF::zero(),
+        };
+
+        w.base.color = WHITE;
+
+        w
     }
 }
 

@@ -30,16 +30,13 @@ mod widget;
 pub mod widget_panel;
 pub mod widget_text;
 
-use std::{cell::RefCell, rc::Weak, rc::Rc, sync::Mutex};
+use std::{cell::RefCell, rc::Weak, rc::Rc};
 
 use macroquad::prelude::*;
-use once_cell::sync::OnceCell;
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget}, widget_panel::WidgetPanel, widget_text::WidgetText};
+use crate::ui::{quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_panel::WidgetPanel, widget_text::WidgetText};
 use std::fmt::Debug;
 
-// trait WidgetDebug: Widget + Debug {}
-// impl<T: Widget + Debug> WidgetDebug for T {}
 
 static ROOT_ID: u32 = 0;
 
@@ -49,7 +46,6 @@ pub struct Ui {
     player_max_hp: i32,
     player_sp: u32,
 
-    pub is_character_sheet_visible: bool,
     pub is_focused: bool,
 
     pub left_panel_id: u32,
@@ -67,7 +63,6 @@ impl Ui {
             player_hp: 0,
             player_max_hp: 0,
             player_sp: 0,
-            is_character_sheet_visible: false,
             is_focused: false,
             id_counter: 1,
             left_panel_id: u32::MAX,
@@ -107,13 +102,14 @@ impl Ui {
 
     }
 
-    pub fn show_character_sheet(&mut self) {
-        self.is_character_sheet_visible = true;
-        self.is_focused = true;
+    pub fn toggle_character_sheet(&mut self) {
+        let is_visible = self.widgets[self.character_sheet_id as usize].borrow().is_visible();
+        let mut cs = self.widgets[self.character_sheet_id as usize].borrow_mut();
+        cs.set_visible(!is_visible)
     }
 
     pub fn hide(&mut self) {
-        self.is_character_sheet_visible = false;
+        self.widgets[self.character_sheet_id as usize].borrow_mut().set_visible(false);
         self.is_focused = false;
     }
 
@@ -210,7 +206,8 @@ impl Ui {
 
     fn create_right_panel(&mut self) {
         self.right_panel_id = self.id_counter;
-        let right_panel_rc = WidgetPanel::new(self.id_counter, Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
+        let right_panel_rc = self.create_widget::<WidgetPanel>(
+            Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
         {
             let mut right_panel = right_panel_rc.borrow_mut();
             right_panel.set_size(SizeF::new(400.0, 0.0));
@@ -220,76 +217,78 @@ impl Ui {
             right_panel.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
         }
         
-        // right_panel.set_visible(false);
-        self.widgets.push(right_panel_rc);
-        self.id_counter += 1;
+        // self.widgets.push(right_panel_rc);
+        // self.id_counter += 1;
     }
 
     fn create_character_sheet(&mut self) {
         self.character_sheet_id = self.id_counter;
-        let character_sheet = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
-        let mut character_sheet = character_sheet.borrow_mut();
-        character_sheet.set_size(SizeF::new(400.0, 0.0));
-        character_sheet.set_border(WHITE, 2.0);
-        character_sheet.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-        character_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
-        character_sheet.add_anchor(AnchorKind::Left, self.left_panel_id, AnchorKind::Right);
-        character_sheet.add_anchor(AnchorKind::Right, self.right_panel_id, AnchorKind::Left);
-        character_sheet.set_color(BLACK);
-        character_sheet.set_visible(false);
-    }
+        let character_sheet_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
+        {
+            let mut character_sheet = character_sheet_rc.borrow_mut();
+            character_sheet.set_border(WHITE, 2.0);
+            character_sheet.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            character_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            //character_sheet.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Right);
+            //character_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Left);
+            character_sheet.add_anchor(AnchorKind::Left, self.left_panel_id, AnchorKind::Right);
+            character_sheet.add_anchor(AnchorKind::Right, self.right_panel_id, AnchorKind::Left);
+            character_sheet.set_color(BLACK);
+            character_sheet.set_visible(false);
+        }
 
-    fn draw_right_panel(&mut self, resolution: (f32, f32)) {
-        draw_rectangle_lines(
-            resolution.0 - 400.0,
-            0.0,
-            400.0,
-            resolution.1,
-            2.0,
-            WHITE,
+        let parent_dyn = Rc::clone(&self.widgets[self.character_sheet_id as usize]);
+
+        let spell_title_id = self.id_counter;
+        let spells_title = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
         );
-
-        draw_text("UI 2", resolution.0 - 400.0, 20.0, 30.0, WHITE);
-    }
-
-    fn draw_character_sheet(&mut self, resolution: (f32, f32)) {
-        draw_rectangle_lines(
-            400.0,
-            0.0,
-            resolution.0 - 400.0,
-            resolution.1,
-            2.0,
-            WHITE,
+        {
+            let mut lbl = spells_title.borrow_mut();
+            lbl.set_text(&"Spells".to_string());
+            lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        }
+        
+        let spells_learn = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
         );
+        {
+            let mut lbl = spells_learn.borrow_mut();
+            lbl.set_text(&"Learn New Spell (S)".to_string());
+            lbl.set_margin_top(30.0);
+            lbl.add_anchor(AnchorKind::Top, spell_title_id, AnchorKind::Top);
+            lbl.add_anchor(AnchorKind::Left, spell_title_id, AnchorKind::Left);
+        }
 
-        let mut offset = (420.0, 30.0);
+        let skills_title_id = self.id_counter;
+        let skills_title = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = skills_title.borrow_mut();
+            lbl.set_text(&"Skills".to_string());
+            lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::HorizontalCenter);
+        }
 
-        draw_text("Spells", offset.0, offset.1, 30.0, WHITE);
-        offset.1 += 30.0;
-        draw_text("Learn New Spell (S)", offset.0, offset.1, 30.0, WHITE);
-
-        offset = (resolution.0 - resolution.0 / 2.0, 30.0);
-        draw_text("Skills", offset.0, offset.1, 30.0, WHITE);
-        offset.1 += 30.0;
-        draw_text("Learn New Skill (K)", offset.0, offset.1, 30.0, WHITE);
+        let skills_learn = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = skills_learn.borrow_mut();
+            lbl.set_text(&"Learn New Skill (K)".to_string());
+            lbl.set_margin_top(30.0);
+            lbl.add_anchor(AnchorKind::Top, skills_title_id, AnchorKind::Top);
+            lbl.add_anchor(AnchorKind::Left, skills_title_id, AnchorKind::Left);
+        }
     }
 
     pub fn draw(&mut self) {
         let ui_ref = self as &Ui;
 
-        // PRE-EXTRACT widgets to avoid borrow overlap:
-        // let widgets = self.widgets.iter().collect::<Vec<_>>();
-
-        // for widget in widgets {
-        //     widget.draw(ui_ref);
-        // }
-
         self.widgets[ROOT_ID as usize].borrow_mut().draw(ui_ref);
     }
 }
-
-// pub static UI: OnceCell<Mutex<Ui>> = OnceCell::new();
-
-// pub fn ui_mut() -> std::sync::MutexGuard<'static, Ui> {
-//     UI.get().expect("UI not initialized").lock().unwrap()
-// }

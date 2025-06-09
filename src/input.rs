@@ -101,7 +101,7 @@ impl Input {
             keyboard_action = KeyboardAction::SpellSelect;
             spell_action = 1;
         }
-        if is_key_down(KeyCode::C) {
+        if is_key_pressed(KeyCode::C) {
             keyboard_action = KeyboardAction::OpenCharacterSheet;
         }
 

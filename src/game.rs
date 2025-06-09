@@ -120,7 +120,7 @@ pub async fn run() {
         }
         else {
             if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
-                game.ui.show_character_sheet();
+                game.ui.toggle_character_sheet();
             }
             else {
                 game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);

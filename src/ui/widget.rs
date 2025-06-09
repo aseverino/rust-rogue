@@ -35,6 +35,8 @@ pub enum AnchorKind {
     Left,
     Right,
     Bottom,
+    HorizontalCenter,
+    VerticalCenter,
 }
 
 #[derive(Debug)]
@@ -326,6 +328,16 @@ macro_rules! impl_widget {
                         AnchorKind::Right => anchor_widget.borrow_mut().get_right(ui),
                         AnchorKind::Top => anchor_widget.borrow_mut().get_top(ui),
                         AnchorKind::Bottom => anchor_widget.borrow_mut().get_bottom(ui),
+                        AnchorKind::HorizontalCenter => {
+                            let left = anchor_widget.borrow_mut().get_left(ui);
+                            let right = anchor_widget.borrow_mut().get_right(ui);
+                            (left + right) / 2.0
+                        },
+                        AnchorKind::VerticalCenter => {
+                            let top = anchor_widget.borrow_mut().get_top(ui);
+                            let bottom = anchor_widget.borrow_mut().get_bottom(ui);
+                            (top + bottom) / 2.0
+                        }
                     };
 
                     match anchor.anchor_this {
@@ -333,6 +345,14 @@ macro_rules! impl_widget {
                         AnchorKind::Right => right = Some(anchor_pos),
                         AnchorKind::Top => top = Some(anchor_pos),
                         AnchorKind::Bottom => bottom = Some(anchor_pos),
+                        AnchorKind::HorizontalCenter => {
+                            quad.x = anchor_pos - self.$base.size.w / 2.0;
+                            quad.w = self.$base.size.w;
+                        },
+                        AnchorKind::VerticalCenter => {
+                            quad.y = anchor_pos - self.$base.size.h / 2.0;
+                            quad.h = self.$base.size.h;
+                        },
                         _ => {}
                     }
                 }

@@ -5,7 +5,7 @@
       "name": "Debug Macroquad",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/debug/openrift",
+      "program": "${workspaceFolder}/target/debug/rustrogue",
       "args": [],
       "cwd": "${workspaceFolder}",
       "stopOnEntry": false,

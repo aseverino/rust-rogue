@@ -43,7 +43,7 @@ use macroquad::prelude::*;
 
 fn window_conf() -> Conf {
     Conf {
-        window_title: "OpenRift".to_string(),
+        window_title: "Rust Rogue".to_string(),
         window_width: 1920,
         window_height: 1100,
         fullscreen: false,

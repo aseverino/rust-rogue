@@ -30,7 +30,7 @@ pub trait Creature {
 
     fn add_health(&mut self, amount: i32);
 
-    fn get_health(&self) -> i32;
+    fn get_health(&self) -> (u32, u32);
 
     fn is_player(&self) -> bool { false }
     fn is_monster(&self) -> bool { false }

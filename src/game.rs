@@ -42,12 +42,12 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn get_player_hp(&self) -> (i32, i32) {
+    pub fn get_player_hp(&self) -> (u32, u32) {
         (self.player.hp, self.player.max_hp)
     }
 
-    pub fn get_player_sp(&self) -> u32 {
-        self.player.spell_points
+    pub fn get_player_sp(&self) -> (u32, u32) {
+        (self.player.mp, self.player.max_mp)
     }
 }
 
@@ -59,9 +59,9 @@ fn draw(game: &mut GameState, game_interface_offset: (f32, f32)) {
     game.ui.update_geometry(SizeF::new(screen_width(), screen_height()));
 
     let (hp, max_hp) = game.get_player_hp();
-    let sp = game.get_player_sp();
+    let (mp, max_mp) = game.get_player_sp();
     game.ui.set_player_hp(hp, max_hp);
-    game.ui.set_player_sp(sp);
+    game.ui.set_player_mp(mp, max_mp);
 
     game.ui.draw();
 }

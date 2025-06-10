@@ -40,7 +40,7 @@ pub struct MonsterType {
     pub name: String,
     pub glyph: char,
     pub color: [u8; 3], // RGB, will convert to macroquad::Color
-    pub max_hp: i32,
+    pub max_hp: u32,
     pub melee_damage: i32,
 }
 

@@ -51,6 +51,7 @@ pub struct WidgetBase {
     pub id: u32,
     pub parent: Option<Weak<RefCell<dyn Widget>>>,
     pub children: Vec<Weak<RefCell<dyn Widget>>>,
+    pub parent_id: u32,
     pub anchors: Vec<Anchor>,
     pub position: PointF,
     pub size: SizeF,
@@ -63,9 +64,10 @@ pub struct WidgetBase {
 
 impl WidgetBase {
     pub fn new(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self {
-        WidgetBase {
+        let mut w = WidgetBase {
             id,
             parent: parent,
+            parent_id: u32::MAX,
             children: Vec::new(),
             anchors: Vec::new(),
             position: PointF::zero(),
@@ -75,7 +77,15 @@ impl WidgetBase {
             dirty: true,
             visible: true,
             color: BLANK,
+        };
+
+        if let Some(ref parent) = w.parent {
+            if let Some(parent_rc) = parent.upgrade() {
+                w.parent_id = parent_rc.borrow().get_id();
+            }
         }
+
+        w
     }
 }
 
@@ -84,7 +94,11 @@ pub trait WidgetBasicConstructor: Debug + 'static {
 }
 
 pub trait Widget: WidgetBasicConstructor + Debug + 'static {
-    fn new(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+        Self::new_default(id, parent)
+    }
+
+    fn new_default(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
         let w = Rc::new(RefCell::new(Self::basic_constructor(id, parent.clone())));
 
         // Cast to trait object for correct type
@@ -99,298 +113,290 @@ pub trait Widget: WidgetBasicConstructor + Debug + 'static {
         w
     }
 
-    fn get_parent(&self) -> &Option<Weak<RefCell<dyn Widget>>>;
-    fn get_parent_mut(&mut self) -> &mut Option<Weak<RefCell<dyn Widget>>>;
-    fn get_children(&self) -> &[Weak<RefCell<dyn Widget>>];
-    fn get_children_mut(&mut self) -> &mut Vec<Weak<RefCell<dyn Widget>>>;
-    fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>);
+    fn get_base(&self) -> &WidgetBase;
+    fn get_base_mut(&mut self) -> &mut WidgetBase;
+
+    fn set_parent(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>)  {
+        self.get_base_mut().parent = parent.clone();
+    }
+
+    fn get_parent(&self) -> &Option<Weak<RefCell<dyn Widget>>> {
+        &self.get_base().parent
+    }
+
+    fn get_parent_mut(&mut self) -> &mut Option<Weak<RefCell<dyn Widget>>> {
+        &mut self.get_base_mut().parent
+    }
+
+    fn get_children(&self) -> &[Weak<RefCell<dyn Widget>>] {
+        &self.get_base().children
+    }
+
+    fn get_children_mut(&mut self) -> &mut Vec<Weak<RefCell<dyn Widget>>> {
+        &mut self.get_base_mut().children
+    }
+
+    fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>) {
+        self.get_children_mut().push(child);
+    }
+
     fn draw(&self, ui: &Ui);
-    // fn update(&mut self);
-    // fn handle_input(&mut self);
-    // fn is_visible(&self) -> bool;
-    // fn set_visible(&mut self, visible: bool);
-    fn get_position(&self) -> PointF;
-    fn set_position(&mut self, position: PointF);
-    fn set_color(&mut self, color: Color);
-    fn get_size(&self) -> SizeF;
-    fn set_size(&mut self, size: SizeF);
 
-    fn get_top(&mut self, ui: &Ui) -> f32;
-    fn get_left(&mut self, ui: &Ui) -> f32;
-    fn get_right(&mut self, ui: &Ui) -> f32;
-    fn get_bottom(&mut self, ui: &Ui) -> f32;
+    fn get_position(&self) -> PointF {
+        self.get_base().position
+    }
 
-    fn get_margin_top(&self) -> f32;
-    fn get_margin_left(&self) -> f32;
-    fn get_margin_right(&self) -> f32;
-    fn get_margin_bottom(&self) -> f32;
-    fn get_margin(&self) -> QuadF;
+    fn get_size(&self) -> SizeF {
+        self.get_base().size
+    }
 
-    fn set_margin_top(&mut self, margin: f32);
-    fn set_margin_left(&mut self, margin: f32);
-    fn set_margin_right(&mut self, margin: f32);
-    fn set_margin_bottom(&mut self, margin: f32);
-    fn set_margin(&mut self, margin: QuadF);
+    fn get_left(&mut self, ui: &Ui) -> f32 {
+        let q = self.get_drawing_coords(ui);
+        q.x
+    }
+    fn get_right(&mut self, ui: &Ui) -> f32 {
+        let q = self.get_drawing_coords(ui);
+        q.x + q.w
+    }
+    fn get_top(&mut self, ui: &Ui) -> f32 {
+        let q = self.get_drawing_coords(ui);
+        q.y
+    }
+    fn get_bottom(&mut self, ui: &Ui) -> f32 {
+        let q = self.get_drawing_coords(ui);
+        q.y + q.h
+    }
 
-    fn get_coords(&self) -> QuadF;
+    fn get_margin_top(&self) -> f32 {
+        self.get_base().margin.y
+    }
+    fn get_margin_left(&self) -> f32 {
+        self.get_base().margin.x
+    }
+    fn get_margin_right(&self) -> f32 {
+        self.get_base().margin.x + self.get_base().margin.w
+    }
+    fn get_margin_bottom(&self) -> f32 {
+        self.get_base().margin.y + self.get_base().margin.h
+    }
+    fn get_margin(&self) -> QuadF {
+        self.get_base().margin
+    }
 
-    fn set_visible(&mut self, visible: bool);
-    fn is_visible(&self) -> bool;
+    fn set_margin_top(&mut self, margin: f32) {
+        self.get_base_mut().margin.y = margin;
+        self.get_base_mut().dirty = true;
+    }
+    fn set_margin_left(&mut self, margin: f32) {
+        self.get_base_mut().margin.x = margin;
+        self.get_base_mut().dirty = true;
+    }
+    fn set_margin_right(&mut self, margin: f32) {
+        self.get_base_mut().margin.w = margin;
+        self.get_base_mut().dirty = true;
+    }
+    fn set_margin_bottom(&mut self, margin: f32) {
+        self.get_base_mut().margin.h = margin;
+        self.get_base_mut().dirty = true;
+    }
+    fn set_margin(&mut self, margin: QuadF) {
+        self.get_base_mut().margin = margin;
+        self.get_base_mut().dirty = true;
+    }
 
-    fn get_id(&self) -> u32;
-    fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind);
-    fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind);
-    fn get_drawing_coords(&mut self, ui: &Ui) -> QuadF;
-    fn recompute_quad(&self, ui: &Ui) -> QuadF;
+    fn get_coords(&self) -> QuadF {
+        // Return a copy of the computed quad, or a zero quad if not set
+        self.get_base().computed_quad.unwrap_or_else(QuadF::zero)
+    }
+
+    fn get_id(&self) -> u32 {
+        self.get_base().id
+    }
+    fn set_visible(&mut self, visible: bool) {
+        self.get_base_mut().visible = visible;
+    }
+
+    fn is_visible(&self) -> bool {
+        self.get_base().visible
+    }
+
+    fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind) {
+        self.get_base_mut().anchors.push(Anchor {
+            anchor_this: this,
+            anchor_widget_id: other_id,
+            anchor_to: other_side,
+        });
+        self.get_base_mut().dirty = true;
+    }
+
+    fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind) {
+        // let parent_id = match &self.get_base_mut().parent {
+        //     Some(weak_parent) => {
+        //         if let Some(parent_rc) = weak_parent.upgrade() {
+        //             parent_rc.borrow().get_id()
+        //         } else {
+        //             0  // parent was dropped
+        //         }
+        //     }
+        //     None => 0,
+        // };
+
+        let parent_id = self.get_base().parent_id;
+
+        self.get_base_mut().anchors.push(Anchor {
+            anchor_this: this,
+            anchor_widget_id: parent_id,
+            anchor_to: other_side,
+        });
+
+        self.get_base_mut().dirty = true;
+    }
+    
+    fn fill_parent(&mut self) {
+        self.add_anchor_to_parent(
+            AnchorKind::Left,
+            AnchorKind::Left
+        );
+        self.add_anchor_to_parent(
+            AnchorKind::Right,
+            AnchorKind::Right
+        );
+        self.add_anchor_to_parent(
+            AnchorKind::Top,
+            AnchorKind::Top
+        );
+        self.add_anchor_to_parent(
+            AnchorKind::Bottom,
+            AnchorKind::Bottom
+        );
+    }
+
+    fn set_size(&mut self, sz: SizeF) {
+        self.get_base_mut().size = sz;
+        self.get_base_mut().dirty = true;
+    }
+    fn set_position(&mut self, pos: PointF) {
+        self.get_base_mut().position = pos;
+        self.get_base_mut().dirty = true;
+    }
+    fn set_color(&mut self, color: Color) {
+        self.get_base_mut().color = color;
+    }
+
+    fn get_drawing_coords(&mut self, ui: &Ui) -> QuadF {
+        if self.get_base().dirty || self.get_base().computed_quad.is_none() {
+            let quad = self.recompute_quad(ui);
+            self.get_base_mut().computed_quad = Some(quad);
+            self.get_base_mut().dirty = false;
+            quad
+        } else {
+            self.get_base().computed_quad.unwrap()
+        }
+    }
+
+    fn recompute_quad(&self, ui: &Ui) -> QuadF {
+        let mut quad = QuadF::zero();
+
+        // Gather any anchored sides
+        let mut left = None;
+        let mut right = None;
+        let mut top = None;
+        let mut bottom = None;
+
+        for anchor in &self.get_base().anchors {
+            let anchor_widget = &ui.widgets[anchor.anchor_widget_id as usize];
+            let anchor_pos = match anchor.anchor_to {
+                AnchorKind::Left => anchor_widget.borrow_mut().get_left(ui),
+                AnchorKind::Right => anchor_widget.borrow_mut().get_right(ui),
+                AnchorKind::Top => anchor_widget.borrow_mut().get_top(ui),
+                AnchorKind::Bottom => anchor_widget.borrow_mut().get_bottom(ui),
+                AnchorKind::HorizontalCenter => {
+                    let left = anchor_widget.borrow_mut().get_left(ui);
+                    let right = anchor_widget.borrow_mut().get_right(ui);
+                    (left + right) / 2.0
+                },
+                AnchorKind::VerticalCenter => {
+                    let top = anchor_widget.borrow_mut().get_top(ui);
+                    let bottom = anchor_widget.borrow_mut().get_bottom(ui);
+                    (top + bottom) / 2.0
+                }
+            };
+
+            match anchor.anchor_this {
+                AnchorKind::Left => left = Some(anchor_pos),
+                AnchorKind::Right => right = Some(anchor_pos),
+                AnchorKind::Top => top = Some(anchor_pos),
+                AnchorKind::Bottom => bottom = Some(anchor_pos),
+                AnchorKind::HorizontalCenter => {
+                    quad.x = anchor_pos - self.get_base().size.w / 2.0;
+                    quad.w = self.get_base().size.w;
+                },
+                AnchorKind::VerticalCenter => {
+                    quad.y = anchor_pos - self.get_base().size.h / 2.0;
+                    quad.h = self.get_base().size.h;
+                },
+                _ => {}
+            }
+        }
+
+        // Horizontal logic
+        if let (Some(lv), Some(rv)) = (left, right) {
+            quad.x = lv;
+            quad.w = rv - lv;
+        } else if let Some(lv) = left {
+            quad.x = lv;
+            quad.w = self.get_base().size.w;
+        } else if let Some(rv) = right {
+            quad.w = self.get_base().size.w;
+            quad.x = rv - quad.w;
+        } else {
+            quad.x = self.get_base().position.x;
+            quad.w = self.get_base().size.w;
+        }
+
+        // Vertical logic
+        if let (Some(tv), Some(bv)) = (top, bottom) {
+            quad.y = tv;
+            quad.h = bv - tv;
+        } else if let Some(tv) = top {
+            quad.y = tv;
+            quad.h = self.get_base().size.h;
+        } else if let Some(bv) = bottom {
+            quad.h = self.get_base().size.h;
+            quad.y = bv - quad.h;
+        } else {
+            quad.y = self.get_base().position.y;
+            quad.h = self.get_base().size.h;
+        }
+
+        quad.x += self.get_base().margin.x;
+        quad.y += self.get_base().margin.y;
+        quad
+    }
 }
 
-// fn resolve_anchor_position<T: Widget>(anchor_kind: AnchorKind, widget: T) -> f32 {
-//     match anchor_kind {
-//         AnchorKind::Top => widget.get_top(),
-//         AnchorKind::Left => widget.get_left(),
-//         AnchorKind::Right => widget.get_right(),
-//         AnchorKind::Bottom => widget.get_bottom(),
-//     }
-// }
+#[macro_export]
+macro_rules! impl_widget_fns {
+    ($t:ty, $base:ident) => {
+        fn get_base(&self) -> &WidgetBase {
+            &self.$base
+        }
+
+        fn get_base_mut(&mut self) -> &mut WidgetBase {
+            &mut self.$base
+        }
+
+        fn draw(&self, ui: &Ui) {
+            self.draw(ui);
+        }
+    };
+}
 
 #[macro_export]
 macro_rules! impl_widget {
     ($t:ty, $base:ident) => {
         impl Widget for $t {
-            fn get_parent(&self) -> &Option<Weak<RefCell<dyn Widget>>> {
-                &self.$base.parent
-            }
-        
-            fn get_parent_mut(&mut self) -> &mut Option<Weak<RefCell<dyn Widget>>> {
-                &mut self.$base.parent
-            }
-        
-            fn get_children(&self) -> &[Weak<RefCell<dyn Widget>>] {
-                &self.$base.children
-            }
-        
-            fn get_children_mut(&mut self) -> &mut Vec<Weak<RefCell<dyn Widget>>> {
-                &mut self.$base.children
-            }
-
-            fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>) {
-                self.get_children_mut().push(child);
-            }
-
-            fn draw(&self, ui: &Ui) {
-                self.draw(ui);
-            }
-
-            fn get_position(&self) -> PointF {
-                self.$base.position
-            }
-
-            fn get_size(&self) -> SizeF {
-                self.$base.size
-            }
-
-            fn get_left(&mut self, ui: &Ui) -> f32 {
-                let q = self.get_drawing_coords(ui);
-                q.x
-            }
-            fn get_right(&mut self, ui: &Ui) -> f32 {
-                let q = self.get_drawing_coords(ui);
-                q.x + q.w
-            }
-            fn get_top(&mut self, ui: &Ui) -> f32 {
-                let q = self.get_drawing_coords(ui);
-                q.y
-            }
-            fn get_bottom(&mut self, ui: &Ui) -> f32 {
-                let q = self.get_drawing_coords(ui);
-                q.y + q.h
-            }
-
-            fn get_margin_top(&self) -> f32 {
-                self.$base.margin.y
-            }
-            fn get_margin_left(&self) -> f32 {
-                self.$base.margin.x
-            }
-            fn get_margin_right(&self) -> f32 {
-                self.$base.margin.x + self.$base.margin.w
-            }
-            fn get_margin_bottom(&self) -> f32 {
-                self.$base.margin.y + self.$base.margin.h
-            }
-            fn get_margin(&self) -> QuadF {
-                self.$base.margin
-            }
-
-            fn set_margin_top(&mut self, margin: f32) {
-                self.$base.margin.y = margin;
-                self.$base.dirty = true;
-            }
-            fn set_margin_left(&mut self, margin: f32) {
-                self.$base.margin.x = margin;
-                self.$base.dirty = true;
-            }
-            fn set_margin_right(&mut self, margin: f32) {
-                self.$base.margin.w = margin;
-                self.$base.dirty = true;
-            }
-            fn set_margin_bottom(&mut self, margin: f32) {
-                self.$base.margin.h = margin;
-                self.$base.dirty = true;
-            }
-            fn set_margin(&mut self, margin: QuadF) {
-                self.$base.margin = margin;
-                self.$base.dirty = true;
-            }
-
-            fn get_coords(&self) -> QuadF {
-                // Return a copy of the computed quad, or a zero quad if not set
-                self.$base.computed_quad.unwrap_or_else(QuadF::zero)
-            }
-
-            fn get_id(&self) -> u32 {
-                self.$base.id
-            }
-            fn set_visible(&mut self, visible: bool) {
-                self.$base.visible = visible;
-            }
-
-            fn is_visible(&self) -> bool {
-                self.$base.visible
-            }
-
-            fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind) {
-                self.$base.anchors.push(Anchor {
-                    anchor_this: this,
-                    anchor_widget_id: other_id,
-                    anchor_to: other_side,
-                });
-                self.$base.dirty = true;
-            }
-
-            fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind) {
-                let parent_id = match &self.base.parent {
-                    Some(weak_parent) => {
-                        if let Some(parent_rc) = weak_parent.upgrade() {
-                            parent_rc.borrow().get_id()
-                        } else {
-                            0  // parent was dropped
-                        }
-                    }
-                    None => 0,
-                };
-
-                self.base.anchors.push(Anchor {
-                    anchor_this: this,
-                    anchor_widget_id: parent_id,
-                    anchor_to: other_side,
-                });
-
-                self.base.dirty = true;
-            }
-
-            fn set_size(&mut self, sz: SizeF) {
-                self.$base.size = sz;
-                self.$base.dirty = true;
-            }
-            fn set_position(&mut self, pos: PointF) {
-                self.$base.position = pos;
-                self.$base.dirty = true;
-            }
-            fn set_color(&mut self, color: Color) {
-                self.$base.color = color;
-            }
-
-            fn get_drawing_coords(&mut self, ui: &Ui) -> QuadF {
-                if self.$base.dirty || self.$base.computed_quad.is_none() {
-                    let quad = self.recompute_quad(ui);
-                    self.$base.computed_quad = Some(quad);
-                    self.$base.dirty = false;
-                    quad
-                } else {
-                    self.$base.computed_quad.unwrap()
-                }
-            }
-
-            fn recompute_quad(&self, ui: &Ui) -> QuadF {
-                let mut quad = QuadF::zero();
-
-                // Gather any anchored sides
-                let mut left = None;
-                let mut right = None;
-                let mut top = None;
-                let mut bottom = None;
-
-                for anchor in &self.base.anchors {
-                    let anchor_widget = &ui.widgets[anchor.anchor_widget_id as usize];
-                    let anchor_pos = match anchor.anchor_to {
-                        AnchorKind::Left => anchor_widget.borrow_mut().get_left(ui),
-                        AnchorKind::Right => anchor_widget.borrow_mut().get_right(ui),
-                        AnchorKind::Top => anchor_widget.borrow_mut().get_top(ui),
-                        AnchorKind::Bottom => anchor_widget.borrow_mut().get_bottom(ui),
-                        AnchorKind::HorizontalCenter => {
-                            let left = anchor_widget.borrow_mut().get_left(ui);
-                            let right = anchor_widget.borrow_mut().get_right(ui);
-                            (left + right) / 2.0
-                        },
-                        AnchorKind::VerticalCenter => {
-                            let top = anchor_widget.borrow_mut().get_top(ui);
-                            let bottom = anchor_widget.borrow_mut().get_bottom(ui);
-                            (top + bottom) / 2.0
-                        }
-                    };
-
-                    match anchor.anchor_this {
-                        AnchorKind::Left => left = Some(anchor_pos),
-                        AnchorKind::Right => right = Some(anchor_pos),
-                        AnchorKind::Top => top = Some(anchor_pos),
-                        AnchorKind::Bottom => bottom = Some(anchor_pos),
-                        AnchorKind::HorizontalCenter => {
-                            quad.x = anchor_pos - self.$base.size.w / 2.0;
-                            quad.w = self.$base.size.w;
-                        },
-                        AnchorKind::VerticalCenter => {
-                            quad.y = anchor_pos - self.$base.size.h / 2.0;
-                            quad.h = self.$base.size.h;
-                        },
-                        _ => {}
-                    }
-                }
-
-                // Horizontal logic
-                if let (Some(lv), Some(rv)) = (left, right) {
-                    quad.x = lv;
-                    quad.w = rv - lv;
-                } else if let Some(lv) = left {
-                    quad.x = lv;
-                    quad.w = self.$base.size.w;
-                } else if let Some(rv) = right {
-                    quad.w = self.$base.size.w;
-                    quad.x = rv - quad.w;
-                } else {
-                    quad.x = self.$base.position.x;
-                    quad.w = self.$base.size.w;
-                }
-
-                // Vertical logic
-                if let (Some(tv), Some(bv)) = (top, bottom) {
-                    quad.y = tv;
-                    quad.h = bv - tv;
-                } else if let Some(tv) = top {
-                    quad.y = tv;
-                    quad.h = self.$base.size.h;
-                } else if let Some(bv) = bottom {
-                    quad.h = self.$base.size.h;
-                    quad.y = bv - quad.h;
-                } else {
-                    quad.y = self.$base.position.y;
-                    quad.h = self.$base.size.h;
-                }
-
-                quad.x += self.$base.margin.x;
-                quad.y += self.$base.margin.y;
-                quad
-            }
+            impl_widget_fns!($t, $base);
         }
     };
 }

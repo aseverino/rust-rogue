@@ -29,29 +29,37 @@ use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, 
 use std::{cell::RefCell, rc::{Weak, Rc}};
 
 pub struct WidgetText {
-    base: WidgetBase,
-    
-    pub is_focused: bool,
-    pub is_enabled: bool,
-    pub is_hovered: bool,
-    pub is_visible: bool,
-    pub is_clickable: bool,
-
+    pub base: WidgetBase,
     pub text: String,
-    pub position: PointF,
+    pub text_size: SizeF,
 }
 
 impl WidgetText {
     pub fn draw(&self, _ui: &Ui) {
+        let quad_opt = self.base.computed_quad;
+
+        // if let Some(drawing_coords) = quad_opt {
+        //     if self.base.color != BLANK {
+        //         draw_rectangle(
+        //             drawing_coords.x,
+        //             drawing_coords.y,
+        //             drawing_coords.w,
+        //             drawing_coords.h,
+        //             self.base.color,
+        //         );
+        //     }
+        // }
+
         if let Some(drawing_coords) = self.base.computed_quad {
-            draw_text(&self.text, drawing_coords.x, drawing_coords.y, 30.0, self.base.color);
+            draw_text(&self.text, drawing_coords.x, drawing_coords.y + self.text_size.h, 30.0, self.base.color);
         }
     }
 
     pub fn set_text(&mut self, text: &String) {
         self.text = text.to_string();
         let dim = measure_text(&text, None, 30, 1.0);
-        self.base.size = SizeF::new(dim.width, dim.height);
+        self.text_size = SizeF::new(dim.width, dim.height);
+        self.base.size = self.text_size;
     }
 }
 
@@ -65,19 +73,18 @@ impl WidgetBasicConstructor for WidgetText {
     fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self {
         let mut w = WidgetText {
             base: WidgetBase::new(id, parent),
-            is_focused: false,
-            is_enabled: true,
-            is_hovered: false,
-            is_visible: true,
-            is_clickable: true,
             text: "".to_string(),
-            position: PointF::zero(),
+            text_size: SizeF::new(0.0, 0.0),
         };
 
         w.base.color = WHITE;
-
+        //w.base.size = SizeF::new(0.0, 0.0);
+        //bar.background.set_parent(Some());
+        //bar.background.set_color(Color::from_rgba(1, 0, 0, 1));
+        //bar.background.fill_parent();
         w
     }
 }
 
 impl_widget!(WidgetText, base);
+

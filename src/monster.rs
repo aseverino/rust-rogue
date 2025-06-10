@@ -25,10 +25,11 @@ use macroquad::prelude::*;
 use crate::creature::Creature;
 use crate::position::Position;
 use crate::monster_type::MonsterType;
+use std::cmp::{max, min};
 use std::rc::Rc;
 
 pub struct Monster {
-    pub hp: i32,
+    pub hp: u32,
     pub kind: Rc<MonsterType>,
     pub position: Position,
 }
@@ -57,17 +58,11 @@ impl Creature for Monster {
     }
 
     fn add_health(&mut self, amount: i32) {
-        self.hp += amount;
-        if self.hp > self.kind.max_hp {
-            self.hp = self.kind.max_hp; // Cap health at max
-        }
-        else if self.hp < 0 {
-            self.hp = 0; // Ensure health doesn't go below 0
-        }
+        self.hp = min(max((self.hp as i32) + amount, 0) as u32, self.kind.max_hp);
     }
 
-    fn get_health(&self) -> i32 {
-        self.hp
+    fn get_health(&self) -> (u32, u32) {
+        (self.hp, self.kind.max_hp)
     }
 
     fn draw(&self, offset: (f32, f32)) {

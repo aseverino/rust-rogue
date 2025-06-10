@@ -26,12 +26,14 @@ use crate::creature::Creature;
 use crate::position::{ Position, POSITION_INVALID };
 use crate::player_spell::PlayerSpell;
 use crate::spell_type;
+use std::cmp::{max, min};
 use std::collections::HashSet;
 
 pub struct Player {
-    pub hp: i32,
-    pub max_hp: i32,
-    pub spell_points: u32,
+    pub hp: u32,
+    pub max_hp: u32,
+    pub mp: u32,
+    pub max_mp: u32,
     pub position: Position,
     pub goal_position: Option<Position>,
     pub spells: Vec<PlayerSpell>,
@@ -57,7 +59,8 @@ impl Player {
         Self {
             hp: 50,
             max_hp: 50,
-            spell_points: 1,
+            mp: 10,
+            max_mp: 10,
             position: pos,
             goal_position: None,
             spells: spells,
@@ -81,17 +84,11 @@ impl Creature for Player {
     }
 
     fn add_health(&mut self, amount: i32) {
-        self.hp += amount;
-        if self.hp > self.max_hp {
-            self.hp = self.max_hp; // Cap health at max
-        }
-        else if self.hp < 0 {
-            self.hp = 0; // Ensure health doesn't go below 0
-        }
+        self.hp = min(max((self.hp as i32) + amount, 0) as u32, self.max_hp);
     }
 
-    fn get_health(&self) -> i32 {
-        self.hp
+    fn get_health(&self) -> (u32, u32) {
+        (self.hp, self.max_hp)
     }
 
     fn draw(&self, offset: (f32, f32)) {

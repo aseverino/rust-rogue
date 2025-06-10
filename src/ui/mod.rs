@@ -29,12 +29,13 @@ mod widget;
 
 pub mod widget_panel;
 pub mod widget_text;
+pub mod widget_bar;
 
 use std::{cell::RefCell, rc::Weak, rc::Rc};
 
 use macroquad::prelude::*;
 
-use crate::ui::{quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_panel::WidgetPanel, widget_text::WidgetText};
+use crate::ui::{quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_bar::WidgetBar, widget_panel::WidgetPanel, widget_text::WidgetText};
 use std::fmt::Debug;
 
 
@@ -42,9 +43,10 @@ static ROOT_ID: u32 = 0;
 
 #[derive(Debug)]
 pub struct Ui {
-    player_hp: i32,
-    player_max_hp: i32,
-    player_sp: u32,
+    player_hp: u32,
+    player_max_hp: u32,
+    player_mp: u32,
+    player_max_mp: u32,
 
     pub is_focused: bool,
 
@@ -58,11 +60,11 @@ pub struct Ui {
 
 impl Ui {
     pub fn new() -> Self {
-        let root = WidgetPanel::new(0, None);
         let mut ui = Ui {
             player_hp: 0,
             player_max_hp: 0,
-            player_sp: 0,
+            player_mp: 0,
+            player_max_mp: 0,
             is_focused: false,
             id_counter: 1,
             left_panel_id: u32::MAX,
@@ -71,6 +73,7 @@ impl Ui {
             widgets: Vec::new(),
         };
 
+        let root = WidgetPanel::new(&mut ui, 0, None);
         ui.widgets.push(root);
 
         ui.create_left_panel();
@@ -89,17 +92,14 @@ impl Ui {
         }
     }
 
-    pub fn set_player_hp(&mut self, hp: i32, max_hp: i32) {
+    pub fn set_player_hp(&mut self, hp: u32, max_hp: u32) {
         self.player_hp = hp;
         self.player_max_hp = max_hp;
     }
 
-    pub fn set_player_sp(&mut self, sp: u32) {
-        self.player_sp = sp;
-    }
-
-    pub fn set_last_action(&mut self, _action: &str) {
-
+    pub fn set_player_mp(&mut self, mp: u32, max_mp: u32) {
+        self.player_mp = mp;
+        self.player_max_mp = max_mp;
     }
 
     pub fn toggle_character_sheet(&mut self) {
@@ -113,12 +113,56 @@ impl Ui {
         self.is_focused = false;
     }
 
+    // fn add_widget(&mut self, widget: Rc<RefCell<dyn Widget>>) {
+    //     self.widgets.push(widget);
+    //     self.id_counter += 1;
+
+    //     if let Some(w) = self.widgets.last() {
+    //         let new_children: Vec<_> = w.borrow().get_children()
+    //             .iter()
+    //             .filter_map(|c| c.upgrade())
+    //             .collect();
+    //         for child in new_children {
+    //             self.widgets.push(child);
+    //             self.id_counter += 1;
+    //         }
+    //     }
+    // }
+
+    // fn add_widget_recursive(&mut self, widget: Rc<RefCell<dyn Widget>>) {
+    //     self.widgets.push(widget.clone());
+    //     self.id_counter += 1;
+
+    //     let children: Vec<_> = widget.borrow().get_children()
+    //         .iter()
+    //         .filter_map(|c| c.upgrade())
+    //         .collect();
+
+    //     for child in children {
+    //         self.add_widget_recursive(child);
+    //     }
+    // }
+
+    // fn create_widget<T: Widget + 'static>(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<T>> {
+    //     let widget = T::new(self, self.id_counter, parent);
+    //     let widget_dyn: Rc<RefCell<dyn Widget>> = widget.clone();
+
+    //     self.add_widget_recursive(widget_dyn);
+
+    //     widget
+    // }
+
+    fn add_widget(&mut self, widget: Rc<RefCell<dyn Widget>>) {
+        self.widgets.push(widget);
+        self.id_counter += 1;
+    }
+
+
     fn create_widget<T: Widget + 'static>(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<T>> {
-        let widget = T::new(self.id_counter, parent);
+        let widget = T::new(self, self.id_counter, parent);
         let widget_dyn: Rc<RefCell<dyn Widget>> = widget.clone();
 
-        self.widgets.push(widget_dyn);
-        self.id_counter += 1;
+        self.add_widget(widget_dyn);
 
         widget
     }
@@ -154,28 +198,41 @@ impl Ui {
         }
 
         // Current‐HP value
-        let hp_value = self.create_widget::<WidgetText>(
-            Some(Rc::downgrade(&parent_dyn))
-        );
-        {
-            let mut val = hp_value.borrow_mut();
-            val.set_text(&format!("{}", self.player_hp));
-            val.set_margin_left(10.0);
-            // Anchor it relative to the "HP" label we just made
-            val.add_anchor(AnchorKind::Top,  hp_label.borrow().get_id(), AnchorKind::Top);
-            val.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
-        }
+        // let hp_value = self.create_widget::<WidgetText>(
+        //     Some(Rc::downgrade(&parent_dyn))
+        // );
+        // {
+        //     let mut val = hp_value.borrow_mut();
+        //     val.set_text(&format!("{}", self.player_hp));
+        //     val.set_margin_left(10.0);
+        //     // Anchor it relative to the "HP" label we just made
+        //     val.add_anchor(AnchorKind::Top,  hp_label.borrow().get_id(), AnchorKind::Top);
+        //     val.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
+        // }
 
-        // Max‐HP value
-        let hp_max_value = self.create_widget::<WidgetText>(
+        // // Max‐HP value
+        // let hp_max_value = self.create_widget::<WidgetText>(
+        //     Some(Rc::downgrade(&parent_dyn))
+        // );
+        // {
+        //     let mut val = hp_max_value.borrow_mut();
+        //     val.set_text(&format!("/{}", self.player_max_hp));
+        //     // Anchor it relative to the "HP" label we just made
+        //     val.add_anchor(AnchorKind::Top,  hp_value.borrow().get_id(), AnchorKind::Top);
+        //     val.add_anchor(AnchorKind::Left, hp_value.borrow().get_id(), AnchorKind::Right);
+        // }
+
+        let hp_bar = self.create_widget::<WidgetBar>(
             Some(Rc::downgrade(&parent_dyn))
         );
         {
-            let mut val = hp_max_value.borrow_mut();
-            val.set_text(&format!("/{}", self.player_max_hp));
-            // Anchor it relative to the "HP" label we just made
-            val.add_anchor(AnchorKind::Top,  hp_value.borrow().get_id(), AnchorKind::Top);
-            val.add_anchor(AnchorKind::Left, hp_value.borrow().get_id(), AnchorKind::Right);
+            let mut bar = hp_bar.borrow_mut();
+            bar.set_size(SizeF::new(200.0, 20.0));
+            bar.add_anchor(AnchorKind::Top, hp_label.borrow().get_id(), AnchorKind::Top);
+            bar.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
+            //bar.set_text(&format!("{}/{}", self.player_hp, self.player_max_hp));
+            //bar.background.set_color(Color { r:1.0, g:0.0, b:0.0, a:1.0 });
+            //bar.foreground.set_color(Color { r:1.0, g:1.0, b:1.0, a:1.0 });
         }
 
         let sp_label = self.create_widget::<WidgetText>(
@@ -183,8 +240,8 @@ impl Ui {
         );
         {
             let mut lbl = sp_label.borrow_mut();
-            lbl.set_text(&"SP".to_string());
-            lbl.set_color(YELLOW);
+            lbl.set_text(&"MP".to_string());
+            lbl.set_color(BLUE);
             lbl.set_margin_top(10.0);
             lbl.add_anchor(AnchorKind::Top, hp_label.borrow().get_id(), AnchorKind::Bottom);
             lbl.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Left);
@@ -196,7 +253,8 @@ impl Ui {
         );
         {
             let mut val = sp_value.borrow_mut();
-            val.set_text(&format!("{}", self.player_sp));
+            val.set_text(&format!("{}", self.player_mp));
+            val.set_color(BLUE);
             val.set_margin_left(10.0);
             // Anchor it relative to the "HP" label we just made
             val.add_anchor(AnchorKind::Top,  sp_label.borrow().get_id(), AnchorKind::Top);

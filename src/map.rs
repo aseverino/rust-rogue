@@ -270,13 +270,13 @@ impl Map {
         target.add_health(-damage);
         println!("{} takes {} damage!", target.name(), damage);
 
-        if target.get_health() <= 0 {
+        if target.get_health().0 <= 0 {
             self.tiles[target.pos()].creature = NO_CREATURE; // Remove monster from tile
             println!("{} has been defeated!", target.name());
             // Optionally, remove the monster from the list
             // self.monsters.remove(target_creature as usize);
         } else {
-            println!("{} has {} HP left.", target.name(), target.get_health());
+            println!("{} has {} HP left.", target.name(), target.get_health().0);
         }
     }
 
@@ -460,7 +460,7 @@ impl Map {
                     ItemKind::Orb(_) => {
                         tile.remove_item();
                         println!("Player picked up an orb!");
-                        player.spell_points += 1; // Increase spell points
+                        //player.spell_points += 1; // Increase spell points
                     }
                     ItemKind::Portal(_) => {
                         
@@ -486,7 +486,7 @@ impl Map {
 
                         if next_step == player.position {
                             println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
-                            player.hp -= monster.kind.melee_damage;
+                            player.add_health(-monster.kind.melee_damage);
                             if player.hp <= 0 {
                                 println!("Player has been defeated!");
                                 self.last_player_event = Some(PlayerEvent::Death);

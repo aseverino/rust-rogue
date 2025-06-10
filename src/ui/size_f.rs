@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::ui::{point_f::PointF, quad_f::QuadF};
+
 #[derive(Copy, Clone, Debug)]
 pub struct SizeF {
     pub w: f32,
@@ -41,5 +43,14 @@ impl SizeF {
 
     pub fn is_valid(&self) -> bool {
         self.w > 0.0 && self.h > 0.0
+    }
+
+    pub fn to_quad(&self, pos: PointF) -> QuadF {
+        QuadF {
+            x: pos.x,
+            y: pos.y,
+            w: self.w,
+            h: self.h,
+        }
     }
 }

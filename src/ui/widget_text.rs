@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::any::Any;
 use std::fmt;
 
 use macroquad::prelude::*;
@@ -60,6 +61,7 @@ impl WidgetText {
         let dim = measure_text(&text, None, 30, 1.0);
         self.text_size = SizeF::new(dim.width, dim.height);
         self.base.size = self.text_size;
+        self.base.dirty = true;
     }
 }
 

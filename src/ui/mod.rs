@@ -48,14 +48,15 @@ pub struct Ui {
     player_mp: u32,
     player_max_mp: u32,
 
-    pub is_focused: bool,
-
-    pub left_panel_id: u32,
-    pub right_panel_id: u32,
-    pub character_sheet_id: u32,
-
+    left_panel_id: u32,
+    right_panel_id: u32,
+    character_sheet_id: u32,
+    hp_bar_id: u32,
+    
     id_counter: u32,
-    pub widgets: Vec<Rc<RefCell<dyn Widget>>>,
+    widgets: Vec<Rc<RefCell<dyn Widget>>>,
+
+    pub is_focused: bool,
 }
 
 impl Ui {
@@ -70,6 +71,7 @@ impl Ui {
             left_panel_id: u32::MAX,
             right_panel_id: u32::MAX,
             character_sheet_id: u32::MAX,
+            hp_bar_id: u32::MAX,
             widgets: Vec::new(),
         };
 
@@ -95,6 +97,14 @@ impl Ui {
     pub fn set_player_hp(&mut self, hp: u32, max_hp: u32) {
         self.player_hp = hp;
         self.player_max_hp = max_hp;
+
+        if let Some(hp_bar) = self.widgets.get(self.hp_bar_id as usize) {
+            let mut bar_ref = hp_bar.borrow_mut();
+            if let Some(bar) = bar_ref.as_any_mut().downcast_mut::<WidgetBar>() {
+                bar.set_text(&format!("{}/{}", self.player_hp, self.player_max_hp));
+                bar.set_bar_percentage(self.player_hp as f32 / self.player_max_hp as f32);
+            }
+        }
     }
 
     pub fn set_player_mp(&mut self, mp: u32, max_mp: u32) {
@@ -222,6 +232,7 @@ impl Ui {
         //     val.add_anchor(AnchorKind::Left, hp_value.borrow().get_id(), AnchorKind::Right);
         // }
 
+        self.hp_bar_id = self.id_counter;
         let hp_bar = self.create_widget::<WidgetBar>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -230,9 +241,13 @@ impl Ui {
             bar.set_size(SizeF::new(200.0, 20.0));
             bar.add_anchor(AnchorKind::Top, hp_label.borrow().get_id(), AnchorKind::Top);
             bar.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
-            //bar.set_text(&format!("{}/{}", self.player_hp, self.player_max_hp));
-            //bar.background.set_color(Color { r:1.0, g:0.0, b:0.0, a:1.0 });
-            //bar.foreground.set_color(Color { r:1.0, g:1.0, b:1.0, a:1.0 });
+            bar.set_text(&format!("{}/{}", self.player_hp, self.player_max_hp));
+            bar.set_background_color(Color { r:0.0, g:0.0, b:0.0, a:1.0 });
+            bar.set_bar_color(Color { r:1.0, g:0.0, b:0.0, a:1.0 });
+
+            if self.player_max_hp > 0 {
+                bar.set_bar_percentage(self.player_hp as f32 / self.player_max_hp as f32);
+            }
         }
 
         let sp_label = self.create_widget::<WidgetText>(

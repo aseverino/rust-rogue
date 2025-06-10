@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::any::Any;
 use std::fmt::Debug;
 
 use std::{cell::RefCell, rc::{Weak, Rc}};
@@ -93,7 +94,10 @@ pub trait WidgetBasicConstructor: Debug + 'static {
     fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self where Self: Sized;
 }
 
-pub trait Widget: WidgetBasicConstructor + Debug + 'static {
+pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
     fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
         Self::new_default(id, parent)
     }
@@ -296,8 +300,8 @@ pub trait Widget: WidgetBasicConstructor + Debug + 'static {
 
     fn recompute_quad(&self, ui: &Ui) -> QuadF {
         let mut quad = QuadF::zero();
+        let size = self.get_base().size;
 
-        // Gather any anchored sides
         let mut left = None;
         let mut right = None;
         let mut top = None;
@@ -314,7 +318,7 @@ pub trait Widget: WidgetBasicConstructor + Debug + 'static {
                     let left = anchor_widget.borrow_mut().get_left(ui);
                     let right = anchor_widget.borrow_mut().get_right(ui);
                     (left + right) / 2.0
-                },
+                }
                 AnchorKind::VerticalCenter => {
                     let top = anchor_widget.borrow_mut().get_top(ui);
                     let bottom = anchor_widget.borrow_mut().get_bottom(ui);
@@ -327,52 +331,67 @@ pub trait Widget: WidgetBasicConstructor + Debug + 'static {
                 AnchorKind::Right => right = Some(anchor_pos),
                 AnchorKind::Top => top = Some(anchor_pos),
                 AnchorKind::Bottom => bottom = Some(anchor_pos),
+
                 AnchorKind::HorizontalCenter => {
-                    quad.x = anchor_pos - self.get_base().size.w / 2.0;
-                    quad.w = self.get_base().size.w;
-                },
+                    quad.x = anchor_pos - size.w / 2.0;
+                    quad.w = size.w;
+
+                    // Continue collecting vertical anchors, but skip horizontal logic
+                    // We'll break early if both vertical center and center-x are found.
+                    continue;
+                }
+
                 AnchorKind::VerticalCenter => {
-                    quad.y = anchor_pos - self.get_base().size.h / 2.0;
-                    quad.h = self.get_base().size.h;
-                },
-                _ => {}
+                    quad.y = anchor_pos - size.h / 2.0;
+                    quad.h = size.h;
+
+                    // Continue collecting horizontal anchors, but skip vertical logic
+                    continue;
+                }
             }
         }
 
-        // Horizontal logic
-        if let (Some(lv), Some(rv)) = (left, right) {
-            quad.x = lv;
-            quad.w = rv - lv;
-        } else if let Some(lv) = left {
-            quad.x = lv;
-            quad.w = self.get_base().size.w;
-        } else if let Some(rv) = right {
-            quad.w = self.get_base().size.w;
-            quad.x = rv - quad.w;
-        } else {
-            quad.x = self.get_base().position.x;
-            quad.w = self.get_base().size.w;
+        // Horizontal fallback
+        if quad.w == 0.0 {
+            if let (Some(l), Some(r)) = (left, right) {
+                quad.x = l;
+                quad.w = r - l;
+            } else if let Some(l) = left {
+                quad.x = l;
+                quad.w = size.w;
+            } else if let Some(r) = right {
+                quad.w = size.w;
+                quad.x = r - quad.w;
+            } else {
+                quad.x = self.get_base().position.x;
+                quad.w = size.w;
+            }
         }
 
-        // Vertical logic
-        if let (Some(tv), Some(bv)) = (top, bottom) {
-            quad.y = tv;
-            quad.h = bv - tv;
-        } else if let Some(tv) = top {
-            quad.y = tv;
-            quad.h = self.get_base().size.h;
-        } else if let Some(bv) = bottom {
-            quad.h = self.get_base().size.h;
-            quad.y = bv - quad.h;
-        } else {
-            quad.y = self.get_base().position.y;
-            quad.h = self.get_base().size.h;
+        // Vertical fallback
+        if quad.h == 0.0 {
+            if let (Some(t), Some(b)) = (top, bottom) {
+                quad.y = t;
+                quad.h = b - t;
+            } else if let Some(t) = top {
+                quad.y = t;
+                quad.h = size.h;
+            } else if let Some(b) = bottom {
+                quad.h = size.h;
+                quad.y = b - quad.h;
+            } else {
+                quad.y = self.get_base().position.y;
+                quad.h = size.h;
+            }
         }
 
+        // Apply margins
         quad.x += self.get_base().margin.x;
         quad.y += self.get_base().margin.y;
+
         quad
     }
+
 }
 
 #[macro_export]
@@ -388,6 +407,14 @@ macro_rules! impl_widget_fns {
 
         fn draw(&self, ui: &Ui) {
             self.draw(ui);
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
         }
     };
 }

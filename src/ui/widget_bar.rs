@@ -20,7 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::any::Any;
 use std::{cell::RefCell, fmt, rc::{Rc, Weak}};
+
+use macroquad::color::Color;
 
 use crate::ui::{widget::{AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, widget_panel::WidgetPanel, widget_text::WidgetText, Ui};
 
@@ -42,6 +45,53 @@ impl WidgetBar {
         for child in &self.base.children {
             if let Some(child_widget) = child.upgrade() {
                 child_widget.borrow().draw(ui);
+            }
+        }
+    }
+
+    pub fn set_background_color(&mut self, color: Color) {
+        if let Some(bg_weak) = &self.background {
+            if let Some(bg_rc) = bg_weak.upgrade() {
+                bg_rc.borrow_mut().set_color(color);
+            }
+        }
+    }
+
+    pub fn set_bar_color(&mut self, color: Color) {
+        if let Some(fg_weak) = &self.foreground {
+            if let Some(fg_rc) = fg_weak.upgrade() {
+                fg_rc.borrow_mut().set_color(color);
+            }
+        }
+    }
+
+    pub fn set_bar_percentage(&mut self, percentage: f32) {
+        if let Some(fg_weak) = &self.foreground {
+            if let Some(fg_rc) = fg_weak.upgrade() {
+                let mut fg = fg_rc.borrow_mut();
+                let width = if let Some(bg_weak) = &self.background {
+                    if let Some(bg_rc) = bg_weak.upgrade() {
+                        bg_rc.borrow().base.computed_quad
+                            .as_ref()
+                            .map_or(0.0, |quad| quad.w * percentage)
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+                fg.base.size.w = width;
+                fg.base.computed_quad.as_mut().map(|quad| {
+                    quad.w = width;
+                });
+            }
+        }
+    }
+
+    pub fn set_text(&mut self, text: &str) {
+        if let Some(text_weak) = &self.text {
+            if let Some(text_rc) = text_weak.upgrade() {
+                text_rc.borrow_mut().set_text(&text.to_string());
             }
         }
     }
@@ -110,9 +160,9 @@ impl Widget for WidgetBar {
                 //bg_rc.borrow_mut().set_color(Color::from_rgba(255, 0, 0, 255));
                 
                 {
-                    let mut fg = text_rc.borrow_mut();
-                    fg.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
-                    fg.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
+                    let mut text = text_rc.borrow_mut();
+                    text.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
+                    text.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
                 };
             }
         }

@@ -460,7 +460,7 @@ impl Map {
                     ItemKind::Orb(_) => {
                         tile.remove_item();
                         println!("Player picked up an orb!");
-                        //player.spell_points += 1; // Increase spell points
+                        player.sp += 1; // Increase soul points
                     }
                     ItemKind::Portal(_) => {
                         

@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Rusty Short Sword",
+    "attack_dice": [6],
+    "modifier": 0,
+    "attribute_modifier": "STR",
+    "required": [ ["STR", 5], ["DEX", 5] ],
+    "slot": "hand",
+    "two-handed": false
+  },
+  {
+    "name": "Rotten Wood Bow",
+    "attack_dice": [6],
+    "modifier": 0,
+    "attribute_modifier": "DEX",
+    "required": [ ["STR", 5], ["DEX", 5] ],
+    "slot": "hand",
+    "two-handed": true
+  },
+  {
+    "name": "Branch Staff",
+    "attack_dice": [3],
+    "modifier": 0,
+    "attribute_modifier": "INT",
+    "required": [ ["STR", 5], ["DEX", 5] ],
+    "slot": "hand",
+    "two-handed": false
+  }
+]

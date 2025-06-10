@@ -75,3 +75,20 @@ impl Item for Portal {
         //ItemType::Orb
     }
 }
+
+
+pub trait Weapon: Item {
+    //fn attack(&self);
+}
+
+pub trait Shield: Item {
+}
+
+pub trait Helmet: Item {
+}
+
+pub trait Armor: Item {
+}
+
+pub trait Boots: Item {
+}

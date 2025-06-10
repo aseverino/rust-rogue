@@ -21,13 +21,30 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use crate::item::*;
 use crate::map::{TILE_SIZE, GRID_WIDTH, GRID_HEIGHT, Map};
 use crate::creature::Creature;
 use crate::position::{ Position, POSITION_INVALID };
 use crate::player_spell::PlayerSpell;
 use crate::spell_type;
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::HashSet;
+use std::rc::Rc;
+
+type WeaponRef = Rc<RefCell<dyn Weapon>>;
+type ShieldRef = Rc<RefCell<dyn Shield>>;
+type HelmetRef = Rc<RefCell<dyn Helmet>>;
+type ArmorRef = Rc<RefCell<dyn Armor>>;
+type BootsRef = Rc<RefCell<dyn Boots>>;
+
+pub struct Equipment {
+    pub weapon: Option<WeaponRef>,
+    pub shield: Option<ShieldRef>,
+    pub helmet: Option<HelmetRef>,
+    pub armor: Option<ArmorRef>,
+    pub boots: Option<BootsRef>,
+}
 
 pub struct Player {
     pub hp: u32,
@@ -46,6 +63,8 @@ pub struct Player {
     pub spells: Vec<PlayerSpell>,
     pub selected_spell: Option<usize>,
     pub line_of_sight: HashSet<Position>,
+
+    pub equipment: Equipment,
 }
 
 impl Player {
@@ -77,6 +96,13 @@ impl Player {
             spells: spells,
             selected_spell: None,
             line_of_sight: HashSet::new(),
+            equipment: Equipment {
+                weapon: None,
+                shield: None,
+                helmet: None,
+                armor: None,
+                boots: None,
+            },
         }
     }
 

@@ -68,6 +68,14 @@ impl Player {
             line_of_sight: HashSet::new(),
         }
     }
+
+    fn add_mana(&mut self, amount: i32) {
+        self.mp = min(max((self.hp as i32) + amount, 0) as u32, self.max_hp);
+    }
+
+    fn get_mana(&self) -> (u32, u32) {
+        (self.mp, self.max_mp)
+    }
 }
 
 impl Creature for Player {

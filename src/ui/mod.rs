@@ -52,6 +52,7 @@ pub struct Ui {
     right_panel_id: u32,
     character_sheet_id: u32,
     hp_bar_id: u32,
+    mp_bar_id: u32,
     
     id_counter: u32,
     widgets: Vec<Rc<RefCell<dyn Widget>>>,
@@ -72,6 +73,7 @@ impl Ui {
             right_panel_id: u32::MAX,
             character_sheet_id: u32::MAX,
             hp_bar_id: u32::MAX,
+            mp_bar_id: u32::MAX,
             widgets: Vec::new(),
         };
 
@@ -110,6 +112,14 @@ impl Ui {
     pub fn set_player_mp(&mut self, mp: u32, max_mp: u32) {
         self.player_mp = mp;
         self.player_max_mp = max_mp;
+
+        if let Some(mp_bar) = self.widgets.get(self.mp_bar_id as usize) {
+            let mut bar_ref = mp_bar.borrow_mut();
+            if let Some(bar) = bar_ref.as_any_mut().downcast_mut::<WidgetBar>() {
+                bar.set_text(&format!("{}/{}", self.player_mp, self.player_max_mp));
+                bar.set_bar_percentage(self.player_mp as f32 / self.player_max_mp as f32);
+            }
+        }
     }
 
     pub fn toggle_character_sheet(&mut self) {
@@ -207,31 +217,6 @@ impl Ui {
             lbl.add_anchor_to_parent(AnchorKind::Left,   AnchorKind::Left);
         }
 
-        // Current‐HP value
-        // let hp_value = self.create_widget::<WidgetText>(
-        //     Some(Rc::downgrade(&parent_dyn))
-        // );
-        // {
-        //     let mut val = hp_value.borrow_mut();
-        //     val.set_text(&format!("{}", self.player_hp));
-        //     val.set_margin_left(10.0);
-        //     // Anchor it relative to the "HP" label we just made
-        //     val.add_anchor(AnchorKind::Top,  hp_label.borrow().get_id(), AnchorKind::Top);
-        //     val.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
-        // }
-
-        // // Max‐HP value
-        // let hp_max_value = self.create_widget::<WidgetText>(
-        //     Some(Rc::downgrade(&parent_dyn))
-        // );
-        // {
-        //     let mut val = hp_max_value.borrow_mut();
-        //     val.set_text(&format!("/{}", self.player_max_hp));
-        //     // Anchor it relative to the "HP" label we just made
-        //     val.add_anchor(AnchorKind::Top,  hp_value.borrow().get_id(), AnchorKind::Top);
-        //     val.add_anchor(AnchorKind::Left, hp_value.borrow().get_id(), AnchorKind::Right);
-        // }
-
         self.hp_bar_id = self.id_counter;
         let hp_bar = self.create_widget::<WidgetBar>(
             Some(Rc::downgrade(&parent_dyn))
@@ -250,11 +235,11 @@ impl Ui {
             }
         }
 
-        let sp_label = self.create_widget::<WidgetText>(
+        let mp_label = self.create_widget::<WidgetText>(
             Some(Rc::downgrade(&parent_dyn))
         );
         {
-            let mut lbl = sp_label.borrow_mut();
+            let mut lbl = mp_label.borrow_mut();
             lbl.set_text(&"MP".to_string());
             lbl.set_color(BLUE);
             lbl.set_margin_top(10.0);
@@ -262,18 +247,22 @@ impl Ui {
             lbl.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Left);
         }
 
-        // Current‐SP value
-        let sp_value = self.create_widget::<WidgetText>(
+        self.mp_bar_id = self.id_counter;
+        let mp_bar = self.create_widget::<WidgetBar>(
             Some(Rc::downgrade(&parent_dyn))
         );
         {
-            let mut val = sp_value.borrow_mut();
-            val.set_text(&format!("{}", self.player_mp));
-            val.set_color(BLUE);
-            val.set_margin_left(10.0);
-            // Anchor it relative to the "HP" label we just made
-            val.add_anchor(AnchorKind::Top,  sp_label.borrow().get_id(), AnchorKind::Top);
-            val.add_anchor(AnchorKind::Left, sp_label.borrow().get_id(), AnchorKind::Right);
+            let mut bar = mp_bar.borrow_mut();
+            bar.set_size(SizeF::new(200.0, 20.0));
+            bar.add_anchor(AnchorKind::Top, mp_label.borrow().get_id(), AnchorKind::Top);
+            bar.add_anchor(AnchorKind::Left, mp_label.borrow().get_id(), AnchorKind::Right);
+            bar.set_text(&format!("{}/{}", self.player_mp, self.player_max_mp));
+            bar.set_background_color(Color { r:0.0, g:0.0, b:0.0, a:1.0 });
+            bar.set_bar_color(Color { r:0.0, g:0.0, b:1.0, a:1.0 });
+
+            if self.player_max_mp > 0 {
+                bar.set_bar_percentage(self.player_mp as f32 / self.player_max_mp as f32);
+            }
         }
     }
 

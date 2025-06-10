@@ -51,8 +51,9 @@ pub struct Anchor {
 pub struct WidgetBase {
     pub id: u32,
     pub parent: Option<Weak<RefCell<dyn Widget>>>,
-    pub children: Vec<Weak<RefCell<dyn Widget>>>,
     pub parent_id: u32,
+    pub children: Vec<Weak<RefCell<dyn Widget>>>,
+    pub children_ids: Vec<u32>,
     pub anchors: Vec<Anchor>,
     pub position: PointF,
     pub size: SizeF,
@@ -70,6 +71,7 @@ impl WidgetBase {
             parent: parent,
             parent_id: u32::MAX,
             children: Vec::new(),
+            children_ids: Vec::new(),
             anchors: Vec::new(),
             position: PointF::zero(),
             size: SizeF::zero(),
@@ -110,7 +112,7 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
         if let Some(parent_weak) = parent {
             if let Some(parent_rc) = parent_weak.upgrade() {
-                parent_rc.borrow_mut().add_child(Rc::downgrade(&w_dyn));
+                parent_rc.borrow_mut().add_child(Rc::downgrade(&w_dyn), id);
             }
         }
 
@@ -136,12 +138,17 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         &self.get_base().children
     }
 
+    fn get_children_ids(&self) -> &[u32] {
+        &self.get_base().children_ids
+    }
+
     fn get_children_mut(&mut self) -> &mut Vec<Weak<RefCell<dyn Widget>>> {
         &mut self.get_base_mut().children
     }
 
-    fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>) {
+    fn add_child(&mut self, child: Weak<RefCell<dyn Widget>>, id: u32) {
         self.get_children_mut().push(child);
+        self.get_base_mut().children_ids.push(id);
     }
 
     fn draw(&self, ui: &Ui);
@@ -234,17 +241,6 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
     }
 
     fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind) {
-        // let parent_id = match &self.get_base_mut().parent {
-        //     Some(weak_parent) => {
-        //         if let Some(parent_rc) = weak_parent.upgrade() {
-        //             parent_rc.borrow().get_id()
-        //         } else {
-        //             0  // parent was dropped
-        //         }
-        //     }
-        //     None => 0,
-        // };
-
         let parent_id = self.get_base().parent_id;
 
         self.get_base_mut().anchors.push(Anchor {
@@ -254,6 +250,36 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         });
 
         self.get_base_mut().dirty = true;
+    }
+
+    fn add_anchor_to_prev(&mut self, this: AnchorKind, other_side: AnchorKind) {
+        let c: Vec<u32> = if let Some(parent_weak) = self.get_parent() {
+            if let Some(parent_rc) = parent_weak.upgrade() {
+                parent_rc.borrow().get_children_ids().to_vec()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
+        let mut found_this = false;
+
+        for i in (0..c.len()).rev() {
+            if let Some(prev) = c.get(i) {
+                if *prev == self.get_id() {
+                    found_this = true;
+                    continue; // Skip self
+                }
+                if found_this {
+                    // We found the previous widget
+                    let prev = *prev;
+                    let this = this.clone();
+                    self.add_anchor(this, prev, other_side);
+                    return;
+                }
+            }
+        }
     }
     
     fn fill_parent(&mut self) {

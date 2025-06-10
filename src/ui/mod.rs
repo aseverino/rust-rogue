@@ -284,8 +284,8 @@ impl Ui {
         {
             let mut bar = hp_bar.borrow_mut();
             bar.set_size(SizeF::new(200.0, 20.0));
-            bar.add_anchor(AnchorKind::Top, hp_label.borrow().get_id(), AnchorKind::Top);
-            bar.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Right);
+            bar.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            bar.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
             bar.set_text(&format!("{}/{}", self.player_hp, self.player_max_hp));
             bar.set_background_color(Color { r:0.0, g:0.0, b:0.0, a:1.0 });
             bar.set_bar_color(Color { r:1.0, g:0.0, b:0.0, a:1.0 });
@@ -314,8 +314,8 @@ impl Ui {
         {
             let mut bar = mp_bar.borrow_mut();
             bar.set_size(SizeF::new(200.0, 20.0));
-            bar.add_anchor(AnchorKind::Top, mp_label.borrow().get_id(), AnchorKind::Top);
-            bar.add_anchor(AnchorKind::Left, mp_label.borrow().get_id(), AnchorKind::Right);
+            bar.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            bar.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
             bar.set_text(&format!("{}/{}", self.player_mp, self.player_max_mp));
             bar.set_background_color(Color { r:0.0, g:0.0, b:0.0, a:1.0 });
             bar.set_bar_color(Color { r:0.0, g:0.0, b:1.0, a:1.0 });
@@ -344,8 +344,8 @@ impl Ui {
         {
             let mut lbl = soul_value.borrow_mut();
             lbl.set_color(YELLOW);
-            lbl.add_anchor(AnchorKind::Top, soul_label.borrow().get_id(), AnchorKind::Top);
-            lbl.add_anchor(AnchorKind::Left, soul_label.borrow().get_id(), AnchorKind::Right);
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
             lbl.set_text(&format!("{}", self.player_sp));
         }
 
@@ -368,8 +368,8 @@ impl Ui {
         {
             let mut lbl = str_value.borrow_mut();
             lbl.set_color(GREEN);
-            lbl.add_anchor(AnchorKind::Top, str_label.borrow().get_id(), AnchorKind::Top);
-            lbl.add_anchor(AnchorKind::Left, str_label.borrow().get_id(), AnchorKind::Right);
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
             lbl.set_text(&format!("{}", self.player_str));
         }
     }

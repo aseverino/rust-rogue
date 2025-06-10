@@ -62,6 +62,8 @@ fn draw(game: &mut GameState, game_interface_offset: (f32, f32)) {
     let (mp, max_mp) = game.get_player_mp();
     game.ui.set_player_hp(hp, max_hp);
     game.ui.set_player_mp(mp, max_mp);
+    game.ui.set_player_sp(game.player.sp);
+    game.ui.set_player_str(game.player.strength);
 
     game.ui.draw();
 }

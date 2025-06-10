@@ -34,6 +34,13 @@ pub struct Player {
     pub max_hp: u32,
     pub mp: u32,
     pub max_mp: u32,
+
+    pub strength: u32,
+    pub dexterity: u32,
+    pub intelligence: u32,
+
+    pub sp: u32,
+
     pub position: Position,
     pub goal_position: Option<Position>,
     pub spells: Vec<PlayerSpell>,
@@ -57,10 +64,14 @@ impl Player {
         }
 
         Self {
-            hp: 50,
-            max_hp: 50,
-            mp: 10,
-            max_mp: 10,
+            hp: 100,
+            max_hp: 100,
+            mp: 50,
+            max_mp: 50,
+            strength: 10,
+            dexterity: 10,
+            intelligence: 10,
+            sp: 1,
             position: pos,
             goal_position: None,
             spells: spells,
@@ -75,6 +86,10 @@ impl Player {
 
     fn get_mana(&self) -> (u32, u32) {
         (self.mp, self.max_mp)
+    }
+
+    fn get_soul_points(&self) -> u32 {
+        self.sp
     }
 }
 

@@ -62,6 +62,7 @@ pub enum PlayerEvent {
     AutoMoveEnd,
     Wait,
     Cancel,
+    MeleeAttack,
     SpellSelect,
     SpellCast,
     Death,
@@ -112,7 +113,7 @@ impl Map {
     pub async fn init(&mut self, player: &mut Player) {
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
         let monster_types = load_monster_types().await;
-        self.add_random_monsters(&monster_types, 10);
+        self.add_random_monsters(&monster_types, 20);
         
         let len = self.available_walkable_cache.len();
         let positions: Vec<Position> = self.available_walkable_cache
@@ -223,6 +224,10 @@ impl Map {
         player.draw(offset);
     }
 
+    pub fn is_tile_enemy_occupied(&self, pos: Position) -> bool {
+        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].has_enemy()
+    }
+
     pub fn is_tile_walkable(&self, pos: Position) -> bool {
         pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
     }
@@ -252,8 +257,10 @@ impl Map {
                 .expect("Monster type list is empty")
                 .clone();
 
+            let monster = Monster::new(pos.clone(), kind);
+            self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
             // Wrap the monster in Rc and push to creatures
-            self.monsters.push(Monster::new(pos.clone(), kind));
+            self.monsters.push(monster);
         }
 
         self.walkable_cache.shuffle(&mut rng);
@@ -280,7 +287,20 @@ impl Map {
         }
     }
 
-    fn do_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position, spell_index: usize) {
+    fn do_melee_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position) {
+        let damage = 10;
+        let creature_id = self.tiles[target_pos].creature;
+        if creature_id >= 0 {
+            self.do_damage(player, creature_id as u32, damage);
+        }
+    }
+
+    fn do_spell_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position, spell_index: usize) {
+        if !self.is_tile_walkable(target_pos) {
+            println!("Target position is not walkable for spell casting.");
+            return;
+        }
+
         let spell = player.spells.get_mut(spell_index)
             .expect("Selected spell index out of bounds");
 
@@ -353,7 +373,7 @@ impl Map {
                 }
 
                 if should_cast {
-                    self.do_combat(player, player_pos, player_goal, index);
+                    self.do_spell_combat(player, player_pos, player_goal, index);
                     update_monsters = true;
                 }
 
@@ -424,13 +444,20 @@ impl Map {
                 y: (player_pos.y as isize + pos_change.1) as usize
             };
 
-            if self.is_tile_walkable(pos) {
-                new_player_pos = Some(pos);
-                update_monsters = true; // Update monsters if player moves
+            if self.is_tile_enemy_occupied(pos) {
+                self.last_player_event = Some(PlayerEvent::MeleeAttack);
+                update_monsters = true; // Update monsters if player attacks
+                self.do_melee_combat(player, player_pos, pos);
             }
+            else {
+                if self.is_tile_walkable(pos) {
+                    new_player_pos = Some(pos);
+                    update_monsters = true; // Update monsters if player moves
+                }
 
+                self.last_player_event = Some(PlayerEvent::Move);
+            }
             player.goal_position = None;
-            self.last_player_event = Some(PlayerEvent::Move);
         }
         else if player_action == KeyboardAction::Wait {
             new_player_pos = Some(player_pos); // Stay in place

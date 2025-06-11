@@ -20,9 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::collections::LinkedList;
+
 use macroquad::prelude::*;
 
-use crate::{item::*, map::TILE_SIZE, position::Position};
+use crate::{items::{item::ItemKind, orb::Orb}, map::TILE_SIZE, position::Position};
 
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
@@ -38,12 +40,12 @@ pub enum TileKind {
 pub struct Tile {
     pub kind: TileKind,
     pub creature: i32, // Index of creatures on this tile
-    pub item: Option<ItemKind>
+    pub items: LinkedList<ItemKind>
 }
 
 impl Tile {
     pub fn new(kind: TileKind) -> Self {
-        Self { kind, creature: NO_CREATURE, item: None }
+        Self { kind, creature: NO_CREATURE, items: LinkedList::new() }
     }
 
     pub fn is_walkable(&self) -> bool {
@@ -52,11 +54,11 @@ impl Tile {
 
     pub fn add_orb(&mut self) {
         let orb = Orb {};
-        self.item = Some(ItemKind::Orb(orb));
+        self.items.push_back(ItemKind::Orb(orb));
     }
 
-    pub fn remove_item(&mut self) -> Option<ItemKind> {
-        self.item.take()
+    pub fn remove_item(&mut self, index: usize) -> Option<ItemKind> {
+        self.items.iter().nth(index).cloned()
     }
 
     pub fn draw(&self, pos: Position, offset: (f32, f32)) {
@@ -74,7 +76,7 @@ impl Tile {
             color,
         );
 
-        if let Some(item) = &self.item {
+        for item in &self.items {
             match item {
                 ItemKind::Orb(_) => {
                     draw_circle(
@@ -84,16 +86,46 @@ impl Tile {
                         Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
                     );
                 }
-                ItemKind::Portal(_) => {
-                    draw_rectangle(
-                        offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 4.0,
-                        offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
-                        TILE_SIZE / 2.0,
-                        TILE_SIZE / 2.0,
-                        Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 },
-                    );
-                }
+                // ItemKind::Portal(_) => {
+                //     draw_rectangle(
+                //         offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+                //         offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+                //         TILE_SIZE / 2.0,
+                //         TILE_SIZE / 2.0,
+                //         Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 },
+                //     );
+                // }
+                _ => {}
             }
         }
+
+        // if let Some(item) = &self.item {
+        //     match item {
+        //         ItemKind::Orb(_) => {
+        //             draw_circle(
+        //                 offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+        //                 offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+        //                 TILE_SIZE / 4.0,
+        //                 Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+        //             );
+        //         }
+        //         _ => {
+
+        //         }
+        //         // ItemKind::Portal(_) => {
+        //         //     draw_rectangle(
+        //         //         offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+        //         //         offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+        //         //         TILE_SIZE / 2.0,
+        //         //         TILE_SIZE / 2.0,
+        //         //         Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 },
+        //         //     );
+        //         // }
+        //         //ItemKind::Holdable(holdable) => {
+        //             // Assuming Holdable has a draw method
+        //             //holdable.draw(offset, pos);
+        //         //}
+        //     }
+        // }
     }
 }

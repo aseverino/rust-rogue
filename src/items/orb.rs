@@ -20,41 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod input;
-mod ui;
-mod game;
-mod items;
-mod navigator;
-mod map;
-mod map_generator;
-mod position;
-mod tile;
-mod tile_map;
-mod creature;
-mod monster_type;
-mod monster;
-mod spell_type;
-mod player_spell;
-mod spell_execution;
-mod player;
-use std::sync::Mutex;
+use crate::items::item::Item;
 
-use macroquad::prelude::*;
-
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "Rust Rogue".to_string(),
-        window_width: 1920,
-        window_height: 1100,
-        fullscreen: false,
-        ..Default::default()
-    }
+#[derive(Clone, Debug)]
+pub struct Orb {
+    //
 }
 
-//use crate::ui::{Ui};
-
-#[macroquad::main(window_conf)]
-async fn main() {
-    //UI.set(Mutex::new(Ui::new())).unwrap();
-    game::run().await;
+impl Item for Orb {
 }

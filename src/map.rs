@@ -31,7 +31,7 @@ use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
 use crate::creature;
 use crate::creature::Creature;
-use crate::item::ItemKind;
+use crate::items::item::ItemKind;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
 use crate::navigator::Navigator;
@@ -453,20 +453,41 @@ impl Map {
             update_monsters = true;
 
             let tile = &mut self.tiles[pos];
-            
 
-            if let Some(item) = &tile.item {
+            let mut to_remove: Vec<usize> = Vec::new();
+            
+            for (idx, item) in tile.items.iter().rev().enumerate() {
                 match item {
                     ItemKind::Orb(_) => {
-                        tile.remove_item();
-                        println!("Player picked up an orb!");
-                        player.sp += 1; // Increase soul points
+                        println!("Player picked up an orb at index {idx}!");
+                        player.sp += 1;
+                        to_remove.push(idx); // Collect for removal
                     }
-                    ItemKind::Portal(_) => {
-                        
+                    other_item => {
+                        // println!("Player found an item: {:?}", other_item);
                     }
                 }
             }
+
+            for idx in to_remove {
+                tile.remove_item(idx);
+            }
+
+            // for (idx, item) in &tile.items {
+            //     match item {
+            //         (idx, ItemKind::Orb(orb)) => {
+            //             tile.remove_item(*idx);
+            //             println!("Player picked up an orb!");
+            //             player.sp += 1; // Increase soul points
+            //         }
+            //         // (_, ItemKind::Portal(_)) => {
+                        
+            //         // }
+            //         (_, other_item) => {
+            //             //println!("Player found an item: {:?}", other_item);
+            //         }
+            //     }
+            // }
         }
 
         if update_monsters {

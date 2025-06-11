@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use crate::items::Items;
 use crate::map::{Map, TILE_SIZE, PlayerEvent};
 use crate::ui::size_f::SizeF;
 use crate::ui::Ui;
@@ -28,7 +29,7 @@ use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
 
-use crate::spell_type;
+use crate::{spell_type};
 use crate::map_generator;
 use macroquad::time::get_time;
 
@@ -39,6 +40,7 @@ pub struct GameState {
     pub player: Player,
     pub map: Map,
     pub ui: Ui,
+    pub items: Items,
 }
 
 impl GameState {
@@ -76,7 +78,10 @@ pub async fn run() {
         player: Player::new(Position::new(1, 1)),
         map: map_generator::generate(),
         ui: Ui::new(),
+        items: Items::new()
     };
+
+    game.items.load_holdable_items().await;
 
     game.map.init(&mut game.player).await;
     game.map.set_player_random_position(&mut game.player);

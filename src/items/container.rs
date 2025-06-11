@@ -20,75 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::map::Map;
+use crate::items::item::{BaseItemData, Item};
 
-// pub enum ItemType {
-//     Portal,
-//     Orb,
-//     Consumable,
-//     Chest,
-//     Health,
-// }
-
-pub trait Item {
-   fn pickup(&self); 
+pub struct Container {
+    pub base_item: BaseItemData,
+    pub items: Vec<u32>
 }
 
-#[derive(Clone)]
-pub enum ItemKind {
-    Orb(Orb),
-    Portal(Portal),
-}
-
-impl Item for ItemKind {
-    fn pickup(&self) {
-        match self {
-            ItemKind::Orb(orb) => orb.pickup(),
-            ItemKind::Portal(portal) => portal.pickup(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Orb {
-    //
-}
-
-impl Item for Orb {
-    fn pickup(&self) {
-        //ItemType::Orb
-    }
-}
-
-// pub trait Consumable: Item {
-//     fn use_item(&mut self);
-// }
-
-#[derive(Clone)]
-pub struct Portal {
-    // pub destination: Option<Map>,
-    pub active: bool,
-}
-
-impl Item for Portal {
-    fn pickup(&self) {
-        //ItemType::Orb
-    }
-}
-
-
-pub trait Weapon: Item {
-    //fn attack(&self);
-}
-
-pub trait Shield: Item {
-}
-
-pub trait Helmet: Item {
-}
-
-pub trait Armor: Item {
-}
-
-pub trait Boots: Item {
+impl Item for Container {
+    
 }

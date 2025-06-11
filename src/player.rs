@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
-use crate::item::*;
+use crate::items::holdable::*;
 use crate::map::{TILE_SIZE, GRID_WIDTH, GRID_HEIGHT, Map};
 use crate::creature::Creature;
 use crate::position::{ Position, POSITION_INVALID };
@@ -32,11 +32,11 @@ use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::rc::Rc;
 
-type WeaponRef = Rc<RefCell<dyn Weapon>>;
-type ShieldRef = Rc<RefCell<dyn Shield>>;
-type HelmetRef = Rc<RefCell<dyn Helmet>>;
-type ArmorRef = Rc<RefCell<dyn Armor>>;
-type BootsRef = Rc<RefCell<dyn Boots>>;
+type WeaponRef = Rc<RefCell<Weapon>>;
+type ShieldRef = Rc<RefCell<Shield>>;
+type HelmetRef = Rc<RefCell<Helmet>>;
+type ArmorRef = Rc<RefCell<Armor>>;
+type BootsRef = Rc<RefCell<Boots>>;
 
 pub struct Equipment {
     pub weapon: Option<WeaponRef>,

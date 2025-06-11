@@ -48,6 +48,10 @@ impl Tile {
         Self { kind, creature: NO_CREATURE, items: LinkedList::new() }
     }
 
+    pub fn has_enemy(&self) -> bool {
+        self.creature != NO_CREATURE && self.creature != PLAYER_CREATURE_ID
+    }
+
     pub fn is_walkable(&self) -> bool {
         self.kind == TileKind::Floor && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
     }

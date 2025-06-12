@@ -56,6 +56,14 @@ impl Tile {
         self.kind == TileKind::Floor && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
     }
 
+    pub fn has_container(&self) -> bool {
+        self.items.iter().any(|item| matches!(item, ItemKind::Container(_)))
+    }
+
+    pub fn get_top_item(&self) -> Option<&ItemKind> {
+        self.items.back()
+    }
+
     pub fn add_orb(&mut self) {
         let orb = Orb {};
         self.items.push_back(ItemKind::Orb(orb));
@@ -88,6 +96,15 @@ impl Tile {
                         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
                         TILE_SIZE / 4.0,
                         Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+                    );
+                }
+                ItemKind::Container(_) => {
+                    draw_rectangle(
+                        offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+                        offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
+                        TILE_SIZE / 2.0,
+                        TILE_SIZE / 2.0,
+                        Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 },
                     );
                 }
                 // ItemKind::Portal(_) => {

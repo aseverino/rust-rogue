@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use crate::items::item::Item;
 use crate::items::Items;
 use crate::map::{Map, TILE_SIZE, PlayerEvent};
 use crate::ui::point_f::PointF;
@@ -139,6 +140,24 @@ pub async fn run() {
             }
             else {
                 game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+
+                if game.map.last_player_event == Some(PlayerEvent::OpenChest) {
+                    if let Some(items_vec) = game.map.get_chest_items(game.player.position) {
+                        
+                        let actual_items: Vec<(u32, String)> = items_vec.iter()
+                            .filter_map(|item_id| {
+                                game.items.items.iter()
+                                    .find(|item| item.borrow().get_id() == *item_id)
+                                    .map(|item_rc| {
+                                        let item_ref = item_rc.borrow();
+                                        (item_ref.get_id(), item_ref.get_name().to_string())
+                                    })
+                            })
+                            .collect();
+
+                        //game.ui.show_chest_view(&actual_items);
+                    }
+                }
             }   
         }
 

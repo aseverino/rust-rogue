@@ -31,6 +31,7 @@ use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
 use crate::creature;
 use crate::creature::Creature;
+use crate::items::container::Container;
 use crate::items::item::ItemKind;
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
@@ -66,6 +67,7 @@ pub enum PlayerEvent {
     MeleeAttack,
     SpellSelect,
     SpellCast,
+    OpenChest,
     Death,
 }
 
@@ -491,6 +493,10 @@ impl Map {
                         player.sp += 1;
                         to_remove.push(idx); // Collect for removal
                     }
+                    ItemKind::Container(_) => {
+                        self.last_player_event = Some(PlayerEvent::OpenChest);
+                        //to_remove.push(idx); // Collect for removal
+                    }
                     other_item => {
                         // println!("Player found an item: {:?}", other_item);
                     }
@@ -552,6 +558,18 @@ impl Map {
                 }
             }
         }
+    }
+
+    pub fn get_chest_items(&self, position: Position) -> Option<&Vec<u32>> {
+        if position.x < GRID_WIDTH && position.y < GRID_HEIGHT {
+            let tile = &self.tiles[position];
+            if let Some(item) = tile.get_top_item() {
+                if let ItemKind::Container(container) = item {
+                    return Some(&container.items);
+                }
+            }
+        }
+        None
     }
 }
 

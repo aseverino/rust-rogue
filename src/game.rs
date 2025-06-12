@@ -115,8 +115,9 @@ pub async fn run() {
         let map_hover_y = ((map_mouse_pos.y) / TILE_SIZE) as usize;
         let current_tile = Position { x: map_hover_x, y: map_hover_y };
 
-        game.map.hovered_changed = game.map.hovered != Some(current_tile);
-        game.map.hovered = Some(current_tile);
+        game.map.hovered_tile_changed = game.map.hovered_tile != Some(current_tile);
+        game.map.hovered_tile = Some(current_tile);
+        game.ui.update_mouse_position(global_mouse_pos);
 
         if let Some(_click) = input.click {
             if game.ui.is_focused {

@@ -113,6 +113,13 @@ impl Ui {
         }
     }
 
+    pub fn update_mouse_position(&mut self, mouse_position: PointF) {
+        let widgets: Vec<_> = self.widgets.iter().cloned().collect();
+        for widget in widgets {
+            widget.borrow_mut().on_mouse_position_update(self, mouse_position);
+        }
+    }
+
     pub fn handle_click(&mut self, mouse_position: PointF) {
         let widgets: Vec<_> = self.widgets.iter().cloned().collect();
         for widget in widgets {

@@ -237,6 +237,10 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         self.get_base().visible
     }
 
+    fn on_mouse_position_update(&mut self, _ui: &mut Ui, _pos: PointF) {
+        // Default implementation does nothing
+    }
+
     fn on_click(&mut self, _ui: &mut Ui, _pos: PointF) {
         // Default implementation does nothing
     }

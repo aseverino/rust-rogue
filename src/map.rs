@@ -90,8 +90,8 @@ pub struct Map {
     pub walkable_cache: Vec<Position>,
     pub available_walkable_cache: Vec<Position>,
     pub monsters: Vec<Monster>,
-    pub hovered: Option<Position>,
-    pub hovered_changed: bool,
+    pub hovered_tile: Option<Position>,
+    pub hovered_tile_changed: bool,
     pub last_player_event: Option<PlayerEvent>,
     pub spell_fov_cache: SpellFovCache,
     pub should_draw_spell_fov: bool,
@@ -104,8 +104,8 @@ impl Map {
             walkable_cache,
             available_walkable_cache,
             monsters: Vec::new(),
-            hovered: None,
-            hovered_changed: false,
+            hovered_tile: None,
+            hovered_tile_changed: false,
             last_player_event: None,
             spell_fov_cache: SpellFovCache::new(),
             should_draw_spell_fov: false
@@ -147,7 +147,7 @@ impl Map {
         let mut spell_fov_needs_update = false;
         if let Some(selected_spell) = player.selected_spell {
             if let Some(player_spell) = player.spells.get(selected_spell) {
-                if let Some(hovered) = self.hovered {
+                if let Some(hovered) = self.hovered_tile {
                     let spell_type = &player_spell.spell_type;
                     let radius = self.spell_fov_cache.radius;
                     if spell_type.area_radius != Some(radius) {
@@ -163,7 +163,7 @@ impl Map {
 
         if spell_fov_needs_update {
             self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
-            self.spell_fov_cache.origin = self.hovered.unwrap_or(POSITION_INVALID);
+            self.spell_fov_cache.origin = self.hovered_tile.unwrap_or(POSITION_INVALID);
             self.spell_fov_cache.area = Navigator::compute_fov(&self.tiles, self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
         }
     }

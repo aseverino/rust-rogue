@@ -178,6 +178,12 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         q.y + q.h
     }
 
+    fn contains_point(&mut self, ui: &Ui, point: PointF) -> bool {
+        let q = self.get_drawing_coords(ui);
+        point.x >= q.x && point.x <= q.x + q.w &&
+        point.y >= q.y && point.y <= q.y + q.h
+    }
+
     fn get_margin_top(&self) -> f32 {
         self.get_base().margin.y
     }
@@ -229,6 +235,15 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
     fn is_visible(&self) -> bool {
         self.get_base().visible
+    }
+
+    fn on_click(&mut self, _ui: &mut Ui, _pos: PointF) {
+        // Default implementation does nothing
+    }
+
+    fn set_on_click(&mut self, _f: Box<dyn FnMut(&mut Ui, PointF)>)
+    {
+        // Default implementation does nothing
     }
 
     fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind) {
@@ -422,13 +437,13 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
 #[macro_export]
 macro_rules! impl_widget_fns {
-    ($t:ty, $base:ident) => {
+    ($t:ty, $($base:tt)+) => {
         fn get_base(&self) -> &WidgetBase {
-            &self.$base
+            &self.$($base)+
         }
 
         fn get_base_mut(&mut self) -> &mut WidgetBase {
-            &mut self.$base
+            &mut self.$($base)+
         }
 
         fn draw(&self, ui: &Ui) {
@@ -447,9 +462,9 @@ macro_rules! impl_widget_fns {
 
 #[macro_export]
 macro_rules! impl_widget {
-    ($t:ty, $base:ident) => {
+    ($t:ty, $($base:tt)+) => {
         impl Widget for $t {
-            impl_widget_fns!($t, $base);
+            impl_widget_fns!($t, $($base)+);
         }
     };
 }

@@ -109,16 +109,22 @@ pub async fn run() {
 
         let input = Input::poll();
 
-        let mouse_pos = PointF::new(input.mouse.x - game_interface_offset.x, input.mouse.y - game_interface_offset.y);
-        let hover_x = (mouse_pos.x / TILE_SIZE) as usize;
-        let hover_y = ((mouse_pos.y) / TILE_SIZE) as usize;
-        let current_tile = Position { x: hover_x, y: hover_y };
+        let global_mouse_pos = PointF::new(input.mouse.x, input.mouse.y);
+        let map_mouse_pos = PointF::new(input.mouse.x - game_interface_offset.x, input.mouse.y - game_interface_offset.y);
+        let map_hover_x = (map_mouse_pos.x / TILE_SIZE) as usize;
+        let map_hover_y = ((map_mouse_pos.y) / TILE_SIZE) as usize;
+        let current_tile = Position { x: map_hover_x, y: map_hover_y };
 
         game.map.hovered_changed = game.map.hovered != Some(current_tile);
         game.map.hovered = Some(current_tile);
 
         if let Some(_click) = input.click {
+            if game.ui.is_focused {
+                game.ui.handle_click(global_mouse_pos);
+            }
+            else {
             goal_position = Some(current_tile)
+            }
         };
 
         if game.ui.is_focused {

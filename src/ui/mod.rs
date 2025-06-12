@@ -29,13 +29,14 @@ mod widget;
 
 pub mod widget_panel;
 pub mod widget_text;
+pub mod widget_button;
 pub mod widget_bar;
 
 use std::{cell::RefCell, rc::Weak, rc::Rc};
 
 use macroquad::prelude::*;
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_bar::WidgetBar, widget_panel::WidgetPanel, widget_text::WidgetText};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_bar::WidgetBar, widget_button::WidgetButton, widget_panel::WidgetPanel, widget_text::WidgetText};
 use std::fmt::Debug;
 
 
@@ -109,6 +110,13 @@ impl Ui {
             // This only needs `&self`, not `&mut self`.
             // Each call to `update_drawing_coords` will write into that widget's Cell.
             widget.borrow_mut().get_drawing_coords(self);
+        }
+    }
+
+    pub fn handle_click(&mut self, mouse_position: PointF) {
+        let widgets: Vec<_> = self.widgets.iter().cloned().collect();
+        for widget in widgets {
+            widget.borrow_mut().on_click(self, mouse_position);
         }
     }
 

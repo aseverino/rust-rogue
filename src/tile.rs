@@ -24,7 +24,7 @@ use std::collections::LinkedList;
 
 use macroquad::prelude::*;
 
-use crate::{items::{item::ItemKind, orb::Orb}, map::TILE_SIZE, position::Position};
+use crate::{items::{item::ItemKind, orb::Orb}, map::TILE_SIZE, position::Position, ui::point_f::PointF};
 
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
@@ -65,7 +65,7 @@ impl Tile {
         self.items.iter().nth(index).cloned()
     }
 
-    pub fn draw(&self, pos: Position, offset: (f32, f32)) {
+    pub fn draw(&self, pos: Position, offset: PointF) {
         let color = match self.kind {
             TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
             TileKind::Wall => Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
@@ -73,8 +73,8 @@ impl Tile {
         };
 
         draw_rectangle(
-            offset.0 + pos.x as f32 * TILE_SIZE,
-            offset.1 + pos.y as f32 * TILE_SIZE,
+            offset.x + pos.x as f32 * TILE_SIZE,
+            offset.y + pos.y as f32 * TILE_SIZE,
             TILE_SIZE - 1.0,
             TILE_SIZE - 1.0,
             color,
@@ -84,8 +84,8 @@ impl Tile {
             match item {
                 ItemKind::Orb(_) => {
                     draw_circle(
-                        offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
-                        offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+                        offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+                        offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
                         TILE_SIZE / 4.0,
                         Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
                     );

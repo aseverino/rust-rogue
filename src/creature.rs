@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::position::Position;
+use crate::{position::Position, ui::point_f::PointF};
 
 pub trait Creature {
     fn name(&self) -> &str;
     fn pos(&self) -> Position;
     fn set_pos(&mut self, pos: Position);
-    fn draw(&self, offset: (f32, f32));
+    fn draw(&self, offset: PointF);
 
     fn add_health(&mut self, amount: i32);
 

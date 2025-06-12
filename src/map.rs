@@ -40,6 +40,7 @@ use crate::position::{ Position, Direction };
 use crate::input::KeyboardAction;
 use crate::player::Player;
 use crate::tile::{Tile, TileKind, NO_CREATURE, PLAYER_CREATURE_ID};
+use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -167,7 +168,7 @@ impl Map {
         }
     }
 
-    pub fn draw(&mut self, player: &Player, offset: (f32, f32)) {
+    pub fn draw(&mut self, player: &Player, offset: PointF) {
         self.update_spell_fov_cache(player);
 
         for x in 0..GRID_WIDTH {
@@ -182,8 +183,8 @@ impl Map {
                         if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) &&
                         player.line_of_sight.contains(&tile_pos) {
                             draw_rectangle(
-                                offset.0 + x as f32 * TILE_SIZE,
-                                offset.1 + y as f32 * TILE_SIZE,
+                                offset.x + x as f32 * TILE_SIZE,
+                                offset.y + y as f32 * TILE_SIZE,
                                 TILE_SIZE - 1.0,
                                 TILE_SIZE - 1.0,
                                 Color { r: 0.0, g: 1.0, b: 0.0, a: 0.2 },
@@ -193,8 +194,8 @@ impl Map {
 
                     if self.spell_fov_cache.area.contains(&Position { x, y }) {
                         draw_rectangle(
-                            offset.0 + x as f32 * TILE_SIZE,
-                            offset.1 + y as f32 * TILE_SIZE,
+                            offset.x + x as f32 * TILE_SIZE,
+                            offset.y + y as f32 * TILE_SIZE,
                             TILE_SIZE - 1.0,
                             TILE_SIZE - 1.0,
                             Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 });

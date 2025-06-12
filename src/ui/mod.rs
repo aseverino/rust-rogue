@@ -35,7 +35,7 @@ use std::{cell::RefCell, rc::Weak, rc::Rc};
 
 use macroquad::prelude::*;
 
-use crate::ui::{quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_bar::WidgetBar, widget_panel::WidgetPanel, widget_text::WidgetText};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{AnchorKind, Widget}, widget_bar::WidgetBar, widget_panel::WidgetPanel, widget_text::WidgetText};
 use std::fmt::Debug;
 
 

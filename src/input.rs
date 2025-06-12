@@ -23,7 +23,7 @@
 use macroquad::prelude::*;
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
-use crate::position::Direction;
+use crate::{position::Direction, ui::point_f::PointF};
 
 #[derive(Clone, PartialEq)]
 pub enum KeyboardAction {
@@ -39,18 +39,18 @@ pub struct Input {
     keyboard_action: KeyboardAction,
     direction_intention: Direction,
     spell_action: i32,
-    mouse_position: (f32, f32),
-    clicked_position: Option<(f32, f32)>,
+    mouse_position: PointF,
+    clicked_position: Option<PointF>,
 
-    mouse_press_position: Option<(f32, f32)>,
+    mouse_press_position: Option<PointF>,
 }
 
 pub struct InputSnapshot {
     pub keyboard_action: KeyboardAction,
     pub direction: Direction,
     pub spell: i32,
-    pub click: Option<(f32, f32)>,
-    pub mouse: (f32, f32),
+    pub click: Option<PointF>,
+    pub mouse: PointF,
 }
 
 impl Input {
@@ -111,14 +111,15 @@ impl Input {
     }
 
     fn handle_mouse_input(&mut self) {
-        self.mouse_position = mouse_position();
+        let mouse_pos_tuple = mouse_position();
+        self.mouse_position = PointF::new(mouse_pos_tuple.0, mouse_pos_tuple.1);
         if is_mouse_button_pressed(MouseButton::Left) {
             self.mouse_press_position = Some(self.mouse_position);
         }
         if is_mouse_button_released(MouseButton::Left) {
             if let Some(press_pos) = self.mouse_press_position.take() {
-                if (self.mouse_position.0 - press_pos.0).abs() < 5.0 &&
-                (self.mouse_position.1 - press_pos.1).abs() < 5.0 {
+                if (self.mouse_position.x - press_pos.x).abs() < 5.0 &&
+                (self.mouse_position.y - press_pos.y).abs() < 5.0 {
                     self.clicked_position = Some(press_pos);
                 } else {
                     self.clicked_position = None;
@@ -145,7 +146,7 @@ static INPUT: Lazy<Mutex<Input>> = Lazy::new(|| Mutex::new(Input {
     keyboard_action: KeyboardAction::None,
     direction_intention: Direction::None,
     spell_action: 0,
-    mouse_position: (0.0, 0.0),
+    mouse_position: PointF::new(0.0, 0.0),
     clicked_position: None,
     mouse_press_position: None,
 }));

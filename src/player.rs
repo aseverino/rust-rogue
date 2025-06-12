@@ -27,6 +27,7 @@ use crate::creature::Creature;
 use crate::position::{ Position, POSITION_INVALID };
 use crate::player_spell::PlayerSpell;
 use crate::spell_type;
+use crate::ui::point_f::PointF;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::HashSet;
@@ -140,11 +141,11 @@ impl Creature for Player {
         (self.hp, self.max_hp)
     }
 
-    fn draw(&self, offset: (f32, f32)) {
+    fn draw(&self, offset: PointF) {
         // Base colored rectangle
         draw_rectangle(
-            offset.0 + self.position.x as f32 * TILE_SIZE + 4.0,
-            offset.1 + self.position.y as f32 * TILE_SIZE + 4.0,
+            offset.x + self.position.x as f32 * TILE_SIZE + 4.0,
+            offset.y + self.position.y as f32 * TILE_SIZE + 4.0,
             TILE_SIZE - 8.0,
             TILE_SIZE - 8.0,
             BLUE,
@@ -153,8 +154,8 @@ impl Creature for Player {
         // Glyph overlay
         draw_text(
             "@",
-            offset.0 + self.position.x as f32 * TILE_SIZE + 10.0,
-            offset.1 + self.position.y as f32 * TILE_SIZE + 20.0,
+            offset.x + self.position.x as f32 * TILE_SIZE + 10.0,
+            offset.y + self.position.y as f32 * TILE_SIZE + 20.0,
             18.0,
             WHITE,
         );

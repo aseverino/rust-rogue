@@ -23,6 +23,7 @@
 use macroquad::prelude::*;
 use crate::items::Items;
 use crate::map::{Map, TILE_SIZE, PlayerEvent};
+use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
 use crate::ui::Ui;
 use crate::player::Player;
@@ -53,7 +54,7 @@ impl GameState {
     }
 }
 
-fn draw(game: &mut GameState, game_interface_offset: (f32, f32)) {
+fn draw(game: &mut GameState, game_interface_offset: PointF) {
     if !game.ui.is_focused {
         game.map.draw(&game.player, game_interface_offset);
     }
@@ -89,7 +90,7 @@ pub async fn run() {
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
-    let game_interface_offset = ( 410.0, 10.0 );
+    let game_interface_offset = PointF::new(410.0, 10.0);
 
     loop {
         let now = get_time();
@@ -108,9 +109,9 @@ pub async fn run() {
 
         let input = Input::poll();
 
-        let mouse_pos = (input.mouse.0 - game_interface_offset.0, input.mouse.1 - game_interface_offset.1);
-        let hover_x = (mouse_pos.0 / TILE_SIZE) as usize;
-        let hover_y = ((mouse_pos.1) / TILE_SIZE) as usize;
+        let mouse_pos = PointF::new(input.mouse.x - game_interface_offset.x, input.mouse.y - game_interface_offset.y);
+        let hover_x = (mouse_pos.x / TILE_SIZE) as usize;
+        let hover_y = ((mouse_pos.y) / TILE_SIZE) as usize;
         let current_tile = Position { x: hover_x, y: hover_y };
 
         game.map.hovered_changed = game.map.hovered != Some(current_tile);

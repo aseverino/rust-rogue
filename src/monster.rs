@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::map::TILE_SIZE;
+use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
 use crate::creature::Creature;
 use crate::position::Position;
@@ -65,13 +66,13 @@ impl Creature for Monster {
         (self.hp, self.kind.max_hp)
     }
 
-    fn draw(&self, offset: (f32, f32)) {
+    fn draw(&self, offset: PointF) {
         if self.hp <= 0 {
             return; // Don't draw dead monsters
         }
         draw_rectangle(
-            offset.0 + self.position.x as f32 * TILE_SIZE + 8.0,
-            offset.1 + self.position.y as f32 * TILE_SIZE + 8.0,
+            offset.x + self.position.x as f32 * TILE_SIZE + 8.0,
+            offset.y + self.position.y as f32 * TILE_SIZE + 8.0,
             TILE_SIZE - 16.0,
             TILE_SIZE - 16.0,
             self.kind.color(),
@@ -79,7 +80,7 @@ impl Creature for Monster {
 
         // Optional glyph drawing
         let glyph = self.kind.glyph.to_string();
-        draw_text(&glyph, offset.0 + self.position.x as f32 * TILE_SIZE + 12.0, offset.1 + self.position.y as f32 * TILE_SIZE + 20.0, 16.0, WHITE);
+        draw_text(&glyph, offset.x + self.position.x as f32 * TILE_SIZE + 12.0, offset.y + self.position.y as f32 * TILE_SIZE + 20.0, 16.0, WHITE);
     }
 
     fn is_monster(&self) -> bool { true }

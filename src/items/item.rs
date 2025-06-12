@@ -22,9 +22,9 @@
 
 use serde::Deserialize;
 
-use crate::items::{holdable::HoldableGroupKind, orb::Orb};
+use crate::items::{holdable::HoldableGroupKind, orb::Orb, container::Container};
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct BaseItemData {
     pub id: u32,
     pub name: String,
@@ -36,10 +36,12 @@ pub enum ItemKind {
     Orb(Orb),
     //Portal(Portal),
     Holdable(HoldableGroupKind),
+    Container(Container),
 }
 
 pub trait Item {
-    
+    fn get_id(&self) -> u32;
+    fn get_name(&self) -> &str;
 }
 
 // use std::{collections::HashMap, rc::Rc};

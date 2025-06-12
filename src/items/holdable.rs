@@ -45,7 +45,12 @@ pub struct Weapon {
 }
 
 impl Item for Weapon {
-    
+    fn get_id(&self) -> u32 {
+        self.base_holdable.base_item.id
+    }
+    fn get_name(&self) -> &str {
+        &self.base_holdable.base_item.name
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,7 +61,12 @@ pub struct Armor {
 }
 
 impl Item for Armor {
-    
+    fn get_id(&self) -> u32 {
+        self.base_holdable.base_item.id
+    }
+    fn get_name(&self) -> &str {
+        &self.base_holdable.base_item.name
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,7 +76,12 @@ pub struct Shield {
 }
 
 impl Item for Shield {
-    
+    fn get_id(&self) -> u32 {
+        self.base_holdable.base_item.id
+    }
+    fn get_name(&self) -> &str {
+        &self.base_holdable.base_item.name
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -76,7 +91,12 @@ pub struct Helmet {
 }
 
 impl Item for Helmet {
-    
+    fn get_id(&self) -> u32 {
+        self.base_holdable.base_item.id
+    }
+    fn get_name(&self) -> &str {
+        &self.base_holdable.base_item.name
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,7 +106,12 @@ pub struct Boots {
 }
 
 impl Item for Boots {
-    
+    fn get_id(&self) -> u32 {
+        self.base_holdable.base_item.id
+    }
+    fn get_name(&self) -> &str {
+        &self.base_holdable.base_item.name
+    }
 }
 
 #[derive(Debug, Deserialize)]

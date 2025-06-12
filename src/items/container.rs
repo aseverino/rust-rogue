@@ -22,11 +22,43 @@
 
 use crate::items::item::{BaseItemData, Item};
 
+#[derive(Clone)]
 pub struct Container {
     pub base_item: BaseItemData,
     pub items: Vec<u32>
 }
 
+impl Container {
+    pub fn new() -> Self {
+        Self {
+            base_item: BaseItemData {
+                id: 0,
+                name: String::from("Generic Container"),
+                description: String::from("A container to hold items.")
+            },
+            items: Vec::new(),
+        }
+    }
+
+    pub fn add_item(&mut self, item_id: u32) {
+        self.items.push(item_id);
+    }
+
+    pub fn remove_item(&mut self, item_id: u32) -> Option<u32> {
+        if let Some(pos) = self.items.iter().position(|&id| id == item_id) {
+            Some(self.items.remove(pos))
+        } else {
+            None
+        }
+    }
+}
+
 impl Item for Container {
-    
+    fn get_id(&self) -> u32 {
+        u32::MAX
+    }
+
+    fn get_name(&self) -> &str {
+        "Container"
+    }
 }

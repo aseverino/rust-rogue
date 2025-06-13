@@ -35,4 +35,8 @@ impl Item for Orb {
     fn get_name(&self) -> &str {
         "Orb"
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

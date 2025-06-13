@@ -36,6 +36,25 @@ pub struct BaseHoldableItemData {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum HoldableGroup {
+    Weapons { weapons: Vec<Weapon> },
+    Armor { armor: Vec<Armor> },
+    Shields { shields: Vec<Shield> },
+    Helmets { helmets: Vec<Helmet> },
+    Boots { boots: Vec<Boots> },
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum HoldableGroupKind {
+    Weapons,
+    Armor,
+    Shields,
+    Helmets,
+    Boots,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Weapon {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
@@ -50,6 +69,18 @@ impl Item for Weapon {
     }
     fn get_name(&self) -> &str {
         &self.base_holdable.base_item.name
+    }
+
+    fn is_weapon(&self) -> bool {
+        true
+    }
+
+    fn as_weapon(&self) -> Option<&Weapon> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -67,6 +98,18 @@ impl Item for Armor {
     fn get_name(&self) -> &str {
         &self.base_holdable.base_item.name
     }
+
+    fn is_armor(&self) -> bool {
+        true
+    }
+
+    fn as_armor(&self) -> Option<&Armor> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +124,18 @@ impl Item for Shield {
     }
     fn get_name(&self) -> &str {
         &self.base_holdable.base_item.name
+    }
+
+    fn is_shield(&self) -> bool {
+        true
+    }
+
+    fn as_shield(&self) -> Option<&Shield> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -97,6 +152,18 @@ impl Item for Helmet {
     fn get_name(&self) -> &str {
         &self.base_holdable.base_item.name
     }
+
+    fn is_helmet(&self) -> bool {
+        true
+    }
+
+    fn as_helmet(&self) -> Option<&Helmet> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,23 +179,16 @@ impl Item for Boots {
     fn get_name(&self) -> &str {
         &self.base_holdable.base_item.name
     }
-}
 
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub enum HoldableGroup {
-    Weapons { weapons: Vec<Weapon> },
-    Armor { armor: Vec<Armor> },
-    Shields { shields: Vec<Shield> },
-    Helmets { helmets: Vec<Helmet> },
-    Boots { boots: Vec<Boots> },
-}
+    fn is_boots(&self) -> bool {
+        true
+    }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum HoldableGroupKind {
-    Weapons,
-    Armor,
-    Shields,
-    Helmets,
-    Boots,
+    fn as_boots(&self) -> Option<&Boots> {
+        Some(self)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

@@ -61,4 +61,8 @@ impl Item for Container {
     fn get_name(&self) -> &str {
         "Container"
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

@@ -20,9 +20,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::{cell::RefCell, rc::Rc};
+
 use serde::Deserialize;
 
-use crate::items::{holdable::HoldableGroupKind, orb::Orb, container::Container};
+use crate::items::{container::Container, holdable::{Armor, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb};
+
+pub fn downcast_rc_item<T: 'static>(rc: &Rc<RefCell<dyn Item>>) -> Option<Rc<RefCell<T>>> {
+    if rc.borrow().as_any().is::<T>() {
+        // SAFETY: we just checked type, so we can clone Rc and transmute its type
+        let raw = Rc::as_ptr(rc) as *const RefCell<T>;
+        let cloned = unsafe { Rc::from_raw(raw) };
+        let result = Rc::clone(&cloned);
+        std::mem::forget(cloned); // avoid dropping original
+        Some(result)
+    } else {
+        None
+    }
+}
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct BaseItemData {
@@ -42,6 +57,18 @@ pub enum ItemKind {
 pub trait Item {
     fn get_id(&self) -> u32;
     fn get_name(&self) -> &str;
+    // Type query methods
+    fn is_weapon(&self) -> bool { false }
+    fn is_shield(&self) -> bool { false }
+    fn is_helmet(&self) -> bool { false }
+    fn is_armor(&self) -> bool { false }
+    fn is_boots(&self) -> bool { false }
+    fn as_weapon(&self) -> Option<&Weapon> { None }
+    fn as_shield(&self) -> Option<&Shield> { None }
+    fn as_helmet(&self) -> Option<&Helmet> { None }
+    fn as_armor(&self) -> Option<&Armor> { None }
+    fn as_boots(&self) -> Option<&Boots> { None }
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 // use std::{collections::HashMap, rc::Rc};

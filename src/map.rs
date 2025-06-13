@@ -162,7 +162,7 @@ impl Map {
             container.add_item(0); // Add some items to the container
             container.add_item(1);
             container.add_item(2);
-            self.tiles[pos].items.push_back(ItemKind::Container(container));
+            self.tiles[pos].items.push(ItemKind::Container(container));
             self.available_walkable_cache.retain(|&p| p != pos); // Remove chest position from available walkable cache
         } else {
             println!("No available position for chest.");

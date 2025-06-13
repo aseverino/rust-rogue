@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::collections::LinkedList;
-
 use macroquad::prelude::*;
 
 use crate::{items::{item::ItemKind, orb::Orb}, map::TILE_SIZE, position::Position, ui::point_f::PointF};
@@ -40,12 +38,12 @@ pub enum TileKind {
 pub struct Tile {
     pub kind: TileKind,
     pub creature: i32, // Index of creatures on this tile
-    pub items: LinkedList<ItemKind>
+    pub items: Vec<ItemKind>
 }
 
 impl Tile {
     pub fn new(kind: TileKind) -> Self {
-        Self { kind, creature: NO_CREATURE, items: LinkedList::new() }
+        Self { kind, creature: NO_CREATURE, items: Vec::new() }
     }
 
     pub fn has_enemy(&self) -> bool {
@@ -61,12 +59,12 @@ impl Tile {
     }
 
     pub fn get_top_item(&self) -> Option<&ItemKind> {
-        self.items.back()
+        self.items.last()
     }
 
     pub fn add_orb(&mut self) {
         let orb = Orb {};
-        self.items.push_back(ItemKind::Orb(orb));
+        self.items.push(ItemKind::Orb(orb));
     }
 
     pub fn remove_item(&mut self, index: usize) -> Option<ItemKind> {

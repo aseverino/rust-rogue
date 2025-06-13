@@ -35,7 +35,7 @@ pub enum Direction {
     None,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
@@ -104,6 +104,31 @@ impl Position {
         } else {
             Some(Self { x: self.x - 1, y: self.y - 1 })
         }
+    }
+
+    pub fn positions_around(&self) -> Vec<Position> {
+        let mut positions = Vec::new();
+        if let Some(north) = self.north() {
+            positions.push(north);
+        }
+        if let Some(west) = self.west() {
+            positions.push(west);
+        }
+        positions.push(self.east());
+        positions.push(self.south());
+        if let Some(south_west) = self.south_west() {
+            positions.push(south_west);
+        }
+        if let Some(north_east) = self.north_east() {
+            positions.push(north_east);
+        }
+        
+        positions.push(self.south_east());
+        
+        if let Some(north_west) = self.north_west() {
+            positions.push(north_west);
+        }
+        positions
     }
 }
 

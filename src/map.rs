@@ -114,7 +114,6 @@ impl Map {
         }
     }
     pub async fn init(&mut self, player: &mut Player) {
-        self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
         let monster_types = load_monster_types().await;
         self.add_random_monsters(&monster_types, 20);
         
@@ -126,6 +125,20 @@ impl Map {
         for pos in positions {
             self.tiles[pos].add_orb();
         }
+
+        
+
+        // let chest_pos = self.available_walkable_cache.pop();
+
+        // if let Some(pos) = chest_pos {
+        //     let mut container = Container::new();
+        //     container.add_item(0);
+        //     container.add_item(1);
+        //     container.add_item(2);
+        //     self.tiles[pos].items.push_back(ItemKind::Container(container));
+        // } else {
+        //     println!("No available position for chest.");
+        // }
     }
 
     pub fn set_player_random_position(&mut self, player: &mut Player) {
@@ -134,6 +147,26 @@ impl Map {
 
         self.tiles[pos].creature = PLAYER_CREATURE_ID;
         player.set_pos(pos);
+
+        self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
+
+        let mut positions_around = player.position.positions_around();
+        positions_around.shuffle(&mut thread_rng());
+
+        let chest_pos: Option<Position> = positions_around
+            .into_iter()
+            .find(|&pos| self.is_tile_walkable(pos));
+
+        if let Some(pos) = chest_pos {
+            let mut container = Container::new();
+            container.add_item(0); // Add some items to the container
+            container.add_item(1);
+            container.add_item(2);
+            self.tiles[pos].items.push_back(ItemKind::Container(container));
+            self.available_walkable_cache.retain(|&p| p != pos); // Remove chest position from available walkable cache
+        } else {
+            println!("No available position for chest.");
+        }
     }
 
     fn compute_player_fov(&mut self, player: &mut Player, radius: usize) {
@@ -291,10 +324,25 @@ impl Map {
     }
 
     fn do_melee_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position) {
-        let damage = 10;
+        let damage = {
+            if let Some(weapon) = &player.equipment.weapon {
+                let mut damage: u32 = 0;
+                for &d in weapon.borrow().attack_dice.iter() {
+                    let mut rng = thread_rng();
+                    let roll = rng.gen_range(1..=d);
+                    println!("Rolled {} on a {}-sided die", roll, d);
+                    damage += roll;
+                }
+                damage
+            }
+            else {
+                10 as u32
+            }
+        };
+
         let creature_id = self.tiles[target_pos].creature;
         if creature_id >= 0 {
-            self.do_damage(player, creature_id as u32, damage);
+            self.do_damage(player, creature_id as u32, damage as i32);
         }
     }
 

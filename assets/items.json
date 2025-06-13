@@ -42,7 +42,7 @@
     {
         "armor": [
             {
-                "id": 0,
+                "id": 3,
                 "name": "Leather Armor",
                 "description": "",
                 "class": "Armor",
@@ -53,7 +53,7 @@
                 "slot": "body"
             },
             {
-                "id": 1,
+                "id": 4,
                 "name": "Chainmail",
                 "description": "",
                 "class": "Armor",

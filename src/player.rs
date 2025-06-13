@@ -22,6 +22,7 @@
 
 use macroquad::prelude::*;
 use crate::items::holdable::*;
+use crate::items::item::{downcast_rc_item, Item};
 use crate::map::{TILE_SIZE, GRID_WIDTH, GRID_HEIGHT, Map};
 use crate::creature::Creature;
 use crate::position::{ Position, POSITION_INVALID };
@@ -117,6 +118,39 @@ impl Player {
 
     fn get_soul_points(&self) -> u32 {
         self.sp
+    }
+
+    pub fn add_item(&mut self, item: Rc<RefCell<dyn Item>>) {
+        let item_ref = item.borrow();
+
+        if item_ref.is_weapon() {
+            drop(item_ref);
+            if let Some(weapon_rc) = downcast_rc_item::<Weapon>(&item) {
+                self.equipment.weapon = Some(weapon_rc);
+            }
+        } else if item_ref.is_shield() {
+            drop(item_ref);
+            if let Some(shield_rc) = downcast_rc_item::<Shield>(&item) {
+                self.equipment.shield = Some(shield_rc);
+            }
+        } else if item_ref.is_helmet() {
+            drop(item_ref);
+            if let Some(helmet_rc) = downcast_rc_item::<Helmet>(&item) {
+                self.equipment.helmet = Some(helmet_rc);
+            }
+        } else if item_ref.is_armor() {
+            drop(item_ref);
+            if let Some(armor_rc) = downcast_rc_item::<Armor>(&item) {
+                self.equipment.armor = Some(armor_rc);
+            }
+        } else if item_ref.is_boots() {
+            drop(item_ref);
+            if let Some(boots_rc) = downcast_rc_item::<Boots>(&item) {
+                self.equipment.boots = Some(boots_rc);
+            }
+        } else {
+            println!("Unknown item type!");
+        }
     }
 }
 

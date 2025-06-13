@@ -57,7 +57,7 @@ pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 33;
 pub const GRID_HEIGHT: usize = 33;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PlayerEvent {
     Move,
     AutoMove,
@@ -331,12 +331,12 @@ impl Map {
                     let mut rng = thread_rng();
                     let roll = rng.gen_range(1..=d);
                     println!("Rolled {} on a {}-sided die", roll, d);
-                    damage += roll;
+                    damage += roll + weapon.borrow().base_holdable.modifier as u32;
                 }
                 damage
             }
             else {
-                10 as u32
+                1 as u32
             }
         };
 
@@ -608,9 +608,9 @@ impl Map {
         }
     }
 
-    pub fn get_chest_items(&self, position: Position) -> Option<&Vec<u32>> {
+    pub fn get_chest_items(&self, position: &Position) -> Option<&Vec<u32>> {
         if position.x < GRID_WIDTH && position.y < GRID_HEIGHT {
-            let tile = &self.tiles[position];
+            let tile = &self.tiles[*position];
             if let Some(item) = tile.get_top_item() {
                 if let ItemKind::Container(container) = item {
                     return Some(&container.items);
@@ -618,6 +618,15 @@ impl Map {
             }
         }
         None
+    }
+
+    pub fn remove_chest(&mut self, position: Position) {
+        for (idx, item) in self.tiles[position].items.iter().enumerate() {
+            if let ItemKind::Container(_) = item {
+                self.tiles[position].items.remove(idx);
+                return; // Exit after removing the first container
+            }
+        }
     }
 }
 

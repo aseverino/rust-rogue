@@ -92,8 +92,16 @@ pub async fn run() {
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
+    let chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
 
     loop {
+        if let Some(item_id) = chest_action.take() {
+            let item = game.items.items[item_id as usize].clone();
+            game.player.add_item(item);
+            game.map.remove_chest(game.player.position);
+            game.ui.hide();
+        }
+
         let now = get_time();
         if now - last_move_time < move_interval {
             draw(&mut game, game_interface_offset);
@@ -102,7 +110,9 @@ pub async fn run() {
         }
         clear_background(BLACK);
 
-        if game.map.last_player_event == Some(PlayerEvent::Death) {
+        let player_event = game.map.last_player_event.clone();
+
+        if player_event == Some(PlayerEvent::Death) {
             draw_text("Game Over!", 10.0, 20.0, 30.0, WHITE);
             next_frame().await;
             continue;
@@ -140,9 +150,10 @@ pub async fn run() {
             }
             else {
                 game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+                let player_pos = { game.player.position };
 
-                if game.map.last_player_event == Some(PlayerEvent::OpenChest) {
-                    if let Some(items_vec) = game.map.get_chest_items(game.player.position) {
+                if player_event == Some(PlayerEvent::OpenChest) {
+                    if let Some(items_vec) = game.map.get_chest_items(&player_pos) {
                         
                         let actual_items: Vec<(u32, String)> = items_vec.iter()
                             .filter_map(|item_id| {
@@ -155,7 +166,11 @@ pub async fn run() {
                             })
                             .collect();
 
-                        game.ui.show_chest_view(&actual_items);
+                        let chest_action_clone = chest_action.clone();
+
+                        game.ui.show_chest_view(&actual_items, Box::new(move |item_id| {
+                            *chest_action_clone.borrow_mut() = Some(item_id);
+                        }));
                     }
                 }
             }

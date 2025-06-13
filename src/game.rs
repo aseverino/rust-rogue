@@ -125,7 +125,7 @@ pub async fn run() {
                 game.ui.handle_click(global_mouse_pos);
             }
             else {
-            goal_position = Some(current_tile)
+                goal_position = Some(current_tile)
             }
         };
 
@@ -155,10 +155,10 @@ pub async fn run() {
                             })
                             .collect();
 
-                        //game.ui.show_chest_view(&actual_items);
+                        game.ui.show_chest_view(&actual_items);
                     }
                 }
-            }   
+            }
         }
 
         if game.map.last_player_event == Some(PlayerEvent::AutoMove) {

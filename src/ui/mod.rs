@@ -56,6 +56,7 @@ pub struct Ui {
     left_panel_id: u32,
     right_panel_id: u32,
     character_sheet_id: u32,
+    chest_view_id: u32,
     hp_bar_id: u32,
     mp_bar_id: u32,
     sp_value_id: u32,
@@ -85,6 +86,7 @@ impl Ui {
             left_panel_id: u32::MAX,
             right_panel_id: u32::MAX,
             character_sheet_id: u32::MAX,
+            chest_view_id: u32::MAX,
             hp_bar_id: u32::MAX,
             mp_bar_id: u32::MAX,
             sp_value_id: u32::MAX,
@@ -100,6 +102,7 @@ impl Ui {
         ui.create_left_panel();
         ui.create_right_panel();
         ui.create_character_sheet();
+        ui.create_chest_view();
         ui
     }
 
@@ -197,14 +200,74 @@ impl Ui {
         }
     }
 
+    pub fn set_chest_items(&mut self, items: &Vec<(u32, String)>) {
+        let chest_view_rc = if let Some(chest_view) = self.widgets.get(self.chest_view_id as usize) {
+            chest_view.clone()
+        } else {
+            return; // early return if missing
+        };
+        
+        let panel_children_len = {
+            let mut chest_ref = chest_view_rc.borrow_mut();
+            if let Some(panel) = chest_ref.as_any_mut().downcast_mut::<WidgetPanel>() {
+                panel.get_children().len()
+            } else {
+                return; // not a panel → nothing to do
+            }
+        };
+
+        if panel_children_len - 1 < items.len() {
+            for &(item_id, ref item_name) in items.iter().skip(panel_children_len - 1) {
+                let item_widget = self.create_widget::<WidgetButton>(
+                    Some(Rc::downgrade(&chest_view_rc))
+                );
+                {
+                    let mut item_text = item_widget.borrow_mut();
+                    item_text.set_text(&format!("{}", item_name));
+                    item_text.set_margin_top(10.0);
+                    item_text.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+                    item_text.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Left);
+                    item_text.set_on_click(Box::new(move |ui, _| {
+                        // Handle item click
+                        println!("Clicked on item: {}", item_id);
+                    }));
+                }
+            }
+        }
+
+        // Update existing items
+        let mut chest_ref = chest_view_rc.borrow_mut();
+        if let Some(panel) = chest_ref.as_any_mut().downcast_mut::<WidgetPanel>() {
+            let panel_children = panel.get_children();
+
+            for (index, (item_id, item_name)) in items.iter().enumerate() {
+                if let Some(child_rc) = panel_children.get(index + 1).and_then(|c| c.upgrade()) {
+                    let mut child_ref = child_rc.borrow_mut();
+                    if let Some(item_text) = child_ref.as_any_mut().downcast_mut::<WidgetButton>() {
+                        item_text.set_text(&format!("{}", item_name));
+                    }
+                }
+            }
+        }
+    }
+
     pub fn toggle_character_sheet(&mut self) {
         let is_visible = self.widgets[self.character_sheet_id as usize].borrow().is_visible();
         let mut cs = self.widgets[self.character_sheet_id as usize].borrow_mut();
-        cs.set_visible(!is_visible)
+        cs.set_visible(!is_visible);
+        self.is_focused = !is_visible;
+    }
+
+    pub fn show_chest_view(&mut self, items: &Vec<(u32, String)>) {
+        self.set_chest_items(items);
+        self.widgets[self.chest_view_id as usize].borrow_mut().set_visible(true);
+        self.is_focused = true;
+        
     }
 
     pub fn hide(&mut self) {
         self.widgets[self.character_sheet_id as usize].borrow_mut().set_visible(false);
+        self.widgets[self.chest_view_id as usize].borrow_mut().set_visible(false);
         self.is_focused = false;
     }
 
@@ -465,6 +528,35 @@ impl Ui {
             lbl.set_margin_top(30.0);
             lbl.add_anchor(AnchorKind::Top, skills_title_id, AnchorKind::Top);
             lbl.add_anchor(AnchorKind::Left, skills_title_id, AnchorKind::Left);
+        }
+    }
+
+    fn create_chest_view(&mut self) {
+        self.chest_view_id = self.id_counter;
+        let chest_view_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
+        {
+            let mut chest_view = chest_view_rc.borrow_mut();
+            chest_view.set_border(WHITE, 2.0);
+            chest_view.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            chest_view.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            chest_view.add_anchor(AnchorKind::Left, self.left_panel_id, AnchorKind::Right);
+            chest_view.add_anchor(AnchorKind::Right, self.right_panel_id, AnchorKind::Left);
+            chest_view.set_color(BLACK);
+            chest_view.set_visible(false);
+        }
+
+        let parent_dyn = Rc::clone(&self.widgets[self.chest_view_id as usize]);
+
+        let title_id = self.id_counter;
+        let title = self.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = title.borrow_mut();
+            lbl.set_text(&"Chest".to_string());
+            lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
     }
 

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::map::TILE_SIZE;
+use crate::maps::TILE_SIZE;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
 use crate::creature::Creature;

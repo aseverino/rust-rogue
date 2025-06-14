@@ -22,10 +22,10 @@
 
 use macroquad::prelude::*;
 use crate::items::holdable::*;
-use crate::items::item::{downcast_rc_item, Item};
-use crate::map::{TILE_SIZE, GRID_WIDTH, GRID_HEIGHT, Map};
+use crate::items::base_item::{downcast_rc_item, Item};
+use crate::maps::{TILE_SIZE};
 use crate::creature::Creature;
-use crate::position::{ Position, POSITION_INVALID };
+use crate::position::{ Position };
 use crate::player_spell::PlayerSpell;
 use crate::spell_type;
 use crate::ui::point_f::PointF;

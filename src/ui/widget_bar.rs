@@ -25,7 +25,7 @@ use std::{cell::RefCell, fmt, rc::{Rc, Weak}};
 
 use macroquad::color::Color;
 
-use crate::ui::{widget::{AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, widget_panel::WidgetPanel, widget_text::WidgetText, Ui};
+use crate::ui::{widget::{AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, widget_panel::WidgetPanel, widget_text::WidgetText, manager::Ui};
 
 pub struct WidgetBar {
     pub base: WidgetBase,

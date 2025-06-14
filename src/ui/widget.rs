@@ -26,7 +26,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, rc::{Weak, Rc}};
 use macroquad::color::{Color, BLANK};
 
-use crate::ui::{Ui};
+use crate::ui::{manager::Ui};
 
 use crate::ui::{point_f::PointF, size_f::SizeF, quad_f::QuadF};
 

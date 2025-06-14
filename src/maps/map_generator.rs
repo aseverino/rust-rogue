@@ -23,9 +23,8 @@
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
-use crate::map::{Map, SpellFovCache, GRID_WIDTH, GRID_HEIGHT};
+use crate::maps::{map::Map, GRID_WIDTH, GRID_HEIGHT};
 use crate::tile::{Tile, TileKind};
-use crate::tile_map::TileMap;
 use crate::position::Position;
 use rand::seq::SliceRandom;
 

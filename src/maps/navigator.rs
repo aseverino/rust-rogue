@@ -23,7 +23,7 @@
 use std::collections::HashSet;
 use pathfinding::prelude::astar;
 
-use crate::{map::{GRID_HEIGHT, GRID_WIDTH}, position::Position, tile::TileKind, tile_map::TileMap};
+use crate::{maps::{GRID_HEIGHT, GRID_WIDTH}, position::Position, tile::TileKind, tile_map::TileMap};
 
 pub struct Navigator {}
 

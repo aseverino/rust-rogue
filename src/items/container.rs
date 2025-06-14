@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::items::item::{BaseItemData, Item};
+use crate::items::base_item::{BaseItemData, Item};
 
 #[derive(Clone)]
 pub struct Container {

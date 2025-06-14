@@ -25,37 +25,28 @@ extern crate rand as external_rand;
 
 use external_rand::Rng;
 use external_rand::thread_rng;
-use ::rand::rngs::ThreadRng;
 
 use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
-use crate::creature;
 use crate::creature::Creature;
 use crate::items::container::Container;
-use crate::items::item::ItemKind;
+use crate::items::base_item::ItemKind;
+use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
-use crate::navigator::Navigator;
 use crate::position::POSITION_INVALID;
 use crate::position::{ Position, Direction };
 use crate::input::KeyboardAction;
 use crate::player::Player;
-use crate::tile::{Tile, TileKind, NO_CREATURE, PLAYER_CREATURE_ID};
+use crate::tile::{Tile, NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
-use std::cell::RefCell;
-use pathfinding::prelude::astar;
 use crate::tile_map::TileMap;
-use crate::player_spell::PlayerSpell;
 use crate::monster_type::load_monster_types;
 
 // use fov::FovAlgorithm;
 // use fov::Map as FovMap;
-
-pub const TILE_SIZE: f32 = 32.0;
-pub const GRID_WIDTH: usize = 33;
-pub const GRID_HEIGHT: usize = 33;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PlayerEvent {
@@ -113,7 +104,7 @@ impl Map {
             should_draw_spell_fov: false
         }
     }
-    pub async fn init(&mut self, player: &mut Player) {
+    pub async fn init(&mut self, _player: &mut Player) {
         let monster_types = load_monster_types().await;
         self.add_random_monsters(&monster_types, 20);
         
@@ -323,7 +314,7 @@ impl Map {
         }
     }
 
-    fn do_melee_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position) {
+    fn do_melee_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position) {
         let damage = {
             if let Some(weapon) = &player.equipment.weapon {
                 let mut damage: u32 = 0;
@@ -346,7 +337,7 @@ impl Map {
         }
     }
 
-    fn do_spell_combat(&mut self, player: &mut Player, attacker_pos: Position, target_pos: Position, spell_index: usize) {
+    fn do_spell_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, spell_index: usize) {
         if !self.is_tile_walkable(target_pos) {
             println!("Target position is not walkable for spell casting.");
             return;
@@ -545,7 +536,7 @@ impl Map {
                         self.last_player_event = Some(PlayerEvent::OpenChest);
                         //to_remove.push(idx); // Collect for removal
                     }
-                    other_item => {
+                    _ => {
                         // println!("Player found an item: {:?}", other_item);
                     }
                 }

@@ -25,7 +25,7 @@ use std::fmt;
 
 use macroquad::prelude::*;
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, Ui};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, manager::Ui};
 
 use std::{cell::RefCell, rc::{Weak, Rc}};
 

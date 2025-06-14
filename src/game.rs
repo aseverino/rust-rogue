@@ -21,18 +21,17 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
-use crate::items::item::Item;
-use crate::items::Items;
-use crate::map::{Map, TILE_SIZE, PlayerEvent};
+use crate::items::collection::Items;
+use crate::maps::map_generator;
+use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
-use crate::ui::Ui;
+use crate::ui::manager::Ui;
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
 
 use crate::{spell_type};
-use crate::map_generator;
 use macroquad::time::get_time;
 
 use std::rc::Rc;

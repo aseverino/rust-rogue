@@ -22,7 +22,7 @@
 
 use serde::Deserialize;
 
-use crate::items::item::{BaseItemData, Item};
+use crate::items::base_item::{BaseItemData, Item};
 
 #[derive(Debug, Deserialize)]
 pub struct BaseHoldableItemData {

@@ -27,7 +27,7 @@ use macroquad::prelude::*;
 
 use std::{cell::RefCell, rc::{Weak, Rc}};
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, Ui};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, manager::Ui};
 
 pub struct WidgetPanel {
     pub base: WidgetBase,

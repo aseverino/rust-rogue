@@ -20,38 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod input;
-mod ui;
-mod game;
-mod items;
-mod maps;
-mod position;
-mod tile;
-mod tile_map;
-mod creature;
-mod monster_type;
-mod monster;
-mod spell_type;
-mod player_spell;
-mod spell_execution;
-mod player;
+pub mod map_generator;
+pub mod map;
+pub mod navigator;
 
-use macroquad::prelude::*;
-
-fn window_conf() -> Conf {
-    Conf {
-        window_title: "Rust Rogue".to_string(),
-        window_width: 1920,
-        window_height: 1100,
-        fullscreen: false,
-        ..Default::default()
-    }
-}
-
-//use crate::ui::{Ui};
-
-#[macroquad::main(window_conf)]
-async fn main() {
-    //UI.set(Mutex::new(Ui::new())).unwrap();
-    game::run().await;
-}
+pub const TILE_SIZE: f32 = 32.0;
+pub const GRID_WIDTH: usize = 33;
+pub const GRID_HEIGHT: usize = 33;

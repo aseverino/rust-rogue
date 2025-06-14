@@ -22,7 +22,7 @@
 
 use macroquad::prelude::*;
 
-use crate::{items::{item::ItemKind, orb::Orb}, map::TILE_SIZE, position::Position, ui::point_f::PointF};
+use crate::{items::{base_item::ItemKind, orb::Orb}, maps::TILE_SIZE, position::Position, ui::point_f::PointF};
 
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value

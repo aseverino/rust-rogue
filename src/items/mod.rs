@@ -22,68 +22,9 @@
 
 //pub mod item;
 
-pub mod item;
+pub mod collection;
+pub mod base_item;
 pub mod container;
 pub mod holdable;
 pub mod orb;
-use std::{cell::RefCell, collections::HashMap, rc::{Rc, Weak}};
-
-use crate::items::{holdable::{HoldableGroup, HoldableGroupKind}, item::Item};
-
-pub struct Items {
-    pub items: Vec<Rc<RefCell<dyn Item>>>,
-    holdable_items: HashMap<HoldableGroupKind, Vec<Weak<RefCell<dyn Item>>>>// = HashMap::new();
-}
-
-impl Items {
-    pub fn new() -> Self {
-        Self {
-            items: Vec::new(),
-            holdable_items: HashMap::new(),
-        }
-    }
-    pub async fn load_holdable_items(&mut self) {
-        let json_str = std::fs::read_to_string("assets/items.json").unwrap();
-        let groups: Vec<HoldableGroup> = serde_json::from_str(&json_str).unwrap();
-
-        for group in groups {
-            match group {
-                HoldableGroup::Weapons { weapons } => {
-                    for weapon in weapons {
-                        self.items.push(Rc::new(RefCell::new(weapon)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Weapons).or_default().push(Rc::downgrade(&ptr_copy));
-                    }
-                }
-                HoldableGroup::Armor { armor } => {
-                    for armor in armor {
-                        self.items.push(Rc::new(RefCell::new(armor)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Armor).or_default().push(Rc::downgrade(&ptr_copy));
-                    }
-                }
-                HoldableGroup::Shields { shields } => {
-                    for shield in shields {
-                        self.items.push(Rc::new(RefCell::new(shield)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Shields).or_default().push(Rc::downgrade(&ptr_copy));
-                    }
-                }
-                HoldableGroup::Helmets { helmets } => {
-                    for helmet in helmets {
-                        self.items.push(Rc::new(RefCell::new(helmet)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Helmets).or_default().push(Rc::downgrade(&ptr_copy));
-                    }
-                }
-                HoldableGroup::Boots { boots } => {
-                    for boots in boots {
-                        self.items.push(Rc::new(RefCell::new(boots)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Boots).or_default().push(Rc::downgrade(&ptr_copy));
-                    }
-                }
-            }
-        };
-    }
-}
+pub mod teleport;

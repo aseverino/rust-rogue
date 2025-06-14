@@ -34,51 +34,38 @@ use crate::tile::{Tile, TileKind};
 use crate::position::Position;
 use rand::seq::SliceRandom;
 
-// fn generate_maps() {
-//     // Shared state
-//     let pair = Arc::new((Mutex::new(false), Condvar::new()));
+#[derive(Debug, Clone)]
+pub enum MapTheme {
+    Any,
+    Chasm,
+    Wall,
+}
 
-//     // Clone for the thread
-//     let pair_clone = Arc::clone(&pair);
+#[derive(Debug, Clone)]
+pub struct GenerationParams {
+    pub num_walks: usize,
+    pub walk_length: usize,
+    pub min_dist_between_starts: usize,
+    pub radius: usize,
+    pub exits: u8,
+    pub theme: MapTheme,
+}
 
-//     // Spawn the thread
-//     let handle = thread::spawn(move || {
-//         loop {
-//             let (lock, cvar) = &*pair_clone;
-//             let mut should_poll = lock.lock().unwrap();
+impl GenerationParams {
+    pub fn default() -> Self {
+        Self {
+            num_walks: 6,
+            walk_length: 80,
+            min_dist_between_starts: 6,
+            radius: 1, // 0 = 1x1, 1 = 3x3, or even 2 = 5x5
+            exits: 4,
+            theme: MapTheme::Any,
+        }
+    }
+}
 
-//             // Wait until `should_poll` becomes true
-//             while !*should_poll {
-//                 should_poll = cvar.wait(should_poll).unwrap();
-//             }
-
-//             // Do the work
-//             println!("Polling something...");
-//             thread::sleep(Duration::from_secs(1)); // Simulate polling
-
-//             // Reset signal (optional)
-//             *should_poll = false;
-//         }
-//     });
-
-//     // Main thread controls when polling occurs
-//     for i in 0..3 {
-//         thread::sleep(Duration::from_secs(2));
-//         println!("Signaling thread to poll, iteration {}", i);
-
-//         let (lock, cvar) = &*pair;
-//         let mut should_poll = lock.lock().unwrap();
-//         *should_poll = true;
-//         cvar.notify_one(); // Wake the polling thread
-//     }
-
-//     // Optional: join if you want graceful shutdown (add exit condition to the loop)
-//     handle.join().unwrap();
-// }
-
-// Commands for the background thread
 enum Command {
-    Generate,
+    Generate(GenerationParams),
     Stop,
 }
 
@@ -86,6 +73,14 @@ pub struct MapGenerator {
     command_tx: Sender<Command>,
     result_rx: Arc<Mutex<Receiver<Map>>>,
     thread_handle: Option<JoinHandle<()>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Border {
+    Top,
+    Bottom,
+    Left,
+    Right,
 }
 
 impl MapGenerator {
@@ -100,8 +95,8 @@ impl MapGenerator {
             thread::spawn(move || {
                 for command in command_rx {
                     match command {
-                        Command::Generate => {
-                            let map = Self::generate_map();
+                        Command::Generate(params) => {
+                            let map = Self::generate_map(params);
                             let _ = result_tx.send(map); // send result back
                         }
                         Command::Stop => {
@@ -120,8 +115,8 @@ impl MapGenerator {
         }
     }
 
-    pub fn request_generation(&self) {
-        let _ = self.command_tx.send(Command::Generate);
+    pub fn request_generation(&self, params: GenerationParams) {
+        let _ = self.command_tx.send(Command::Generate(params));
     }
 
     // pub fn get_generated_map(&self) -> Option<Map> {
@@ -228,55 +223,108 @@ impl MapGenerator {
                 step_y = dy.signum();
             }
 
-            let new_x = (current.x as isize + step_x).clamp(1, GRID_WIDTH as isize - 2) as usize;
-            let new_y = (current.y as isize + step_y).clamp(1, GRID_HEIGHT as isize - 2) as usize;
+            let new_x = (current.x as isize + step_x).clamp(0, GRID_WIDTH as isize - 1) as usize;
+            let new_y = (current.y as isize + step_y).clamp(0, GRID_HEIGHT as isize - 1) as usize;
             current = Position { x: new_x, y: new_y };
         }
     }
 
-    pub fn generate_map() -> Map {
+    fn choose_border_exits(count: usize) -> Vec<Border> {
+        use Border::*;
+        let all = vec![Top, Bottom, Left, Right];
+        let mut rng = thread_rng();
+        all.choose_multiple(&mut rng, count).cloned().collect()
+    }
+
+    fn place_border_anchors(tiles: &mut Vec<Vec<Tile>>, borders: &[Border]) -> Vec<Position> {
+        let mut anchors = Vec::new();
+        let width = GRID_WIDTH as usize;
+        let height = GRID_HEIGHT as usize;
+
+        let mut rng = thread_rng();
+        for border in borders {
+            let pos = match border {
+                Border::Top => Position::new(rng.gen_range(1..width - 1), 0),
+                Border::Bottom => Position::new(rng.gen_range(1..width - 1), height - 1),
+                Border::Left => Position::new(0, rng.gen_range(1..height - 1)),
+                Border::Right => Position::new(width - 1, rng.gen_range(1..height - 1)),
+            };
+            tiles[pos.x][pos.y].kind = TileKind::Floor;
+            anchors.push(pos);
+        }
+
+        anchors
+    }
+
+    pub fn generate_map(params: GenerationParams) -> Map {
         let mut rng = thread_rng();
 
-        let tile_type = if rng.gen_bool(0.5) {
-            TileKind::Chasm
-        } else {
-            TileKind::Wall
+        let tile_type = match params.theme {
+            MapTheme::Any => {
+                if rng.gen_bool(0.5) {
+                    TileKind::Chasm
+                } else {
+                    TileKind::Wall
+                }
+            }
+            MapTheme::Chasm => TileKind::Chasm,
+            MapTheme::Wall => TileKind::Wall,
         };
 
         let mut tiles = vec![vec![Tile::new(tile_type); GRID_HEIGHT]; GRID_WIDTH];
         let mut walkable_cache = Vec::new();
         let mut visited = vec![vec![false; GRID_HEIGHT]; GRID_WIDTH];
 
-        const NUM_WALKS: usize = 6;
-        const WALK_LENGTH: usize = 80;
-        const MIN_DISTANCE_BETWEEN_STARTS: usize = 6;
+        let borders = Self::choose_border_exits(params.exits as usize);
+        let anchor_points = Self::place_border_anchors(&mut tiles, &borders);
+
+        let num_walks: usize = params.num_walks;
+        let walk_length: usize = params.walk_length;
+        let min_distance_between_starts: usize = params.min_dist_between_starts;
 
         let mut start_positions = Vec::new();
 
-        for _ in 0..NUM_WALKS {
+        for &anchor in &anchor_points {
+            if !visited[anchor.x][anchor.y] {
+                tiles[anchor.x][anchor.y].kind = TileKind::Floor;
+                walkable_cache.push(anchor);
+                visited[anchor.x][anchor.y] = true;
+            }
+            start_positions.push(anchor);
+        }
+
+        for i in 0..num_walks + start_positions.len() {
             let mut x;
             let mut y;
-            // Ensure new walk starts away from previous walks
-            loop {
-                x = rng.gen_range(3..GRID_WIDTH - 3);
-                y = rng.gen_range(3..GRID_HEIGHT - 3);
 
-                let too_close = start_positions.iter().any(|&pos: &Position| {
-                    let dx = pos.x as isize - x as isize;
-                    let dy = pos.y as isize - y as isize;
-                    dx.abs() + dy.abs() < MIN_DISTANCE_BETWEEN_STARTS as isize
-                });
+            if i >= start_positions.len() {
+                // Ensure new walk starts away from previous walks
+                loop {
+                    x = rng.gen_range(3..GRID_WIDTH - 3);
+                    y = rng.gen_range(3..GRID_HEIGHT - 3);
 
-                if !too_close {
-                    break;
+                    let too_close = start_positions.iter().any(|&pos: &Position| {
+                        let dx = pos.x as isize - x as isize;
+                        let dy = pos.y as isize - y as isize;
+                        dx.abs() + dy.abs() < min_distance_between_starts as isize
+                    });
+
+                    if !too_close {
+                        break;
+                    }
                 }
+
+                start_positions.push(Position { x, y });
+            }
+            else {
+                // Use existing start position
+                x = start_positions[i].x;
+                y = start_positions[i].y;
             }
 
-            start_positions.push(Position { x, y });
-
             // Apply random walk
-            for _ in 0..WALK_LENGTH {
-                if x < 1 || x >= GRID_WIDTH - 1 || y < 1 || y >= GRID_HEIGHT - 1 {
+            for _ in 0..walk_length {
+                if x >= GRID_WIDTH || y >= GRID_HEIGHT {
                     break;
                 }
 
@@ -319,15 +367,8 @@ impl MapGenerator {
             let current = start_positions[i];
 
             //carve_path_between(&mut tiles, prev, current, &mut walkable_cache);
-            Self::carve_jagged_path(&mut tiles, prev, current, &mut walkable_cache, &mut rng, 1);
+            Self::carve_jagged_path(&mut tiles, prev, current, &mut walkable_cache, &mut rng, params.radius);
         }
-
-        // Place player at one of the center-most islands
-        // let player_pos = *start_positions.first().unwrap_or(&Position { x: GRID_WIDTH / 2, y: GRID_HEIGHT / 2 });
-        // let mut player = player;
-        // player.set_pos(player_pos);
-        // tiles[player_pos.x][player_pos.y].kind = TileKind::Floor;
-        // tiles[player_pos.x][player_pos.y].creature = PLAYER_CREATURE_ID;
 
         let mut available_walkable_cache = walkable_cache.clone();
         available_walkable_cache.shuffle(&mut rng);

@@ -74,7 +74,7 @@ fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
 pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
-    
+
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
         map_generator: map_generator::MapGenerator::new(),
@@ -82,7 +82,10 @@ pub async fn run() {
         items: Items::new()
     };
 
-    game.map_generator.request_generation();
+    let mut gen_params = map_generator::GenerationParams::default();
+    gen_params.exits = 5;
+    gen_params.theme = map_generator::MapTheme::Chasm;
+    game.map_generator.request_generation(gen_params);
 
     game.items.load_holdable_items().await;
 

@@ -27,16 +27,16 @@ use crate::creature::Creature;
 use crate::position::Position;
 use crate::monster_type::MonsterType;
 use std::cmp::{max, min};
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct Monster {
     pub hp: u32,
-    pub kind: Rc<MonsterType>,
+    pub kind: Arc<MonsterType>,
     pub position: Position,
 }
 
 impl Monster {
-    pub fn new(pos: Position, kind: Rc<MonsterType>) -> Self {
+    pub fn new(pos: Position, kind: Arc<MonsterType>) -> Self {
         Self {
             position: pos,
             hp: kind.max_hp,

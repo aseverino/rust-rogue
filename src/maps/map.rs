@@ -28,6 +28,7 @@ use external_rand::thread_rng;
 
 use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
+use std::sync::Arc;
 use crate::creature::Creature;
 use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
@@ -261,7 +262,7 @@ impl Map {
     
     pub(crate) fn add_random_monsters(
         &mut self,
-        monster_types: &HashMap<String, Rc<MonsterType>>,
+        monster_types: &HashMap<String, Arc<MonsterType>>,
         count: usize,
     ) {
         let mut rng = thread_rng();

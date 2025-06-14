@@ -39,7 +39,7 @@ use std::cell::RefCell;
 
 pub struct GameState {
     pub player: Player,
-    pub map: Map,
+    pub map_generator: map_generator::MapGenerator,
     pub ui: Ui,
     pub items: Items,
 }
@@ -54,9 +54,9 @@ impl GameState {
     }
 }
 
-fn draw(game: &mut GameState, game_interface_offset: PointF) {
+fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
     if !game.ui.is_focused {
-        game.map.draw(&game.player, game_interface_offset);
+        map.draw(&game.player, game_interface_offset);
     }
     
     game.ui.update_geometry(SizeF::new(screen_width(), screen_height()));
@@ -74,18 +74,27 @@ fn draw(game: &mut GameState, game_interface_offset: PointF) {
 pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
-
+    
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        map: map_generator::generate(),
+        map_generator: map_generator::MapGenerator::new(),
         ui: Ui::new(),
         items: Items::new()
     };
 
+    game.map_generator.request_generation();
+
     game.items.load_holdable_items().await;
 
-    game.map.init(&mut game.player).await;
-    game.map.set_player_random_position(&mut game.player);
+    let map_opt = game.map_generator.get_generated_map_blocking();
+    let mut map = if let Some(map) = map_opt {
+        map
+    } else {
+        panic!("Failed to generate map");
+    };
+
+    map.init(&mut game.player).await;
+    map.set_player_random_position(&mut game.player);
     
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps
@@ -97,19 +106,19 @@ pub async fn run() {
         if let Some(item_id) = chest_action.take() {
             let item = game.items.items[item_id as usize].clone();
             game.player.add_item(item);
-            game.map.remove_chest(game.player.position);
+            map.remove_chest(game.player.position);
             game.ui.hide();
         }
 
         let now = get_time();
         if now - last_move_time < move_interval {
-            draw(&mut game, game_interface_offset);
+            draw(&mut game, &mut map, game_interface_offset);
             next_frame().await;
             continue;
         }
         clear_background(BLACK);
 
-        let player_event = game.map.last_player_event.clone();
+        let player_event = map.last_player_event.clone();
 
         if player_event == Some(PlayerEvent::Death) {
             draw_text("Game Over!", 10.0, 20.0, 30.0, WHITE);
@@ -125,8 +134,8 @@ pub async fn run() {
         let map_hover_y = ((map_mouse_pos.y) / TILE_SIZE) as usize;
         let current_tile = Position { x: map_hover_x, y: map_hover_y };
 
-        game.map.hovered_tile_changed = game.map.hovered_tile != Some(current_tile);
-        game.map.hovered_tile = Some(current_tile);
+        map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
+        map.hovered_tile = Some(current_tile);
         game.ui.update_mouse_position(global_mouse_pos);
 
         if let Some(_click) = input.click {
@@ -148,11 +157,11 @@ pub async fn run() {
                 game.ui.toggle_character_sheet();
             }
             else {
-                game.map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+                map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
                 let player_pos = { game.player.position };
 
                 if player_event == Some(PlayerEvent::OpenChest) {
-                    if let Some(items_vec) = game.map.get_chest_items(&player_pos) {
+                    if let Some(items_vec) = map.get_chest_items(&player_pos) {
                         
                         let actual_items: Vec<(u32, String)> = items_vec.iter()
                             .filter_map(|item_id| {
@@ -175,13 +184,13 @@ pub async fn run() {
             }
         }
 
-        if game.map.last_player_event == Some(PlayerEvent::AutoMove) {
+        if map.last_player_event == Some(PlayerEvent::AutoMove) {
             last_move_time = now; // Update last move time for auto step
         } else {
             goal_position = None;
         }
 
-        draw(&mut game, game_interface_offset);
+        draw(&mut game, &mut map, game_interface_offset);
         next_frame().await;
     }
 }

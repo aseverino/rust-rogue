@@ -22,7 +22,7 @@
 
 use macroquad::prelude::*;
 use crate::items::collection::Items;
-use crate::maps::map_generator;
+use crate::maps::overworld::Overworld;
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
@@ -39,7 +39,7 @@ use std::cell::RefCell;
 
 pub struct GameState {
     pub player: Player,
-    pub map_generator: map_generator::MapGenerator,
+    pub overworld: Overworld,
     pub ui: Ui,
     pub items: Items,
 }
@@ -77,24 +77,19 @@ pub async fn run() {
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        map_generator: map_generator::MapGenerator::new(),
+        overworld: Overworld::new(),
         ui: Ui::new(),
         items: Items::new()
     };
 
-    let mut gen_params = map_generator::GenerationParams::default();
-    gen_params.exits = 5;
-    gen_params.theme = map_generator::MapTheme::Chasm;
-    game.map_generator.request_generation(gen_params);
-
     game.items.load_holdable_items().await;
 
-    let map_opt = game.map_generator.get_generated_map_blocking();
-    let mut map = if let Some(map) = map_opt {
-        map
+    let map_arc = if let Some(map_arc) = game.overworld.get_map_ptr(0, 2, 2) {
+        map_arc
     } else {
-        panic!("Failed to generate map");
+        panic!("Failed to get map pointer from overworld");
     };
+    let mut map = map_arc.lock().unwrap();
 
     map.init(&mut game.player).await;
     map.set_player_random_position(&mut game.player);

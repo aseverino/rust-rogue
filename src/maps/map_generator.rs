@@ -20,7 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::cmp::min;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -33,6 +35,13 @@ use crate::maps::{map::Map, GRID_WIDTH, GRID_HEIGHT};
 use crate::tile::{Tile, TileKind};
 use crate::position::Position;
 use rand::seq::SliceRandom;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OverworldPos {
+    pub floor: usize,
+    pub x: usize,
+    pub y: usize,
+}
 
 #[derive(Debug, Clone)]
 pub enum MapTheme {
@@ -65,13 +74,17 @@ impl GenerationParams {
 }
 
 enum Command {
-    Generate(GenerationParams),
+    Generate(OverworldPos, GenerationParams),
     Stop,
+}
+
+pub struct MapAssignment {
+    pub opos: OverworldPos,
+    pub map: Map,
 }
 
 pub struct MapGenerator {
     command_tx: Sender<Command>,
-    result_rx: Arc<Mutex<Receiver<Map>>>,
     thread_handle: Option<JoinHandle<()>>,
 }
 
@@ -84,48 +97,32 @@ enum Border {
 }
 
 impl MapGenerator {
-    pub fn new() -> Self {
+    pub fn new(callback: Box<dyn Fn(MapAssignment) + Send + 'static>) -> Self {
         let (command_tx, command_rx) = mpsc::channel::<Command>();
-        let (result_tx, result_rx) = mpsc::channel::<Map>();
-        let result_rx = Arc::new(Mutex::new(result_rx));
-        let result_tx_clone = result_tx.clone();
 
-        let handle = {
-            let result_tx = result_tx_clone.clone();
-            thread::spawn(move || {
-                for command in command_rx {
-                    match command {
-                        Command::Generate(params) => {
-                            let map = Self::generate_map(params);
-                            let _ = result_tx.send(map); // send result back
-                        }
-                        Command::Stop => {
-                            println!("[MapGenerator] Stopping...");
-                            break;
-                        }
+        let handle = thread::spawn(move || {
+            for command in command_rx {
+                match command {
+                    Command::Generate(pos, params) => {
+                        let map = Self::generate_map(&params);
+                        callback(MapAssignment { opos: pos, map });
+                    }
+                    Command::Stop => {
+                        println!("[MapGenerator] Stopping...");
+                        break;
                     }
                 }
-            })
-        };
+            }
+        });
 
         Self {
             command_tx,
-            result_rx,
             thread_handle: Some(handle),
         }
     }
 
-    pub fn request_generation(&self, params: GenerationParams) {
-        let _ = self.command_tx.send(Command::Generate(params));
-    }
-
-    // pub fn get_generated_map(&self) -> Option<Map> {
-    //     // Try to receive without blocking
-    //     self.result_rx.lock().unwrap().recv().ok()
-    // }
-
-    pub fn get_generated_map_blocking(&self) -> Option<Map> {
-        self.result_rx.lock().unwrap().recv().ok()
+    pub fn request_generation(&self, opos: OverworldPos, params: GenerationParams) {
+        let _ = self.command_tx.send(Command::Generate(opos, params));
     }
 
     pub fn stop(&mut self) {
@@ -233,7 +230,7 @@ impl MapGenerator {
         use Border::*;
         let all = vec![Top, Bottom, Left, Right];
         let mut rng = thread_rng();
-        all.choose_multiple(&mut rng, count).cloned().collect()
+        all.choose_multiple(&mut rng, min(count, 4)).cloned().collect()
     }
 
     fn place_border_anchors(tiles: &mut Vec<Vec<Tile>>, borders: &[Border]) -> Vec<Position> {
@@ -256,7 +253,7 @@ impl MapGenerator {
         anchors
     }
 
-    pub fn generate_map(params: GenerationParams) -> Map {
+    fn generate_map(params: &GenerationParams) -> Map {
         let mut rng = thread_rng();
 
         let tile_type = match params.theme {

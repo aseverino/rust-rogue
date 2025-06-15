@@ -23,17 +23,17 @@
 use crate::items::base_item::Item;
 
 #[derive(Clone, Debug)]
-pub struct Orb {
+pub struct Teleport {
     //
 }
 
-impl Item for Orb {
+impl Item for Teleport {
     fn get_id(&self) -> u32 {
         u32::MAX
     }
 
     fn get_name(&self) -> &str {
-        "Orb"
+        "Teleport"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

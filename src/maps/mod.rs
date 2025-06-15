@@ -20,9 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod map_generator;
+mod map_generator;
 pub mod map;
 pub mod navigator;
+pub mod overworld;
 
 pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 33;

@@ -22,7 +22,7 @@
 
 use macroquad::prelude::*;
 
-use crate::{items::{base_item::ItemKind, orb::Orb}, maps::TILE_SIZE, position::Position, ui::point_f::PointF};
+use crate::{items::{base_item::ItemKind, orb::Orb}, maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE}, position::Position, ui::point_f::PointF};
 
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
@@ -85,6 +85,17 @@ impl Tile {
             TILE_SIZE - 1.0,
             color,
         );
+
+        if self.kind == TileKind::Floor && (pos.x == 0 || pos.y == 0 || pos.x == GRID_WIDTH - 1 || pos.y == GRID_HEIGHT - 1) {
+            // Draw border
+            draw_rectangle(
+                offset.x + pos.x as f32 * TILE_SIZE,
+                offset.y + pos.y as f32 * TILE_SIZE,
+                TILE_SIZE - 1.0,
+                TILE_SIZE - 1.0,
+                Color { r: 0.0, g: 1.0, b: 0.0, a: 0.5 },
+            );
+        }
 
         for item in &self.items {
             match item {

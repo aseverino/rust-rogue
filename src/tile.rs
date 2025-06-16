@@ -68,7 +68,11 @@ impl Tile {
     }
 
     pub fn remove_item(&mut self, index: usize) -> Option<ItemKind> {
-        self.items.iter().nth(index).cloned()
+        if index < self.items.len() {
+            Some(self.items.remove(index))
+        } else {
+            None
+        }
     }
 
     pub fn draw(&self, pos: Position, offset: PointF) {

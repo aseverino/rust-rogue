@@ -20,9 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use core::panic;
 use std::{sync::{mpsc, Arc, Mutex}};
 
-use crate::maps::{map::Map, map_generator::{BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}};
+use macroquad::miniquad::ElapsedQuery;
+
+use crate::maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}, GRID_HEIGHT, GRID_WIDTH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverworldPos {
@@ -88,7 +91,8 @@ impl Overworld {
     pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize) {
         for dx in -1i32..=1 {
             for dy in -1i32..=1 {
-                if dx == 0 && dy == 0 { continue; }
+                // Skip diagonals
+                if dx.abs() + dy.abs() != 1 { continue; }
                 let new_x = x as i32 + dx;
                 let new_y = y as i32 + dy;
                 if new_x >= 0 && new_x < 5 && new_y >= 0 && new_y < 5 {
@@ -112,6 +116,50 @@ impl Overworld {
                         gen_params.borders |= BorderFlags::DOWN;
 
                         gen_params.theme = MapTheme::Chasm;
+
+                        let border_idx = if dx == -1 && dy == 0 {
+                            Border::Left // Left border of the original map, right border of the adjacent map
+                        } else if dx == 1 && dy == 0 {
+                            Border::Right // Right border of the original map, left border of the adjacent map
+                        } else if dy == -1 && dx == 0 {
+                            Border::Top // Top border of the original map, bottom border of the adjacent map
+                        } else if dy == 1 && dx == 0 {
+                            Border::Bottom // Bottom border of the original map, top border of the adjacent map
+                        }
+                        else {
+                            panic!("Unexpected dx, dy combination: ({}, {})", dx, dy);
+                        };
+
+                        if let Ok(maps_guard) = self.maps.lock() {
+                            let border_positions_opt = maps_guard[floor][x][y]
+                                .as_ref()
+                                .and_then(|map| map.lock().ok())
+                                .map(|m| m.border_positions[border_idx as usize].clone());
+
+                            let mut border_positions = border_positions_opt.unwrap();
+
+                            for pos in &mut border_positions {
+                                if border_idx == Border::Left {
+                                    pos.x = GRID_WIDTH - 1;
+                                } else if border_idx == Border::Right {
+                                    pos.x = 0;
+                                } else if border_idx == Border::Top {
+                                    pos.y = GRID_HEIGHT - 1;
+                                } else if border_idx == Border::Bottom {
+                                    pos.y = 0; // Adjust for the bottom border of the adjacent map
+                                }
+                            }
+
+                            let target_border = match border_idx {
+                                Border::Left => Border::Right,
+                                Border::Right => Border::Left,
+                                Border::Top => Border::Bottom,
+                                Border::Bottom => Border::Top,
+                            };
+
+                            gen_params.predefined_borders[target_border as usize] = border_positions;
+                        }
+
                         self.map_generator.request_generation(opos, gen_params);
                     }
                 }

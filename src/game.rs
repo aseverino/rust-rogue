@@ -94,11 +94,11 @@ pub async fn run() {
         panic!("Failed to get map pointer from overworld");
     };
     let mut current_map_arc = map_arc;
-    let mut map = current_map_arc.lock().unwrap();
+    {
+        let mut map = current_map_arc.lock().unwrap();
+        map.set_player_random_position(&mut game.player);
+    }
 
-    // map.init(&mut game.player).await;
-    map.set_player_random_position(&mut game.player);
-    
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
@@ -126,32 +126,41 @@ pub async fn run() {
 
             if let Some(new_map_arc) = game.overworld.lock().unwrap().get_map_ptr(new_opos) {
                 // Drop the current map lock before reassigning current_map_arc
-                drop(map);
                 current_map_arc = new_map_arc;
-                map = current_map_arc.lock().unwrap();
-                map.set_player_random_position(&mut game.player);
+                
+                {
+                    let mut map = current_map_arc.lock().unwrap();
+                    map.set_player_random_position(&mut game.player);
+                }
+                
                 overworld_pos = new_opos;
             } else {
                 panic!("Failed to get map pointer from overworld");
             }
             map_update = false;
         }
-        if let Some(item_id) = chest_action.take() {
+        else if let Some(item_id) = chest_action.take() {
             let item = game.items.items[item_id as usize].clone();
             game.player.add_item(item);
-            map.remove_chest(game.player.position);
+            {
+                let mut map = current_map_arc.lock().unwrap();
+                map.remove_chest(game.player.position);
+            }
             game.ui.hide();
         }
 
         let now = get_time();
         if now - last_move_time < move_interval {
-            draw(&mut game, &mut map, game_interface_offset);
+            {
+                let mut map = current_map_arc.lock().unwrap();
+                draw(&mut game, &mut map, game_interface_offset);
+            }
             next_frame().await;
             continue;
         }
         clear_background(BLACK);
 
-        let player_event = map.last_player_event.clone();
+        let player_event = { current_map_arc.lock().unwrap().last_player_event.clone() };
 
         if player_event == Some(PlayerEvent::Death) {
             draw_text("Game Over!", 10.0, 20.0, 30.0, WHITE);
@@ -167,66 +176,69 @@ pub async fn run() {
         let map_hover_y = ((map_mouse_pos.y) / TILE_SIZE) as usize;
         let current_tile = Position { x: map_hover_x, y: map_hover_y };
 
-        map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
-        map.hovered_tile = Some(current_tile);
-        game.ui.update_mouse_position(global_mouse_pos);
+        {
+            let mut map = current_map_arc.lock().unwrap();
+            map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
+            map.hovered_tile = Some(current_tile);
+            game.ui.update_mouse_position(global_mouse_pos);
 
-        if let Some(_click) = input.click {
+            if let Some(_click) = input.click {
+                if game.ui.is_focused {
+                    game.ui.handle_click(global_mouse_pos);
+                }
+                else {
+                    goal_position = Some(current_tile)
+                }
+            };
+
             if game.ui.is_focused {
-                game.ui.handle_click(global_mouse_pos);
+                if input.keyboard_action == KeyboardAction::Cancel {
+                    game.ui.hide();
+                }
             }
             else {
-                goal_position = Some(current_tile)
-            }
-        };
+                if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
+                    game.ui.toggle_character_sheet();
+                }
+                else {
+                    map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+                    let player_pos = { game.player.position };
 
-        if game.ui.is_focused {
-            if input.keyboard_action == KeyboardAction::Cancel {
-                game.ui.hide();
-            }
-        }
-        else {
-            if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
-                game.ui.toggle_character_sheet();
-            }
-            else {
-                map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
-                let player_pos = { game.player.position };
+                    if player_event == Some(PlayerEvent::OpenChest) {
+                        if let Some(items_vec) = map.get_chest_items(&player_pos) {
+                            
+                            let actual_items: Vec<(u32, String)> = items_vec.iter()
+                                .filter_map(|item_id| {
+                                    game.items.items.iter()
+                                        .find(|item| item.borrow().get_id() == *item_id)
+                                        .map(|item_rc| {
+                                            let item_ref = item_rc.borrow();
+                                            (item_ref.get_id(), item_ref.get_name().to_string())
+                                        })
+                                })
+                                .collect();
 
-                if player_event == Some(PlayerEvent::OpenChest) {
-                    if let Some(items_vec) = map.get_chest_items(&player_pos) {
-                        
-                        let actual_items: Vec<(u32, String)> = items_vec.iter()
-                            .filter_map(|item_id| {
-                                game.items.items.iter()
-                                    .find(|item| item.borrow().get_id() == *item_id)
-                                    .map(|item_rc| {
-                                        let item_ref = item_rc.borrow();
-                                        (item_ref.get_id(), item_ref.get_name().to_string())
-                                    })
-                            })
-                            .collect();
+                            let chest_action_clone = chest_action.clone();
 
-                        let chest_action_clone = chest_action.clone();
-
-                        game.ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                            *chest_action_clone.borrow_mut() = Some(item_id);
-                        }));
+                            game.ui.show_chest_view(&actual_items, Box::new(move |item_id| {
+                                *chest_action_clone.borrow_mut() = Some(item_id);
+                            }));
+                        }
+                    }
+                    else if player_event == Some(PlayerEvent::ReachBorder) {
+                        map_update = true;
                     }
                 }
-                else if player_event == Some(PlayerEvent::ReachBorder) {
-                    map_update = true;
-                }
             }
-        }
 
-        if map.last_player_event == Some(PlayerEvent::AutoMove) {
-            last_move_time = now; // Update last move time for auto step
-        } else {
-            goal_position = None;
-        }
+            if player_event == Some(PlayerEvent::AutoMove) {
+                last_move_time = now; // Update last move time for auto step
+            } else {
+                goal_position = None;
+            }
 
-        draw(&mut game, &mut map, game_interface_offset);
+            draw(&mut game, &mut map, game_interface_offset);
+        }
         next_frame().await;
     }
 }

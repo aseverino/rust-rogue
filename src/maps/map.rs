@@ -90,6 +90,7 @@ pub struct Map {
     pub last_player_event: Option<PlayerEvent>,
     pub spell_fov_cache: SpellFovCache,
     pub should_draw_spell_fov: bool,
+    pub border_positions: [Vec<Position>; 4],
 }
 
 impl Map {
@@ -103,7 +104,13 @@ impl Map {
             hovered_tile_changed: false,
             last_player_event: None,
             spell_fov_cache: SpellFovCache::new(),
-            should_draw_spell_fov: false
+            should_draw_spell_fov: false,
+            border_positions: [
+                Vec::new(), // Up border
+                Vec::new(), // Right border
+                Vec::new(), // Down border
+                Vec::new(), // Left border
+            ],
         }
     }
 

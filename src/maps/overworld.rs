@@ -22,7 +22,14 @@
 
 use std::{sync::{mpsc, Arc, Mutex}};
 
-use crate::maps::{map::Map, map_generator::{BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme, OverworldPos}};
+use crate::maps::{map::Map, map_generator::{BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OverworldPos {
+    pub floor: usize,
+    pub x: usize,
+    pub y: usize,
+}
 
 pub struct Overworld {
     pub maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>>, // this is a list of floors; each floor has fixed 5x5 maps; The maps are represented by their IDs
@@ -30,13 +37,13 @@ pub struct Overworld {
 }
 
 impl Overworld {
-    pub fn new() -> Arc<Mutex<Self>> {
+    pub async fn new() -> Arc<Mutex<Self>> {
         let maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>> =
             Arc::new(Mutex::new(vec![
                 std::array::from_fn(|_| std::array::from_fn(|_| None))
             ]));
 
-        let map_generator = MapGenerator::new();
+        let map_generator = MapGenerator::new().await;
 
         let overworld = Arc::new(Mutex::new(Self {
             maps: Arc::clone(&maps),
@@ -87,7 +94,7 @@ impl Overworld {
                 if new_x >= 0 && new_x < 5 && new_y >= 0 && new_y < 5 {
                     let opos = OverworldPos { floor, x: new_x as usize, y: new_y as usize };
                     // Check if this adjacent map is already generated
-                    if self.get_map_ptr(floor, new_x as usize, new_y as usize).is_none() {
+                    if self.get_map_ptr(opos).is_none() {
                         // If not, setup the GenerationParams with appropriate borders (they should not have borders at the edges of the 5x5 grid)
                         let mut gen_params = GenerationParams::default();
                         if new_x != 0 {
@@ -112,10 +119,10 @@ impl Overworld {
         }
     }
 
-    pub fn get_map_ptr(&self, floor: usize, x: usize, y: usize) -> Option<Arc<Mutex<Map>>> {
+    pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<Arc<Mutex<Map>>> {
         let maps_guard = self.maps.lock().ok()?;
-        if floor < maps_guard.len() && x < 5 && y < 5 {
-            maps_guard[floor][x][y].as_ref().map(Arc::clone)
+        if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
+            maps_guard[opos.floor][opos.x][opos.y].as_ref().map(Arc::clone)
         } else {
             None
         }

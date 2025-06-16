@@ -22,7 +22,8 @@
 
 use macroquad::prelude::*;
 use crate::items::collection::Items;
-use crate::maps::overworld::Overworld;
+use crate::maps::overworld::{self, Overworld, OverworldPos};
+use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
@@ -78,21 +79,24 @@ pub async fn run() {
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld: Overworld::new(),
+        overworld: Overworld::new().await,
         ui: Ui::new(),
         items: Items::new()
     };
 
     game.items.load_holdable_items().await;
 
-    let map_arc = if let Some(map_arc) = game.overworld.lock().unwrap().get_map_ptr(0, 2, 2) {
+    let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
+
+    let map_arc = if let Some(map_arc) = game.overworld.lock().unwrap().get_map_ptr(overworld_pos) {
         map_arc
     } else {
         panic!("Failed to get map pointer from overworld");
     };
-    let mut map = map_arc.lock().unwrap();
+    let mut current_map_arc = map_arc;
+    let mut map = current_map_arc.lock().unwrap();
 
-    map.init(&mut game.player).await;
+    // map.init(&mut game.player).await;
     map.set_player_random_position(&mut game.player);
     
     let mut last_move_time = 0.0;
@@ -100,8 +104,38 @@ pub async fn run() {
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
     let chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
+    let mut map_update = false;
 
     loop {
+        if map_update {
+            // Determine player's current border position
+            let player_pos = game.player.position;
+            let mut new_opos = overworld_pos.clone();
+            if player_pos.x == 0 {
+                new_opos.x -= 1;
+            }
+            else if player_pos.x == GRID_WIDTH - 1 {
+                new_opos.x += 1;
+            }
+            if player_pos.y == 0 {
+                new_opos.y -= 1;
+            }
+            else if player_pos.y == GRID_HEIGHT - 1 {
+                new_opos.y += 1;
+            }
+
+            if let Some(new_map_arc) = game.overworld.lock().unwrap().get_map_ptr(new_opos) {
+                // Drop the current map lock before reassigning current_map_arc
+                drop(map);
+                current_map_arc = new_map_arc;
+                map = current_map_arc.lock().unwrap();
+                map.set_player_random_position(&mut game.player);
+                overworld_pos = new_opos;
+            } else {
+                panic!("Failed to get map pointer from overworld");
+            }
+            map_update = false;
+        }
         if let Some(item_id) = chest_action.take() {
             let item = game.items.items[item_id as usize].clone();
             game.player.add_item(item);
@@ -179,6 +213,9 @@ pub async fn run() {
                             *chest_action_clone.borrow_mut() = Some(item_id);
                         }));
                     }
+                }
+                else if player_event == Some(PlayerEvent::ReachBorder) {
+                    map_update = true;
                 }
             }
         }

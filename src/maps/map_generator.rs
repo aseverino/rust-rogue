@@ -33,17 +33,12 @@ use bitflags::bitflags;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
+use crate::maps::overworld::OverworldPos;
 use crate::maps::{map::Map, GRID_WIDTH, GRID_HEIGHT};
+use crate::monster_type::{load_monster_types, MonsterType};
 use crate::tile::{Tile, TileKind};
 use crate::position::Position;
 use rand::seq::SliceRandom;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OverworldPos {
-    pub floor: usize,
-    pub x: usize,
-    pub y: usize,
-}
 
 #[derive(Debug, Clone)]
 pub enum MapTheme {
@@ -72,6 +67,7 @@ pub struct GenerationParams {
     pub radius: usize,
     pub borders: BorderFlags,
     pub theme: MapTheme,
+    pub tier: u32
 }
 
 impl GenerationParams {
@@ -83,6 +79,7 @@ impl GenerationParams {
             radius: 1, // 0 = 1x1, 1 = 3x3, or even 2 = 5x5
             borders: BorderFlags::NONE,
             theme: MapTheme::Any,
+            tier: 0,
         }
     }
 }
@@ -97,27 +94,34 @@ pub struct MapAssignment {
     pub map: Map,
 }
 
+type MonsterCollection = HashMap<String, Arc<MonsterType>>;
+type MonsterTypes = Arc<Mutex<MonsterCollection>>;
+
 pub struct MapGenerator {
     command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
+    monster_types: MonsterTypes,
 }
 
 impl MapGenerator {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         Self {
             command_tx: None,
             thread_handle: None,
+            monster_types: Arc::new(Mutex::new(load_monster_types().await))
         }
     }
 
     pub fn set_callback(&mut self, callback: Box<dyn Fn(MapAssignment) + Send + 'static>) {
         let (command_tx, command_rx) = mpsc::channel::<Command>();
         self.command_tx = Some(command_tx);
+        let monster_types = Arc::clone(&self.monster_types);
         self.thread_handle = Some(thread::spawn(move || {
             for command in command_rx {
                 match command {
                     Command::Generate(pos, params) => {
-                        let map = Self::generate_map(&params);
+                        let mut map = Self::generate_map(&params);
+                        Self::populate_map(&mut map, &params, &monster_types);
                         callback(MapAssignment { opos: pos, map });
                     }
                     Command::Stop => {
@@ -396,6 +400,20 @@ impl MapGenerator {
         let map = Map::new(tiles, walkable_cache, available_walkable_cache);
 
         map
+    }
+
+    fn populate_map(map: &mut Map, params: &GenerationParams, monster_types: &MonsterTypes) {
+        let monster_types_guard = monster_types.lock().unwrap();
+        //map.add_random_monsters(&*monster_types_guard, 20);
+        
+        let len = map.available_walkable_cache.len();
+        let positions: Vec<Position> = map.available_walkable_cache
+            .drain(len.saturating_sub(2)..)
+            .collect();
+
+        for pos in positions {
+            map.tiles[pos].add_orb();
+        }
     }
 }
 

@@ -61,6 +61,7 @@ pub enum PlayerEvent {
     SpellCast,
     OpenChest,
     Death,
+    ReachBorder,
 }
 
 pub struct SpellFovCache {
@@ -105,18 +106,19 @@ impl Map {
             should_draw_spell_fov: false
         }
     }
-    pub async fn init(&mut self, _player: &mut Player) {
-        let monster_types = load_monster_types().await;
-        self.add_random_monsters(&monster_types, 20);
-        
-        let len = self.available_walkable_cache.len();
-        let positions: Vec<Position> = self.available_walkable_cache
-            .drain(len.saturating_sub(2)..)
-            .collect();
 
-        for pos in positions {
-            self.tiles[pos].add_orb();
-        }
+    //pub async fn init(&mut self, _player: &mut Player) {
+    //    let monster_types = load_monster_types().await;
+    //    self.add_random_monsters(&monster_types, 20);
+    //    
+    //    let len = self.available_walkable_cache.len();
+    //    let positions: Vec<Position> = self.available_walkable_cache
+    //        .drain(len.saturating_sub(2)..)
+    //        .collect();
+//
+    //    for pos in positions {
+    //        self.tiles[pos].add_orb();
+    //    }
 
         
 
@@ -131,7 +133,7 @@ impl Map {
         // } else {
         //     println!("No available position for chest.");
         // }
-    }
+    //}
 
     pub fn set_player_random_position(&mut self, player: &mut Player) {
         let pos = self.available_walkable_cache.pop()
@@ -545,6 +547,10 @@ impl Map {
 
             for idx in to_remove {
                 tile.remove_item(idx);
+            }
+
+            if tile.is_border(&pos) {
+                self.last_player_event = Some(PlayerEvent::ReachBorder);
             }
 
             // for (idx, item) in &tile.items {

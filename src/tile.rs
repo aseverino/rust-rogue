@@ -75,6 +75,10 @@ impl Tile {
         }
     }
 
+    pub fn is_border(&self, pos: &Position) -> bool {
+        self.kind == TileKind::Floor && (pos.x == 0 || pos.y == 0 || pos.x == GRID_WIDTH - 1 || pos.y == GRID_HEIGHT - 1)
+    }
+
     pub fn draw(&self, pos: Position, offset: PointF) {
         let color = match self.kind {
             TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
@@ -90,7 +94,7 @@ impl Tile {
             color,
         );
 
-        if self.kind == TileKind::Floor && (pos.x == 0 || pos.y == 0 || pos.x == GRID_WIDTH - 1 || pos.y == GRID_HEIGHT - 1) {
+        if self.is_border(&pos) {
             // Draw border
             draw_rectangle(
                 offset.x + pos.x as f32 * TILE_SIZE,

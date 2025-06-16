@@ -238,7 +238,7 @@ impl MapGenerator {
         }
     }
 
-    fn place_border_anchors(tiles: &mut Vec<Vec<Tile>>, borders: BorderFlags) -> Vec<Position> {
+    fn place_border_anchors(tiles: &mut Vec<Vec<Tile>>, borders: BorderFlags) -> Vec<(Position, Position)> {
         let mut anchors = Vec::new();
         let width = GRID_WIDTH;
         let height = GRID_HEIGHT;
@@ -249,24 +249,28 @@ impl MapGenerator {
         }
 
         if borders.contains(BorderFlags::TOP) {
-            let pos = Position::new(rng.gen_range(1..width - 1), 0);
-            tiles[pos.x][pos.y].kind = TileKind::Floor;
-            anchors.push(pos);
+            let border = Position::new(rng.gen_range(1..width - 1), 0);
+            let neighbor = Position::new(border.x, border.y + 1);
+            tiles[border.x][border.y].kind = TileKind::Floor;
+            anchors.push((border, neighbor));
         }
         if borders.contains(BorderFlags::BOTTOM) {
-            let pos = Position::new(rng.gen_range(1..width - 1), height - 1);
-            tiles[pos.x][pos.y].kind = TileKind::Floor;
-            anchors.push(pos);
+            let border = Position::new(rng.gen_range(1..width - 1), height - 1);
+            let neighbor = Position::new(border.x, border.y - 1);
+            tiles[border.x][border.y].kind = TileKind::Floor;
+            anchors.push((border, neighbor));
         }
         if borders.contains(BorderFlags::LEFT) {
-            let pos = Position::new(0, rng.gen_range(1..height - 1));
-            tiles[pos.x][pos.y].kind = TileKind::Floor;
-            anchors.push(pos);
+            let border = Position::new(0, rng.gen_range(1..height - 1));
+            let neighbor = Position::new(border.x + 1, border.y);
+            tiles[border.x][border.y].kind = TileKind::Floor;
+            anchors.push((border, neighbor));
         }
         if borders.contains(BorderFlags::RIGHT) {
-            let pos = Position::new(width - 1, rng.gen_range(1..height - 1));
-            tiles[pos.x][pos.y].kind = TileKind::Floor;
-            anchors.push(pos);
+            let border = Position::new(width - 1, rng.gen_range(1..height - 1));
+            let neighbor = Position::new(border.x - 1, border.y);
+            tiles[border.x][border.y].kind = TileKind::Floor;
+            anchors.push((border, neighbor));
         }
 
         anchors
@@ -292,7 +296,7 @@ impl MapGenerator {
         let mut visited = vec![vec![false; GRID_HEIGHT]; GRID_WIDTH];
 
         //let borders = Self::choose_border_exits(params.exits as usize);
-        let anchor_points = Self::place_border_anchors(&mut tiles, params.borders);
+        let anchor_pairs = Self::place_border_anchors(&mut tiles, params.borders);
 
         let num_walks: usize = params.num_walks;
         let walk_length: usize = params.walk_length;
@@ -300,13 +304,13 @@ impl MapGenerator {
 
         let mut start_positions = Vec::new();
 
-        for &anchor in &anchor_points {
-            if !visited[anchor.x][anchor.y] {
-                tiles[anchor.x][anchor.y].kind = TileKind::Floor;
-                walkable_cache.push(anchor);
-                visited[anchor.x][anchor.y] = true;
+        for &(_, neighbor) in &anchor_pairs {
+            if !visited[neighbor.x][neighbor.y] {
+                tiles[neighbor.x][neighbor.y].kind = TileKind::Floor;
+                walkable_cache.push(neighbor);
+                visited[neighbor.x][neighbor.y] = true;
             }
-            start_positions.push(anchor);
+            start_positions.push(neighbor);
         }
 
         for i in 0..num_walks + start_positions.len() {

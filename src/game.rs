@@ -36,10 +36,11 @@ use macroquad::time::get_time;
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 pub struct GameState {
     pub player: Player,
-    pub overworld: Overworld,
+    pub overworld: Arc<Mutex<Overworld>>,
     pub ui: Ui,
     pub items: Items,
 }
@@ -84,7 +85,7 @@ pub async fn run() {
 
     game.items.load_holdable_items().await;
 
-    let map_arc = if let Some(map_arc) = game.overworld.get_map_ptr(0, 2, 2) {
+    let map_arc = if let Some(map_arc) = game.overworld.lock().unwrap().get_map_ptr(0, 2, 2) {
         map_arc
     } else {
         panic!("Failed to get map pointer from overworld");

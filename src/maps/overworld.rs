@@ -22,7 +22,7 @@
 
 use std::{sync::{mpsc, Arc, Mutex}};
 
-use crate::maps::{map::Map, map_generator::{GenerationParams, MapAssignment, MapGenerator, MapTheme, OverworldPos}};
+use crate::maps::{map::Map, map_generator::{BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme, OverworldPos}};
 
 pub struct Overworld {
     pub maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>>, // this is a list of floors; each floor has fixed 5x5 maps; The maps are represented by their IDs
@@ -30,20 +30,26 @@ pub struct Overworld {
 }
 
 impl Overworld {
-    pub fn new() -> Self {
+    pub fn new() -> Arc<Mutex<Self>> {
         let maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>> =
             Arc::new(Mutex::new(vec![
                 std::array::from_fn(|_| std::array::from_fn(|_| None))
             ]));
 
+        let map_generator = MapGenerator::new();
+
+        let overworld = Arc::new(Mutex::new(Self {
+            maps: Arc::clone(&maps),
+            map_generator,
+        }));
+
+        let overworld_weak = Arc::downgrade(&overworld);
         let maps_clone = Arc::clone(&maps);
 
-        // Define the actual callback function
         let callback = Box::new(move |assignment: MapAssignment| {
             let mut maps = maps_clone.lock().unwrap();
             let OverworldPos { floor, x, y } = assignment.opos;
 
-            // Expand floors as needed
             if floor >= maps.len() {
                 maps.resize_with(floor + 1, || {
                     std::array::from_fn(|_| std::array::from_fn(|_| None))
@@ -51,21 +57,58 @@ impl Overworld {
             }
 
             maps[floor][x][y] = Some(Arc::new(Mutex::new(assignment.map)));
+            drop(maps);
+
+            if let Some(overworld_strong) = overworld_weak.upgrade() {
+                let mut o = overworld_strong.lock().unwrap();
+                o.setup_adjacent_maps(floor, x, y);
+            }
         });
 
-        let map_generator = MapGenerator::new(callback);
-
+        overworld.lock().unwrap().map_generator.set_callback(callback);
+        
         // Request center map
         let mut gen_params = GenerationParams::default();
-        gen_params.exits = 5;
+        gen_params.borders = BorderFlags::TOP | BorderFlags::BOTTOM | BorderFlags::LEFT | BorderFlags::RIGHT | BorderFlags::DOWN;
         gen_params.theme = MapTheme::Chasm;
 
         let center = OverworldPos { floor: 0, x: 2, y: 2 };
-        map_generator.request_generation(center, gen_params);
+        overworld.lock().unwrap().map_generator.request_generation(center, gen_params);
 
-        Self {
-            maps,
-            map_generator,
+        overworld
+    }
+
+    pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize) {
+        for dx in -1i32..=1 {
+            for dy in -1i32..=1 {
+                if dx == 0 && dy == 0 { continue; }
+                let new_x = x as i32 + dx;
+                let new_y = y as i32 + dy;
+                if new_x >= 0 && new_x < 5 && new_y >= 0 && new_y < 5 {
+                    let opos = OverworldPos { floor, x: new_x as usize, y: new_y as usize };
+                    // Check if this adjacent map is already generated
+                    if self.get_map_ptr(floor, new_x as usize, new_y as usize).is_none() {
+                        // If not, setup the GenerationParams with appropriate borders (they should not have borders at the edges of the 5x5 grid)
+                        let mut gen_params = GenerationParams::default();
+                        if new_x != 0 {
+                            gen_params.borders |= BorderFlags::LEFT;
+                        }
+                        if new_x != 4 {
+                            gen_params.borders |= BorderFlags::RIGHT;
+                        }
+                        if new_y != 0 {
+                            gen_params.borders |= BorderFlags::TOP;
+                        }
+                        if new_y != 4 {
+                            gen_params.borders |= BorderFlags::BOTTOM;
+                        }
+                        gen_params.borders |= BorderFlags::DOWN;
+
+                        gen_params.theme = MapTheme::Chasm;
+                        self.map_generator.request_generation(opos, gen_params);
+                    }
+                }
+            }
         }
     }
 

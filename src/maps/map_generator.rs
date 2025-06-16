@@ -22,11 +22,13 @@
 
 use std::cmp::min;
 use std::collections::HashMap;
+use std::ops::BitOr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use bitflags::bitflags;
 
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
@@ -50,13 +52,25 @@ pub enum MapTheme {
     Wall,
 }
 
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct BorderFlags: u32 {
+        const NONE   = 0;
+        const TOP    = 0b0001;
+        const BOTTOM = 0b0010;
+        const LEFT   = 0b0100;
+        const RIGHT  = 0b1000;
+        const DOWN   = 0b0001_0000;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GenerationParams {
     pub num_walks: usize,
     pub walk_length: usize,
     pub min_dist_between_starts: usize,
     pub radius: usize,
-    pub exits: u8,
+    pub borders: BorderFlags,
     pub theme: MapTheme,
 }
 
@@ -67,7 +81,7 @@ impl GenerationParams {
             walk_length: 80,
             min_dist_between_starts: 6,
             radius: 1, // 0 = 1x1, 1 = 3x3, or even 2 = 5x5
-            exits: 4,
+            borders: BorderFlags::NONE,
             theme: MapTheme::Any,
         }
     }
@@ -84,23 +98,22 @@ pub struct MapAssignment {
 }
 
 pub struct MapGenerator {
-    command_tx: Sender<Command>,
+    command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Border {
-    Top,
-    Bottom,
-    Left,
-    Right,
-}
-
 impl MapGenerator {
-    pub fn new(callback: Box<dyn Fn(MapAssignment) + Send + 'static>) -> Self {
-        let (command_tx, command_rx) = mpsc::channel::<Command>();
+    pub fn new() -> Self {
+        Self {
+            command_tx: None,
+            thread_handle: None,
+        }
+    }
 
-        let handle = thread::spawn(move || {
+    pub fn set_callback(&mut self, callback: Box<dyn Fn(MapAssignment) + Send + 'static>) {
+        let (command_tx, command_rx) = mpsc::channel::<Command>();
+        self.command_tx = Some(command_tx);
+        self.thread_handle = Some(thread::spawn(move || {
             for command in command_rx {
                 match command {
                     Command::Generate(pos, params) => {
@@ -113,20 +126,19 @@ impl MapGenerator {
                     }
                 }
             }
-        });
+        }));
+    }
 
-        Self {
-            command_tx,
-            thread_handle: Some(handle),
+    pub fn request_generation(&mut self, opos: OverworldPos, params: GenerationParams) {
+        if let Some(ref tx) = self.command_tx {
+            let _ = tx.send(Command::Generate(opos, params));
         }
     }
 
-    pub fn request_generation(&self, opos: OverworldPos, params: GenerationParams) {
-        let _ = self.command_tx.send(Command::Generate(opos, params));
-    }
-
     pub fn stop(&mut self) {
-        let _ = self.command_tx.send(Command::Stop);
+        if let Some(ref tx) = self.command_tx {
+            let _ = tx.send(Command::Stop);
+        }
         if let Some(handle) = self.thread_handle.take() {
             let _ = handle.join();
         }
@@ -226,26 +238,33 @@ impl MapGenerator {
         }
     }
 
-    fn choose_border_exits(count: usize) -> Vec<Border> {
-        use Border::*;
-        let all = vec![Top, Bottom, Left, Right];
-        let mut rng = thread_rng();
-        all.choose_multiple(&mut rng, min(count, 4)).cloned().collect()
-    }
-
-    fn place_border_anchors(tiles: &mut Vec<Vec<Tile>>, borders: &[Border]) -> Vec<Position> {
+    fn place_border_anchors(tiles: &mut Vec<Vec<Tile>>, borders: BorderFlags) -> Vec<Position> {
         let mut anchors = Vec::new();
-        let width = GRID_WIDTH as usize;
-        let height = GRID_HEIGHT as usize;
-
+        let width = GRID_WIDTH;
+        let height = GRID_HEIGHT;
         let mut rng = thread_rng();
-        for border in borders {
-            let pos = match border {
-                Border::Top => Position::new(rng.gen_range(1..width - 1), 0),
-                Border::Bottom => Position::new(rng.gen_range(1..width - 1), height - 1),
-                Border::Left => Position::new(0, rng.gen_range(1..height - 1)),
-                Border::Right => Position::new(width - 1, rng.gen_range(1..height - 1)),
-            };
+
+        if borders.is_empty() {
+            return anchors;
+        }
+
+        if borders.contains(BorderFlags::TOP) {
+            let pos = Position::new(rng.gen_range(1..width - 1), 0);
+            tiles[pos.x][pos.y].kind = TileKind::Floor;
+            anchors.push(pos);
+        }
+        if borders.contains(BorderFlags::BOTTOM) {
+            let pos = Position::new(rng.gen_range(1..width - 1), height - 1);
+            tiles[pos.x][pos.y].kind = TileKind::Floor;
+            anchors.push(pos);
+        }
+        if borders.contains(BorderFlags::LEFT) {
+            let pos = Position::new(0, rng.gen_range(1..height - 1));
+            tiles[pos.x][pos.y].kind = TileKind::Floor;
+            anchors.push(pos);
+        }
+        if borders.contains(BorderFlags::RIGHT) {
+            let pos = Position::new(width - 1, rng.gen_range(1..height - 1));
             tiles[pos.x][pos.y].kind = TileKind::Floor;
             anchors.push(pos);
         }
@@ -272,8 +291,8 @@ impl MapGenerator {
         let mut walkable_cache = Vec::new();
         let mut visited = vec![vec![false; GRID_HEIGHT]; GRID_WIDTH];
 
-        let borders = Self::choose_border_exits(params.exits as usize);
-        let anchor_points = Self::place_border_anchors(&mut tiles, &borders);
+        //let borders = Self::choose_border_exits(params.exits as usize);
+        let anchor_points = Self::place_border_anchors(&mut tiles, params.borders);
 
         let num_walks: usize = params.num_walks;
         let walk_length: usize = params.walk_length;

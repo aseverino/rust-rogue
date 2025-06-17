@@ -20,17 +20,14 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
-function on_get_attack_damage(item)
-    -- item.attack_dice = array of dice
-    -- item.modifier = int
+function on_get_attack_damage(player, weapon, target)
     local damage = 0
-    for _, die in ipairs(item.attack_dice) do
+    for _, die in ipairs(weapon.attack_dice) do
         damage = damage + math.random(1, die)
     end
-    return damage + item.modifier
+    return damage + weapon.modifier
 end
 
-function on_check_accuracy(item)
-    -- You can imagine a simple function here
-    return 0.75  -- 75% chance to hit
+function on_check_accuracy(player, weapon, target)
+    return 1.0
 end

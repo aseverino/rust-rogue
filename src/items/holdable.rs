@@ -33,6 +33,7 @@ pub struct BaseHoldableItemData {
     pub attribute_modifier: String,
     pub required: Vec<Vec<serde_json::Value>>,
     pub slot: String,
+    pub script: String,
 }
 
 #[derive(Debug, Deserialize)]

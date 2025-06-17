@@ -32,6 +32,7 @@ use std::sync::Arc;
 use crate::creature::Creature;
 use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
+use crate::lua_interface::LuaInterface;
 use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
@@ -345,15 +346,24 @@ impl Map {
         }
     }
 
-    fn do_melee_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position) {
+    fn do_melee_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, lua_interface: &mut LuaInterface) {
         let damage = {
             if let Some(weapon) = &player.equipment.weapon {
                 let mut damage: u32 = 0;
                 for &d in weapon.borrow().attack_dice.iter() {
-                    let mut rng = thread_rng();
-                    let roll = rng.gen_range(1..=d);
-                    println!("Rolled {} on a {}-sided die", roll, d);
-                    damage += roll + weapon.borrow().base_holdable.modifier as u32;
+                    let lua_check = lua_interface.on_get_attack_damage(player, &*weapon.borrow(), &self.monsters[self.tiles[target_pos].creature as usize]);
+                    match lua_check {
+                        Ok(lua_damage) => {
+                            damage = lua_damage as u32;
+                            println!("Damage from Lua script: {}", damage);
+                        }
+                        Err(e) => {
+                            println!("Error in Lua script: {}", e);
+                            let mut rng = thread_rng();
+                            let roll = rng.gen_range(1..=d);
+                            damage = roll + weapon.borrow().base_holdable.modifier as u32;
+                        }
+                    }
                 }
                 damage
             }
@@ -409,7 +419,14 @@ impl Map {
         // }
     }
 
-    pub fn update(&mut self, player: &mut Player, player_action: KeyboardAction, player_direction: Direction, spell_action: i32, player_goal_position: Option<Position>) {
+    pub fn update(&mut self,
+        player: &mut Player,
+        lua_interface: &mut LuaInterface,
+        player_action: KeyboardAction,
+        player_direction: Direction,
+        spell_action: i32,
+        player_goal_position: Option<Position>
+    ) {
         self.last_player_event = None;
         let player_pos = {
             player.position
@@ -518,7 +535,7 @@ impl Map {
             if self.is_tile_enemy_occupied(pos) {
                 self.last_player_event = Some(PlayerEvent::MeleeAttack);
                 update_monsters = true; // Update monsters if player attacks
-                self.do_melee_combat(player, player_pos, pos);
+                self.do_melee_combat(player, player_pos, pos, lua_interface);
             }
             else if self.tiles[pos].is_border(&pos) && !self.monsters.is_empty() {
                 self.last_player_event = Some(PlayerEvent::Cancel);

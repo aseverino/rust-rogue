@@ -23,6 +23,7 @@
 mod input;
 mod ui;
 mod game;
+mod lua_interface;
 mod items;
 mod maps;
 mod position;

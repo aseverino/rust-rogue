@@ -22,6 +22,7 @@
 
 use macroquad::prelude::*;
 use crate::items::collection::Items;
+use crate::lua_interface::LuaInterface;
 use crate::maps::overworld::{self, Overworld, OverworldPos};
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
@@ -44,6 +45,7 @@ pub struct GameState {
     pub overworld: Arc<Mutex<Overworld>>,
     pub ui: Ui,
     pub items: Items,
+    pub lua_interface: LuaInterface
 }
 
 #[derive(PartialEq, Debug)]
@@ -88,7 +90,8 @@ pub async fn run() {
         player: Player::new(Position::new(1, 1)),
         overworld: Overworld::new().await,
         ui: Ui::new(),
-        items: Items::new()
+        items: Items::new(),
+        lua_interface: LuaInterface::new(),
     };
 
     game.items.load_holdable_items().await;
@@ -245,7 +248,7 @@ pub async fn run() {
                     game.ui.toggle_character_sheet();
                 }
                 else {
-                    map.update(&mut game.player, input.keyboard_action, input.direction, input.spell, goal_position);
+                    map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
                     let player_pos = { game.player.position };
 
                     if player_event == Some(PlayerEvent::OpenChest) {

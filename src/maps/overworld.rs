@@ -116,9 +116,12 @@ impl Overworld {
             maps[floor][x][y] = Some(Arc::new(Mutex::new(assignment.map)));
             drop(maps);
 
-            if let Some(overworld_strong) = overworld_weak.upgrade() {
-                let mut o = overworld_strong.lock().unwrap();
-                o.setup_adjacent_maps(floor, x, y);
+            if x == 2 && y == 2 && floor == 0 {
+                // This is the center map, setup adjacent maps
+                if let Some(overworld_strong) = overworld_weak.upgrade() {
+                    let mut o = overworld_strong.lock().unwrap();
+                    o.setup_adjacent_maps(floor, x, y);
+                }
             }
         });
 

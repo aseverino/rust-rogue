@@ -124,37 +124,42 @@ pub async fn run() {
                 new_opos.y += 1;
             }
 
-            if let Some(new_map_arc) = game.overworld.lock().unwrap().get_map_ptr(new_opos) {
-                {
-                    let mut map = current_map_arc.lock().unwrap();
-                    map.remove_creature(&mut game.player);
+            {
+                let mut overworld = game.overworld.lock().unwrap();
+                if let Some(new_map_arc) = overworld.get_map_ptr(new_opos) {
+                    {
+                        let mut map = current_map_arc.lock().unwrap();
+                        map.remove_creature(&mut game.player);
+                    }
+
+                    current_map_arc = new_map_arc;
+                    
+                    {
+                        // Setting up the map adjacencies has to be done before locking it
+                        overworld.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y);
+                        let mut map = current_map_arc.lock().unwrap();
+
+                        if player_pos.x == 0 {
+                            player_pos.x = GRID_WIDTH - 2;
+                        }
+                        else if player_pos.x == GRID_WIDTH - 1 {
+                            player_pos.x = 1;
+                        }
+                        if player_pos.y == 0 {
+                            player_pos.y = GRID_HEIGHT - 2;
+                        }
+                        else if player_pos.y == GRID_HEIGHT - 1 {
+                            player_pos.y = 1;
+                        }
+
+                        map.add_player(&mut game.player, player_pos);
+                        println!("Player moved to new map at position: {:?}", new_opos);
+                    }
+                    
+                    overworld_pos = new_opos;
+                } else {
+                    panic!("Failed to get map pointer from overworld");
                 }
-
-                current_map_arc = new_map_arc;
-                
-                {
-                    let mut map = current_map_arc.lock().unwrap();
-
-                    if player_pos.x == 0 {
-                        player_pos.x = GRID_WIDTH - 2;
-                    }
-                    else if player_pos.x == GRID_WIDTH - 1 {
-                        player_pos.x = 1;
-                    }
-                    if player_pos.y == 0 {
-                        player_pos.y = GRID_HEIGHT - 2;
-                    }
-                    else if player_pos.y == GRID_HEIGHT - 1 {
-                        player_pos.y = 1;
-                    }
-
-                    map.add_player(&mut game.player, player_pos);
-                    println!("Player moved to new map at position: {:?}", new_opos);
-                }
-                
-                overworld_pos = new_opos;
-            } else {
-                panic!("Failed to get map pointer from overworld");
             }
             map_update = false;
         }

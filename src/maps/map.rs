@@ -62,6 +62,7 @@ pub enum PlayerEvent {
     OpenChest,
     Death,
     ReachBorder,
+    ClimbDown,
 }
 
 pub struct SpellFovCache {
@@ -91,6 +92,7 @@ pub struct Map {
     pub spell_fov_cache: SpellFovCache,
     pub should_draw_spell_fov: bool,
     pub border_positions: [Vec<Position>; 4],
+    pub downstair_teleport: Option<Position>,
 }
 
 impl Map {
@@ -111,6 +113,7 @@ impl Map {
                 Vec::new(), // Down border
                 Vec::new(), // Left border
             ],
+            downstair_teleport: None,
         }
     }
 
@@ -560,6 +563,11 @@ impl Map {
                         println!("Player picked up an orb at index {idx}!");
                         player.sp += 1;
                         to_remove.push(idx); // Collect for removal
+                    }
+                    ItemKind::Teleport(_) => {
+                        println!("Player walked downstairs.");
+                        self.last_player_event = Some(PlayerEvent::ClimbDown);
+                        return;
                     }
                     ItemKind::Container(_) => {
                         self.last_player_event = Some(PlayerEvent::OpenChest);

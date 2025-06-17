@@ -87,6 +87,8 @@ pub struct GenerationParams {
     pub borders: BorderFlags,
     pub theme: MapTheme,
     pub predefined_borders: [Vec<Position>; 4],
+    pub predefined_start_pos: Option<Position>,
+    pub force_regen: bool,
     pub tier: u32
 }
 
@@ -105,6 +107,8 @@ impl GenerationParams {
                 Vec::new(), // Down border
                 Vec::new(), // Left border
             ],
+            predefined_start_pos: None,
+            force_regen: false,
             tier: 0,
         }
     }
@@ -160,6 +164,7 @@ impl MapGenerator {
     }
 
     pub fn request_generation(&mut self, opos: OverworldPos, params: GenerationParams) {
+        println!("[MapGenerator] Requesting generation for {:?}", opos);
         if let Some(ref tx) = self.command_tx {
             let _ = tx.send(Command::Generate(opos, params));
         }
@@ -382,6 +387,11 @@ impl MapGenerator {
 
         let mut start_positions = Vec::new();
 
+        if let Some(predefined_start_pos) = params.predefined_start_pos {
+            start_positions.push(predefined_start_pos);
+            println!("Using predefined start position: {:?}", predefined_start_pos);
+        }
+
         for &(_, neighbor) in &anchor_pairs {
             if !visited[neighbor.x][neighbor.y] {
                 tiles[neighbor.x][neighbor.y].kind = TileKind::Floor;
@@ -495,9 +505,19 @@ impl MapGenerator {
     fn populate_map(map: &mut Map, params: &GenerationParams, monster_types: &MonsterTypes) {
         let monster_types_guard = monster_types.lock().unwrap();
         //map.add_random_monsters(&*monster_types_guard, 20);
+
+        let mut len = map.available_walkable_cache.len();
+        let mut positions: Vec<Position> = map.available_walkable_cache
+            .drain(len.saturating_sub(1)..)
+            .collect();
+
+        for pos in positions {
+            map.tiles[pos].add_teleport();
+            map.downstair_teleport = Some(pos);
+        }
         
-        let len = map.available_walkable_cache.len();
-        let positions: Vec<Position> = map.available_walkable_cache
+        len = map.available_walkable_cache.len();
+        positions = map.available_walkable_cache
             .drain(len.saturating_sub(2)..)
             .collect();
 

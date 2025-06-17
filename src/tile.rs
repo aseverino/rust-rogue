@@ -22,7 +22,7 @@
 
 use macroquad::prelude::*;
 
-use crate::{items::{base_item::ItemKind, orb::Orb}, maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE}, position::Position, ui::point_f::PointF};
+use crate::{items::{base_item::ItemKind, orb::Orb, teleport::Teleport}, maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE}, position::Position, ui::point_f::PointF};
 
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
@@ -65,6 +65,11 @@ impl Tile {
     pub fn add_orb(&mut self) {
         let orb = Orb {};
         self.items.push(ItemKind::Orb(orb));
+    }
+
+    pub fn add_teleport(&mut self) {
+        let teleport = Teleport {};
+        self.items.push(ItemKind::Teleport(teleport));
     }
 
     pub fn remove_item(&mut self, index: usize) -> Option<ItemKind> {
@@ -113,6 +118,14 @@ impl Tile {
                         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
                         TILE_SIZE / 4.0,
                         Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+                    );
+                }
+                ItemKind::Teleport(_) => {
+                    draw_circle(
+                        offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+                        offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
+                        TILE_SIZE / 4.0,
+                        Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                     );
                 }
                 ItemKind::Container(_) => {

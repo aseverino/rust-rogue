@@ -24,7 +24,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use serde::Deserialize;
 
-use crate::items::{container::Container, holdable::{Armor, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb};
+use crate::items::{container::Container, holdable::{Armor, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb, teleport::Teleport};
 
 pub fn downcast_rc_item<T: 'static>(rc: &Rc<RefCell<dyn Item>>) -> Option<Rc<RefCell<T>>> {
     if rc.borrow().as_any().is::<T>() {
@@ -49,7 +49,7 @@ pub struct BaseItemData {
 #[derive(Clone)]
 pub enum ItemKind {
     Orb(Orb),
-    //Portal(Portal),
+    Teleport(Teleport),
     Holdable(HoldableGroupKind),
     Container(Container),
 }

@@ -117,10 +117,14 @@ impl Overworld {
             drop(maps);
 
             if x == 2 && y == 2 && floor == 0 {
+                let stairs_pos = maps_clone.lock().unwrap()
+                    .get(0).and_then(|floor| floor[2][2].as_ref())
+                    .and_then(|map| map.lock().unwrap().downstair_teleport);
+                
                 // This is the center map, setup adjacent maps
                 if let Some(overworld_strong) = overworld_weak.upgrade() {
                     let mut o = overworld_strong.lock().unwrap();
-                    o.setup_adjacent_maps(floor, x, y);
+                    o.setup_adjacent_maps(floor, x, y, stairs_pos.unwrap_or_else(|| panic!()));
                 }
             }
         });
@@ -138,7 +142,7 @@ impl Overworld {
         overworld
     }
 
-    pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize) {
+    pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize, stairs_pos: Position) {
         for dx in -1i32..=1 {
             for dy in -1i32..=1 {
                 // Skip diagonals
@@ -172,6 +176,13 @@ impl Overworld {
                 }
             }
         }
+        let opos = OverworldPos { floor: floor + 1, x: 2usize, y: 2usize };
+        let mut gen_params = GenerationParams::default();
+        gen_params.borders = BorderFlags::TOP | BorderFlags::BOTTOM | BorderFlags::LEFT | BorderFlags::RIGHT | BorderFlags::DOWN;
+        gen_params.theme = MapTheme::Chasm;
+        gen_params.force_regen = true;
+        gen_params.predefined_start_pos = Some(stairs_pos);
+        self.map_generator.request_generation(opos, gen_params);
     }
 
     pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<Arc<Mutex<Map>>> {

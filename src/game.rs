@@ -46,6 +46,13 @@ pub struct GameState {
     pub items: Items,
 }
 
+#[derive(PartialEq, Debug)]
+enum PlayerOverworldEvent {
+    None,
+    BorderCross,
+    ClimbDown,
+}
+
 impl GameState {
     pub fn get_player_hp(&self) -> (u32, u32) {
         (self.player.hp, self.player.max_hp)
@@ -87,6 +94,7 @@ pub async fn run() {
     game.items.load_holdable_items().await;
 
     let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
+    let mut current_downstair_teleport_pos: Option<Position>;
 
     let map_arc = if let Some(map_arc) = game.overworld.lock().unwrap().get_map_ptr(overworld_pos) {
         map_arc
@@ -104,24 +112,30 @@ pub async fn run() {
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
     let chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
-    let mut map_update = false;
+    let mut map_update = PlayerOverworldEvent::None;
 
     loop {
-        if map_update {
+        if map_update != PlayerOverworldEvent::None {
             // Determine player's current border position
             let mut player_pos = game.player.position;
             let mut new_opos = overworld_pos.clone();
-            if player_pos.x == 0 {
-                new_opos.x -= 1;
+
+            if map_update == PlayerOverworldEvent::BorderCross {
+                if player_pos.x == 0 {
+                    new_opos.x -= 1;
+                }
+                else if player_pos.x == GRID_WIDTH - 1 {
+                    new_opos.x += 1;
+                }
+                if player_pos.y == 0 {
+                    new_opos.y -= 1;
+                }
+                else if player_pos.y == GRID_HEIGHT - 1 {
+                    new_opos.y += 1;
+                }
             }
-            else if player_pos.x == GRID_WIDTH - 1 {
-                new_opos.x += 1;
-            }
-            if player_pos.y == 0 {
-                new_opos.y -= 1;
-            }
-            else if player_pos.y == GRID_HEIGHT - 1 {
-                new_opos.y += 1;
+            else {
+                new_opos.floor += 1; // Climbing down
             }
 
             {
@@ -134,11 +148,17 @@ pub async fn run() {
 
                     current_map_arc = new_map_arc;
                     
-                    {
-                        // Setting up the map adjacencies has to be done before locking it
-                        overworld.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y);
-                        let mut map = current_map_arc.lock().unwrap();
+                    current_downstair_teleport_pos = {
+                        let map = current_map_arc.lock().unwrap();
+                        map.downstair_teleport.clone()
+                    };
+                    println!("Current downstairs: {:?}", current_downstair_teleport_pos);
 
+                    // Setting up the map adjacencies has to be done before locking it
+                    overworld.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
+                    let mut map = current_map_arc.lock().unwrap();
+
+                    if map_update == PlayerOverworldEvent::BorderCross {
                         if player_pos.x == 0 {
                             player_pos.x = GRID_WIDTH - 2;
                         }
@@ -151,17 +171,17 @@ pub async fn run() {
                         else if player_pos.y == GRID_HEIGHT - 1 {
                             player_pos.y = 1;
                         }
-
-                        map.add_player(&mut game.player, player_pos);
-                        println!("Player moved to new map at position: {:?}", new_opos);
                     }
+                    
+                    map.add_player(&mut game.player, player_pos);
+                    println!("Player moved to new map at position: {:?}", new_opos);
                     
                     overworld_pos = new_opos;
                 } else {
                     panic!("Failed to get map pointer from overworld");
                 }
             }
-            map_update = false;
+            map_update = PlayerOverworldEvent::None;
         }
         else if let Some(item_id) = chest_action.take() {
             let item = game.items.items[item_id as usize].clone();
@@ -250,7 +270,10 @@ pub async fn run() {
                         }
                     }
                     else if player_event == Some(PlayerEvent::ReachBorder) {
-                        map_update = true;
+                        map_update = PlayerOverworldEvent::BorderCross;
+                    }
+                    else if player_event == Some(PlayerEvent::ClimbDown) {
+                        map_update = PlayerOverworldEvent::ClimbDown;
                     }
                 }
             }

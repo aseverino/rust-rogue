@@ -96,7 +96,7 @@ pub async fn run() {
     let mut current_map_arc = map_arc;
     {
         let mut map = current_map_arc.lock().unwrap();
-        map.set_player_random_position(&mut game.player);
+        map.add_player_first_map(&mut game.player);
     }
 
     let mut last_move_time = 0.0;
@@ -109,7 +109,7 @@ pub async fn run() {
     loop {
         if map_update {
             // Determine player's current border position
-            let player_pos = game.player.position;
+            let mut player_pos = game.player.position;
             let mut new_opos = overworld_pos.clone();
             if player_pos.x == 0 {
                 new_opos.x -= 1;
@@ -125,12 +125,31 @@ pub async fn run() {
             }
 
             if let Some(new_map_arc) = game.overworld.lock().unwrap().get_map_ptr(new_opos) {
-                // Drop the current map lock before reassigning current_map_arc
+                {
+                    let mut map = current_map_arc.lock().unwrap();
+                    map.remove_creature(&mut game.player);
+                }
+
                 current_map_arc = new_map_arc;
                 
                 {
                     let mut map = current_map_arc.lock().unwrap();
-                    map.set_player_random_position(&mut game.player);
+
+                    if player_pos.x == 0 {
+                        player_pos.x = GRID_WIDTH - 2;
+                    }
+                    else if player_pos.x == GRID_WIDTH - 1 {
+                        player_pos.x = 1;
+                    }
+                    if player_pos.y == 0 {
+                        player_pos.y = GRID_HEIGHT - 2;
+                    }
+                    else if player_pos.y == GRID_HEIGHT - 1 {
+                        player_pos.y = 1;
+                    }
+
+                    map.add_player(&mut game.player, player_pos);
+                    println!("Player moved to new map at position: {:?}", new_opos);
                 }
                 
                 overworld_pos = new_opos;
@@ -231,7 +250,7 @@ pub async fn run() {
                 }
             }
 
-            if player_event == Some(PlayerEvent::AutoMove) {
+            if map.last_player_event == Some(PlayerEvent::AutoMove) {
                 last_move_time = now; // Update last move time for auto step
             } else {
                 goal_position = None;

@@ -142,14 +142,33 @@ impl Map {
         // }
     //}
 
-    pub fn set_player_random_position(&mut self, player: &mut Player) {
-        let pos = self.available_walkable_cache.pop()
-            .unwrap_or_else(|| Position::new(1, 1)); // Default to (1, 1) if no walkable positions
+    pub fn remove_creature(&mut self, creature: &mut dyn Creature) {
+        let pos = creature.pos();
+        if pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT {
+            self.tiles[pos].creature = NO_CREATURE; // Remove creature from tile
+            creature.set_pos(POSITION_INVALID); // Set creature position to invalid
+        } else {
+            println!("Creature position out of bounds, cannot remove.");
+        }
+    }
+
+    pub fn add_player(&mut self, player: &mut Player, pos: Position) {
+        if !self.is_tile_walkable(pos) {
+            println!("Position is not walkable, cannot set player position.");
+            return;
+        }
 
         self.tiles[pos].creature = PLAYER_CREATURE_ID;
         player.set_pos(pos);
 
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
+    }
+
+    pub fn add_player_first_map(&mut self, player: &mut Player) {
+        let pos = self.available_walkable_cache.pop()
+            .unwrap_or_else(|| Position::new(1, 1)); // Default to (1, 1) if no walkable positions
+
+        self.add_player(player, pos);
 
         let mut positions_around = player.position.positions_around();
         positions_around.shuffle(&mut thread_rng());

@@ -67,6 +67,17 @@ pub enum Border {
     Left,
 }
 
+impl Border {
+    pub fn opposite(self) -> Border {
+        match self {
+            Border::Top    => Border::Bottom,
+            Border::Bottom => Border::Top,
+            Border::Left   => Border::Right,
+            Border::Right  => Border::Left,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GenerationParams {
     pub num_walks: usize,

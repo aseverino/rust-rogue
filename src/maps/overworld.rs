@@ -25,7 +25,7 @@ use std::{sync::{mpsc, Arc, Mutex}};
 
 use macroquad::miniquad::ElapsedQuery;
 
-use crate::maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}, GRID_HEIGHT, GRID_WIDTH};
+use crate::{maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverworldPos {
@@ -40,6 +40,53 @@ pub struct Overworld {
 }
 
 impl Overworld {
+    fn fill_predefined_borders(&self,
+                               opos: OverworldPos,
+                               params: &mut GenerationParams) {
+
+        use Border::*;
+
+        const DIRS: &[(Border, i32, i32, fn(&mut Position))] = &[
+            // neighbour ABOVE us → take its BOTTOM edge, then clamp to y=0
+            (Top,    0, -1, |p| p.y = 0),
+            // neighbour to our RIGHT → take its LEFT edge, then clamp to x=GRID_WIDTH-1
+            (Right,  1,  0, |p| p.x = GRID_WIDTH - 1),
+            // neighbour BELOW us → take its TOP edge, then clamp to y=GRID_HEIGHT-1
+            (Bottom, 0,  1, |p| p.y = GRID_HEIGHT - 1),
+            // neighbour to our LEFT → take its RIGHT edge, then clamp to x=0
+            (Left,  -1,  0, |p| p.x = 0),
+        ];
+
+        for (side, dx, dy, mirror) in DIRS {
+            let nx = opos.x as i32 + dx;
+            let ny = opos.y as i32 + dy;
+
+            // outside the 5×5 slice – ignore
+            if !(0..5).contains(&nx) || !(0..5).contains(&ny) { continue; }
+
+            if let Some(neigh_map) = self.get_map_ptr(OverworldPos { floor: opos.floor,
+                                                                     x: nx as usize,
+                                                                     y: ny as usize }) {
+                let mut vec = neigh_map.lock().unwrap()
+                                        .border_positions[side.opposite() as usize]
+                                        .clone();
+
+                // convert neighbour coordinates to *our* side
+                for p in &mut vec { mirror(p); }
+
+                params.predefined_borders[*side as usize] = vec;
+
+                // make sure this side is opened in the new map too
+                params.borders |= match side {
+                    Top    => BorderFlags::TOP,
+                    Right  => BorderFlags::RIGHT,
+                    Bottom => BorderFlags::BOTTOM,
+                    Left   => BorderFlags::LEFT,
+                };
+            }
+        }
+    }
+    
     pub async fn new() -> Arc<Mutex<Self>> {
         let maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>> =
             Arc::new(Mutex::new(vec![
@@ -116,50 +163,7 @@ impl Overworld {
                         gen_params.borders |= BorderFlags::DOWN;
 
                         gen_params.theme = MapTheme::Chasm;
-
-                        let border_idx = if dx == -1 && dy == 0 {
-                            Border::Left // Left border of the original map, right border of the adjacent map
-                        } else if dx == 1 && dy == 0 {
-                            Border::Right // Right border of the original map, left border of the adjacent map
-                        } else if dy == -1 && dx == 0 {
-                            Border::Top // Top border of the original map, bottom border of the adjacent map
-                        } else if dy == 1 && dx == 0 {
-                            Border::Bottom // Bottom border of the original map, top border of the adjacent map
-                        }
-                        else {
-                            panic!("Unexpected dx, dy combination: ({}, {})", dx, dy);
-                        };
-
-                        if let Ok(maps_guard) = self.maps.lock() {
-                            let border_positions_opt = maps_guard[floor][x][y]
-                                .as_ref()
-                                .and_then(|map| map.lock().ok())
-                                .map(|m| m.border_positions[border_idx as usize].clone());
-
-                            let mut border_positions = border_positions_opt.unwrap();
-
-                            for pos in &mut border_positions {
-                                if border_idx == Border::Left {
-                                    pos.x = GRID_WIDTH - 1;
-                                } else if border_idx == Border::Right {
-                                    pos.x = 0;
-                                } else if border_idx == Border::Top {
-                                    pos.y = GRID_HEIGHT - 1;
-                                } else if border_idx == Border::Bottom {
-                                    pos.y = 0; // Adjust for the bottom border of the adjacent map
-                                }
-                            }
-
-                            let target_border = match border_idx {
-                                Border::Left => Border::Right,
-                                Border::Right => Border::Left,
-                                Border::Top => Border::Bottom,
-                                Border::Bottom => Border::Top,
-                            };
-
-                            gen_params.predefined_borders[target_border as usize] = border_positions;
-                        }
-
+                        self.fill_predefined_borders(opos, &mut gen_params);
                         self.map_generator.request_generation(opos, gen_params);
                     }
                 }

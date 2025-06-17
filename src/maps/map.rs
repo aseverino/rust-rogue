@@ -232,7 +232,7 @@ impl Map {
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
                 let tile = &self.tiles[Position::new(x, y)];
-                tile.draw(Position::new(x, y), offset);
+                tile.draw(Position::new(x, y), offset, !self.monsters.is_empty());
 
                 if self.should_draw_spell_fov {
                     let player_pos = player.pos();
@@ -339,8 +339,7 @@ impl Map {
         if target.get_health().0 <= 0 {
             self.tiles[target.pos()].creature = NO_CREATURE; // Remove monster from tile
             println!("{} has been defeated!", target.name());
-            // Optionally, remove the monster from the list
-            // self.monsters.remove(target_creature as usize);
+            self.monsters.remove(target_id as usize);
         } else {
             println!("{} has {} HP left.", target.name(), target.get_health().0);
         }
@@ -474,8 +473,6 @@ impl Map {
                     player.goal_position = None; // Clear goal if no path found
                     self.last_player_event = Some(PlayerEvent::AutoMoveEnd);
                 }
-
-                
             }
             
         }
@@ -523,6 +520,9 @@ impl Map {
                 update_monsters = true; // Update monsters if player attacks
                 self.do_melee_combat(player, player_pos, pos);
             }
+            else if self.tiles[pos].is_border(&pos) && !self.monsters.is_empty() {
+                self.last_player_event = Some(PlayerEvent::Cancel);
+            }
             else {
                 if self.is_tile_walkable(pos) {
                     new_player_pos = Some(pos);
@@ -565,9 +565,11 @@ impl Map {
                         to_remove.push(idx); // Collect for removal
                     }
                     ItemKind::Teleport(_) => {
-                        println!("Player walked downstairs.");
-                        self.last_player_event = Some(PlayerEvent::ClimbDown);
-                        return;
+                        if self.monsters.is_empty() {
+                            println!("Player walked downstairs.");
+                            self.last_player_event = Some(PlayerEvent::ClimbDown);
+                            return;
+                        }
                     }
                     ItemKind::Container(_) => {
                         self.last_player_event = Some(PlayerEvent::OpenChest);

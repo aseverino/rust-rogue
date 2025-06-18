@@ -33,12 +33,15 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::HashSet;
 use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 type WeaponRef = Rc<RefCell<Weapon>>;
 type ShieldRef = Rc<RefCell<Shield>>;
 type HelmetRef = Rc<RefCell<Helmet>>;
 type ArmorRef = Rc<RefCell<Armor>>;
 type BootsRef = Rc<RefCell<Boots>>;
+
+pub type PlayerRef = Arc<RwLock<Player>>;
 
 pub struct Equipment {
     pub weapon: Option<WeaponRef>,
@@ -197,5 +200,9 @@ impl Creature for Player {
 
     fn is_player(&self) -> bool {
         true
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

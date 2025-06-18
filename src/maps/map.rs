@@ -26,10 +26,13 @@ extern crate rand as external_rand;
 use external_rand::Rng;
 use external_rand::thread_rng;
 
+use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
 use std::sync::Arc;
+use std::sync::RwLock;
 use crate::creature::Creature;
+use crate::creature::CreatureRef;
 use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
 use crate::lua_interface;
@@ -37,11 +40,13 @@ use crate::lua_interface::LuaInterface;
 use crate::lua_interface::LuaScripted;
 use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
+use crate::monster::MonsterRef;
 use crate::monster_type::MonsterType;
+use crate::player;
 use crate::position::POSITION_INVALID;
 use crate::position::{ Position, Direction };
 use crate::input::KeyboardAction;
-use crate::player::Player;
+use crate::player::{ Player, PlayerRef };
 use crate::tile::{Tile, NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
@@ -88,7 +93,7 @@ pub struct Map {
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
     pub available_walkable_cache: Vec<Position>,
-    pub monsters: Vec<Monster>,
+    pub monsters: Vec<MonsterRef>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
     pub last_player_event: Option<PlayerEvent>,
@@ -148,7 +153,8 @@ impl Map {
         // }
     //}
 
-    pub fn remove_creature(&mut self, creature: &mut dyn Creature) {
+    pub fn remove_creature(&mut self, creature_ref: &CreatureRef) {
+        let creature = &mut creature_ref.write().unwrap();
         let pos = creature.pos();
         if pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT {
             self.tiles[pos].creature = NO_CREATURE; // Remove creature from tile
@@ -158,25 +164,26 @@ impl Map {
         }
     }
 
-    pub fn add_player(&mut self, player: &mut Player, pos: Position) {
+    pub fn add_player(&mut self, player_ref: &PlayerRef, pos: Position) {
         if !self.is_tile_walkable(pos) {
             println!("Position is not walkable, cannot set player position.");
             return;
         }
 
         self.tiles[pos].creature = PLAYER_CREATURE_ID;
+        let player = &mut player_ref.write().unwrap();
         player.set_pos(pos);
 
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
     }
 
-    pub fn add_player_first_map(&mut self, player: &mut Player) {
+    pub fn add_player_first_map(&mut self, player_ref: &PlayerRef) {
         let pos = self.available_walkable_cache.pop()
             .unwrap_or_else(|| Position::new(1, 1)); // Default to (1, 1) if no walkable positions
 
-        self.add_player(player, pos);
+        self.add_player(player_ref, pos);
 
-        let mut positions_around = player.position.positions_around();
+        let mut positions_around = player_ref.read().unwrap().position.positions_around();
         positions_around.shuffle(&mut thread_rng());
 
         let chest_pos: Option<Position> = positions_around
@@ -203,7 +210,7 @@ impl Map {
         player.line_of_sight = visible;
     }
 
-    fn update_spell_fov_cache(&mut self, player: &Player) {
+    fn update_spell_fov_cache(&mut self, player: &mut Player) {
         self.should_draw_spell_fov = false;
         let mut spell_fov_needs_update = false;
         if let Some(selected_spell) = player.selected_spell {
@@ -229,7 +236,8 @@ impl Map {
         }
     }
 
-    pub fn draw(&mut self, player: &Player, offset: PointF) {
+    pub fn draw(&mut self, player_ref: &PlayerRef, offset: PointF) {
+        let player = &mut player_ref.write().unwrap();
         self.update_spell_fov_cache(player);
 
         for x in 0..GRID_WIDTH {
@@ -280,7 +288,7 @@ impl Map {
         }
 
         for monster in &self.monsters {
-            monster.draw(offset);
+            monster.write().unwrap().draw(offset);
         }
 
         player.draw(offset);
@@ -317,7 +325,7 @@ impl Map {
                 .expect("Monster type list is empty")
                 .clone();
 
-            let monster = Monster::new(pos.clone(), kind);
+            let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
             self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
             // Wrap the monster in Rc and push to creatures
             self.monsters.push(monster);
@@ -326,45 +334,53 @@ impl Map {
         self.walkable_cache.shuffle(&mut rng);
     }
 
-    fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32, lua_interface: &mut LuaInterface) {
-        let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
-            player
+    fn do_damage(&mut self, player_ref: &PlayerRef, target_id: u32, damage: i32, lua_interface: &mut LuaInterface) {
+        let target_ref: CreatureRef = if target_id == PLAYER_CREATURE_ID as u32 {
+            Arc::clone(player_ref) as CreatureRef
         } else {
             self.monsters.get_mut(target_id as usize)
                 .expect("Target creature not found")
+                .clone() as CreatureRef
         };
-        
-        target.add_health(-damage);
-        println!("{} takes {} damage!", target.name(), damage);
 
-        if target.get_health().0 <= 0 {
-            self.tiles[target.pos()].creature = NO_CREATURE; // Remove monster from tile
-            println!("{} has been defeated!", target.name());
-            if target.is_monster() {
-            // Only call on_death and remove if it's a monster
-            if let Some(monster) = self.monsters.get_mut(target_id as usize) {
-                if monster.kind.is_scripted() {
-                    let r = lua_interface.on_death(monster);
+        // Scope to auto-drop the first lock before the second
+        {
+            let mut target = target_ref.write().unwrap();
+            target.add_health(-damage);
+            println!("{} takes {} damage!", target.name(), damage);
+
+            if target.get_health().0 <= 0 {
+                self.tiles[target.pos()].creature = NO_CREATURE;
+                println!("{} has been defeated!", target.name());
+            } else {
+                println!("{} has {} HP left.", target.name(), target.get_health().0);
+                return;
+            }
+        } // <-- drops write lock here
+
+        // Now safe to lock again
+        if target_id != PLAYER_CREATURE_ID as u32 {
+            {
+                let monster_ref = &self.monsters[target_id as usize];
+                let scripted = { monster_ref.write().unwrap().kind.is_scripted() };
+                if scripted {
+                    let r = lua_interface.on_death(monster_ref);
                     if let Err(e) = r {
                         eprintln!("Error calling Lua on_death: {}", e);
                     }
                 }
             }
+
             self.monsters.remove(target_id as usize);
-        } else {
-            println!("{} has {} HP left.", target.name(), target.get_health().0);
-        }
-        } else {
-            println!("{} has {} HP left.", target.name(), target.get_health().0);
         }
     }
 
-    fn do_melee_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, lua_interface: &mut LuaInterface) {
+    fn do_melee_combat(&mut self, player_ref: &PlayerRef, _attacker_pos: Position, target_pos: Position, lua_interface: &mut LuaInterface) {
         let damage = {
-            if let Some(weapon) = &player.equipment.weapon {
+            if let Some(weapon) = &player_ref.read().unwrap().equipment.weapon {
                 let mut damage: u32 = 0;
 
-                let lua_check = lua_interface.on_get_attack_damage(&*weapon.borrow(), player, &self.monsters[self.tiles[target_pos].creature as usize]);
+                let lua_check = lua_interface.on_get_attack_damage(&*weapon.borrow(), player_ref, &self.monsters[self.tiles[target_pos].creature as usize]);
                 match lua_check {
                     Ok(lua_damage) => {
                         damage = lua_damage as u32;
@@ -388,16 +404,17 @@ impl Map {
 
         let creature_id = self.tiles[target_pos].creature;
         if creature_id >= 0 {
-            self.do_damage(player, creature_id as u32, damage as i32, lua_interface);
+            self.do_damage(player_ref, creature_id as u32, damage as i32, lua_interface);
         }
     }
 
-    fn do_spell_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, spell_index: usize, lua_interface: &mut LuaInterface) {
+    fn do_spell_combat(&mut self, player_ref: &PlayerRef, _attacker_pos: Position, target_pos: Position, spell_index: usize, lua_interface: &mut LuaInterface) {
         if !self.is_tile_walkable(target_pos) {
             println!("Target position is not walkable for spell casting.");
             return;
         }
 
+        let player = &mut player_ref.write().unwrap();
         let spell = player.spells.get_mut(spell_index)
             .expect("Selected spell index out of bounds");
 
@@ -415,7 +432,7 @@ impl Map {
         });
 
         for target_creature in target_creatures {
-            self.do_damage(player, target_creature, damage, lua_interface);
+            self.do_damage(player_ref, target_creature, damage, lua_interface);
         }
 
         // let target = self.monsters.get_mut(target_creature as usize)
@@ -434,7 +451,7 @@ impl Map {
     }
 
     pub fn update(&mut self,
-        player: &mut Player,
+        player_ref: &PlayerRef,
         lua_interface: &mut LuaInterface,
         player_action: KeyboardAction,
         player_direction: Direction,
@@ -442,45 +459,47 @@ impl Map {
         player_goal_position: Option<Position>
     ) {
         self.last_player_event = None;
-        let player_pos = {
-            player.position
-        };
+        let player_pos = { player_ref.read().unwrap().position };
 
         let mut new_player_pos: Option<Position> = None;
         let mut update_monsters = false;
 
         if let Some(player_goal) = player_goal_position {
-            let spell_index = { player.selected_spell };
+            let spell_index = { player_ref.read().unwrap().selected_spell };
 
             if let Some(index) = spell_index {
-                let (in_line_of_sight, spell_range) = {
-                    let in_line_of_sight = player.line_of_sight.contains(&player_goal);
-                    let spell_range = player.spells.get(index)
-                        .expect("Selected spell index out of bounds")
-                        .spell_type.range;
-                    (in_line_of_sight, spell_range)
-                };
-
                 let mut should_cast = false;
+                {
+                    let player = &mut player_ref.write().unwrap();
 
-                if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
-                    if let Some(spell) = player.spells.get_mut(index) {
-                        if spell.charges > 0 {
-                            spell.charges -= 1;
-                            println!("Casting spell charges {}", spell.charges);
-                            should_cast = true;
-                        }
-                        else {
-                            println!("No charges left for this spell!");
+                    let (in_line_of_sight, spell_range) = {
+                        let in_line_of_sight = player.line_of_sight.contains(&player_goal);
+                        let spell_range = player.spells.get(index)
+                            .expect("Selected spell index out of bounds")
+                            .spell_type.range;
+                        (in_line_of_sight, spell_range)
+                    };
+
+                    if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
+                        if let Some(spell) = player.spells.get_mut(index) {
+                            if spell.charges > 0 {
+                                spell.charges -= 1;
+                                println!("Casting spell charges {}", spell.charges);
+                                should_cast = true;
+                            }
+                            else {
+                                println!("No charges left for this spell!");
+                            }
                         }
                     }
                 }
-
+                
                 if should_cast {
-                    self.do_spell_combat(player, player_pos, player_goal, index, lua_interface);
+                    self.do_spell_combat(player_ref, player_pos, player_goal, index, lua_interface);
                     update_monsters = true;
                 }
 
+                let player = &mut player_ref.write().unwrap();
                 player.selected_spell = None;
                 player.goal_position = None; // Clear goal position
                 self.last_player_event = Some(PlayerEvent::SpellCast);
@@ -489,6 +508,8 @@ impl Map {
                 let path: Option<Vec<Position>> = Navigator::find_path(player_pos, player_goal, |pos| {
                     self.is_tile_walkable(pos)
                 });
+
+                let player = &mut player_ref.write().unwrap();
 
                 if let Some(path) = path {
                     if path.len() > 1 {
@@ -508,6 +529,7 @@ impl Map {
             
         }
         else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
+            let player = &mut player_ref.write().unwrap();
             let index = spell_action as usize - 1;
 
             let spell_name = {
@@ -523,6 +545,7 @@ impl Map {
             self.last_player_event = Some(PlayerEvent::SpellSelect);
         }
         else if player_action == KeyboardAction::Cancel {
+            let player = &mut player_ref.write().unwrap();
             player.selected_spell = None;
             player.goal_position = None; // Clear goal position
 
@@ -549,7 +572,7 @@ impl Map {
             if self.is_tile_enemy_occupied(pos) {
                 self.last_player_event = Some(PlayerEvent::MeleeAttack);
                 update_monsters = true; // Update monsters if player attacks
-                self.do_melee_combat(player, player_pos, pos, lua_interface);
+                self.do_melee_combat(player_ref, player_pos, pos, lua_interface);
             }
             else if self.tiles[pos].is_border(&pos) && !self.monsters.is_empty() {
                 self.last_player_event = Some(PlayerEvent::Cancel);
@@ -562,11 +585,11 @@ impl Map {
 
                 self.last_player_event = Some(PlayerEvent::Move);
             }
-            player.goal_position = None;
+            player_ref.write().unwrap().goal_position = None;
         }
         else if player_action == KeyboardAction::Wait {
             new_player_pos = Some(player_pos); // Stay in place
-            player.goal_position = None; // Clear goal position
+            player_ref.write().unwrap().goal_position = None; // Clear goal position
 
             self.last_player_event = Some(PlayerEvent::Wait);
         }
@@ -575,6 +598,7 @@ impl Map {
             self.tiles[player_pos].creature = NO_CREATURE;
             self.tiles[pos].creature = PLAYER_CREATURE_ID;
 
+            let player = &mut player_ref.write().unwrap();
             player.set_pos(pos);
             
             if new_player_pos == player.goal_position {
@@ -619,30 +643,17 @@ impl Map {
             if tile.is_border(&pos) {
                 self.last_player_event = Some(PlayerEvent::ReachBorder);
             }
-
-            // for (idx, item) in &tile.items {
-            //     match item {
-            //         (idx, ItemKind::Orb(orb)) => {
-            //             tile.remove_item(*idx);
-            //             println!("Player picked up an orb!");
-            //             player.sp += 1; // Increase soul points
-            //         }
-            //         // (_, ItemKind::Portal(_)) => {
-                        
-            //         // }
-            //         (_, other_item) => {
-            //             //println!("Player found an item: {:?}", other_item);
-            //         }
-            //     }
-            // }
         }
 
         if update_monsters {
-            for (i, monster) in self.monsters.iter_mut().enumerate() {
+            for (i, monster_ref) in self.monsters.iter_mut().enumerate() {
+                let monster = &mut monster_ref.write().unwrap();
                 if monster.hp <= 0 {
                     continue; // Skip dead monsters
                 }
                 let monster_pos = monster.pos();
+
+                let player = &mut player_ref.write().unwrap();
 
                 let path = Navigator::find_path(monster_pos, player.position, |pos| {
                     pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()

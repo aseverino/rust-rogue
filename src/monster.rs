@@ -27,9 +27,10 @@ use macroquad::prelude::*;
 use crate::creature::Creature;
 use crate::position::Position;
 use crate::monster_type::MonsterType;
+use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 pub struct Monster {
     pub hp: u32,
@@ -37,6 +38,8 @@ pub struct Monster {
     pub position: Position,
     pub id: u32,
 }
+
+pub type MonsterRef = Arc<RwLock<Monster>>;
 
 static MONSTER_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -91,4 +94,8 @@ impl Creature for Monster {
     }
 
     fn is_monster(&self) -> bool { true }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

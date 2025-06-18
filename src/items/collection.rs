@@ -46,7 +46,7 @@ impl Items {
                     for mut weapon in weapons {
                         if weapon.base_holdable.script.is_some() {
                             // Load the Lua script for the weapon
-                            let script_result = lua_interface.load_script_for_weapon(&weapon);
+                            let script_result = lua_interface.load_script(&weapon);
                             if let Err(e) = script_result {
                                 eprintln!("Error loading weapon script: {}", e);
                             } else {

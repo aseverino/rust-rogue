@@ -30,6 +30,13 @@ use rlua::{Lua, Table, Function, RegistryKey, Error, Result};
 
 use crate::{items::holdable::Weapon, monster::Monster, player::Player};
 
+pub trait LuaScripted {
+    fn script_id(&self) -> u32;
+    fn script_path(&self) -> Option<String>;
+    fn is_scripted(&self) -> bool;
+    fn functions(&self) -> Vec<String>;
+}
+
 /// Holds the registry key for each Lua function we care about.
 struct HoldableFunctions {
     on_get_attack_damage: RegistryKey,
@@ -77,45 +84,40 @@ impl LuaInterface {
         Ok(lua_target)
     }
 
-    /// Load the script once (if present & non-empty), extract `on_get_attack_damage`,
-    /// and stash it in the registry.  If `script` is `None` or `""`, this is a no-op.
-    pub fn load_script_for_weapon(&mut self, weapon: &Weapon) -> Result<bool> {
-        // Check for an actual script path
-        let script_path = match &weapon.base_holdable.script {
-            Some(path) if !path.is_empty() => path,
-            _ => return Ok(false),
+    pub fn load_script<T: LuaScripted>(&mut self, entity: &T) -> Result<bool> {
+        let path = match entity.script_path() {
+            Some(p) => p,
+            None => return Ok(false),
         };
 
-        // Read the Lua file
-        let script = fs::read_to_string(script_path)
-            .map_err(|e| Error::external(format!("Failed to read {}: {}", script_path, e)))?;
+        let script = fs::read_to_string(path.clone())
+            .map_err(|e| Error::external(format!("Failed to read {}: {}", path, e)))?;
 
-        // Create an isolated environment table
+        // new, isolated env
         let env: Table = self.lua.create_table()?;
-        let globals = self.lua.globals();
+        let globals = self.lua.globals();             // Table<'_>
         let mt: Table = self.lua.create_table()?;
         mt.set("__index", globals)?;
         env.set_metatable(Some(mt));
 
-        // Load & execute the chunk in that env
-        let chunk = self.lua.load(&script).set_environment(env.clone());
-        chunk.exec()?;
+        // run under that env
+        self.lua.load(&script).set_environment(env.clone()).exec()?;
 
-        // Grab the function and store it in the registry
-        let func: Function = env.get("on_get_attack_damage")?;
-        let key: RegistryKey = self.lua.create_registry_value(func)?;
+        for func_name in entity.functions() {
+            // Check if the function exists in the environment
+            let func: Function = env.get(func_name)?;
+            let key: RegistryKey = self.lua.create_registry_value(func)?;
 
-        // Cache by weapon ID
-        self.script_cache.insert(
-            weapon.base_holdable.base_item.id,
-            HoldableFunctions { on_get_attack_damage: key },
-        );
+            // cache under the entity’s ID
+            self.script_cache.insert(
+                entity.script_id(),
+                HoldableFunctions { on_get_attack_damage: key },
+            );
+        }
 
         Ok(true)
     }
 
-    /// Call the cached `on_get_attack_damage(item)` for this weapon.
-    /// You should only call this if you know a script was loaded.
     pub fn on_get_attack_damage(&self, weapon: &Weapon, player: &Player, monster: &Monster) -> Result<f32> {
         let funcs = self
             .script_cache

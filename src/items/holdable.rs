@@ -23,6 +23,7 @@
 use serde::Deserialize;
 
 use crate::items::base_item::{BaseItemData, Item};
+use crate::lua_interface::LuaScripted;
 
 #[derive(Debug, Deserialize)]
 pub struct BaseHoldableItemData {
@@ -57,6 +58,31 @@ pub enum HoldableGroupKind {
     Boots,
 }
 
+#[macro_export]
+macro_rules! impl_lua_scripted {
+    ($t:ty, [ $($func_name:literal),* $(,)? ]) => {
+        impl LuaScripted for $t {
+            fn script_id(&self) -> u32 {
+                self.base_holdable.base_item.id
+            }
+
+            fn script_path(&self) -> Option<String> {
+                self.base_holdable.script.clone()
+            }
+
+            fn is_scripted(&self) -> bool {
+                self.base_holdable.scripted
+            }
+
+            fn functions(&self) -> Vec<String> {
+                vec![
+                    $( String::from($func_name) ),*
+                ]
+            }
+        }
+    };
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Weapon {
     #[serde(flatten)]
@@ -65,6 +91,8 @@ pub struct Weapon {
     #[serde(rename = "two-handed")]
     pub two_handed: bool,
 }
+
+impl_lua_scripted!(Weapon, [ "on_get_attack_damage" ]);
 
 impl Item for Weapon {
     fn get_id(&self) -> u32 {
@@ -94,6 +122,8 @@ pub struct Armor {
     pub defense_dice: Vec<u32>,
 }
 
+impl_lua_scripted!(Armor, []);
+
 impl Item for Armor {
     fn get_id(&self) -> u32 {
         self.base_holdable.base_item.id
@@ -120,6 +150,8 @@ pub struct Shield {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
 }
+
+impl_lua_scripted!(Shield, []);
 
 impl Item for Shield {
     fn get_id(&self) -> u32 {
@@ -148,6 +180,8 @@ pub struct Helmet {
     pub base_holdable: BaseHoldableItemData,
 }
 
+impl_lua_scripted!(Helmet, []);
+
 impl Item for Helmet {
     fn get_id(&self) -> u32 {
         self.base_holdable.base_item.id
@@ -174,6 +208,8 @@ pub struct Boots {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
 }
+
+impl_lua_scripted!(Boots, []);
 
 impl Item for Boots {
     fn get_id(&self) -> u32 {

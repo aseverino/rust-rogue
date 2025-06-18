@@ -24,7 +24,7 @@ use crate::lua_interface::LuaScripted;
 use crate::maps::TILE_SIZE;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
-use rlua::{UserData, UserDataMethods};
+use rlua::{Table, UserData, UserDataMethods};
 use crate::creature::Creature;
 use crate::position::Position;
 use crate::monster_type::MonsterType;
@@ -103,5 +103,16 @@ impl Creature for Monster {
 
 impl UserData for Monster {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("get_kind", |_, this, ()| {
+            Ok(this.kind.clone())
+        });
+
+        methods.add_method("get_position", |lua_ctx, this, ()| -> rlua::Result<Table<'lua>> {
+            // `lua_ctx` is your Context<'lua>
+            let tbl = lua_ctx.create_table()?;
+            tbl.set("x", this.position.x)?;
+            tbl.set("y", this.position.y)?;
+            Ok(tbl)
+        });
     }
 }

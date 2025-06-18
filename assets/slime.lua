@@ -21,6 +21,6 @@
 -- SOFTWARE.
 
 function on_death(monster)
-    print("dead dead dead dead")
+    add_monster(monster:get_kind():get_id(), monster:get_position())
     return true
 end

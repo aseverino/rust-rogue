@@ -26,9 +26,9 @@
 
 use std::collections::HashMap;
 use std::fs;
-use rlua::{Lua, Table, Function, RegistryKey, Error, Result};
+use rlua::{Context, Error, Function, Lua, RegistryKey, Result, Table};
 
-use crate::{items::holdable::Weapon, monster::{Monster, MonsterRef}, player::{Player, PlayerRef, WeaponRef}};
+use crate::{items::holdable::Weapon, monster::{Monster, MonsterRef}, player::{Player, PlayerRef, WeaponRef}, position::Position};
 
 pub trait LuaScripted {
     fn script_id(&self) -> u32;
@@ -57,6 +57,28 @@ impl LuaInterface {
             lua: Lua::new(),
             script_cache: HashMap::new(),
         }
+    }
+
+    pub fn init(&mut self) -> Result<()> {
+        let add_fn: Function = self.lua.create_function(Self::add_monster)?;
+        self.lua.globals().set("add_monster", add_fn)?;
+        Ok(())
+    }
+
+    fn add_monster<'lua>(
+        _ctx: Context<'lua>,
+        (id, pos): (u32, Table<'lua>)
+    ) -> Result<()> {
+        Position::new(pos.get("x")?, pos.get("y")?);
+
+        Ok(())
+    }
+
+    pub fn add_position<'lua>(&'lua self, pos: &Position) -> rlua::Result<Table<'lua>> {
+        let lua_pos = self.lua.create_table()?;
+        lua_pos.set("x", pos.x)?;
+        lua_pos.set("y", pos.y)?;
+        Ok(lua_pos)
     }
 
     pub fn load_script<T: LuaScripted>(&mut self, entity: &T) -> Result<bool> {

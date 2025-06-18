@@ -90,6 +90,8 @@ fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
 
 pub async fn run() {
     let mut lua_interface = LuaInterface::new();
+    lua_interface.init().unwrap();
+    
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 

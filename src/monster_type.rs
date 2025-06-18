@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use rlua::{UserData, UserDataMethods};
 use serde::Deserialize;
 use std::sync::Arc;
 use serde_json::from_str;
@@ -81,5 +82,13 @@ impl LuaScripted for MonsterType {
 
     fn functions(&self) -> Vec<String> {
         vec!["on_update".to_string(), "on_death".to_string()]
+    }
+}
+
+impl UserData for MonsterType {
+    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("get_id", |_, this, ()| {
+            Ok(this.id)
+        });
     }
 }

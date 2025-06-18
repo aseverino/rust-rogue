@@ -1,23 +1,39 @@
 [
   {
+    "id": 0,
     "name": "Goblin",
+    "tier": 0,
     "glyph": "g",
     "color": [0, 200, 0],
     "max_hp": 10,
-    "melee_damage": 10
+    "melee_damage": 1
   },
   {
+    "id": 1,
+    "name": "Slime",
+    "tier": 0,
+    "glyph": "s",
+    "color": [0, 200, 0],
+    "max_hp": 10,
+    "melee_damage": 1,
+    "script": "assets/slime.lua"
+  },
+  {
+    "id": 2,
     "name": "Orc",
+    "tier": 0,
     "glyph": "o",
     "color": [0, 100, 0],
     "max_hp": 20,
-    "melee_damage": 10
+    "melee_damage": 1
   },
   {
+    "id": 3,
     "name": "Demon",
+    "tier": 0,
     "glyph": "D",
     "color": [200, 0, 0],
     "max_hp": 50,
-    "melee_damage": 10
+    "melee_damage": 1
   }
 ]

@@ -38,14 +38,16 @@ pub trait LuaScripted {
 }
 
 /// Holds the registry key for each Lua function we care about.
-struct HoldableFunctions {
-    on_get_attack_damage: RegistryKey,
+struct ScriptedFunctions {
+    on_get_attack_damage: Option<RegistryKey>,
+    on_update: Option<RegistryKey>,
+    on_death: Option<RegistryKey>,
 }
 
 /// Manages one Lua VM and a cache of loaded scripts → functions.
 pub struct LuaInterface {
     lua: Lua,
-    script_cache: HashMap<u32, HoldableFunctions>,
+    script_cache: HashMap<u32, ScriptedFunctions>,
 }
 
 impl LuaInterface {
@@ -77,11 +79,11 @@ impl LuaInterface {
         Ok(lua_weapon)
     }
 
-    fn setup_target<'lua>(&'lua self, target: &Monster) -> rlua::Result<Table<'lua>> {
+    fn setup_monster<'lua>(&'lua self, monster: &Monster) -> rlua::Result<Table<'lua>> {
         // Prepare target table to pass to Lua
-        let lua_target = self.lua.create_table()?;
-        lua_target.set("health", target.hp)?;
-        Ok(lua_target)
+        let lua_monster = self.lua.create_table()?;
+        lua_monster.set("health", monster.hp)?;
+        Ok(lua_monster)
     }
 
     pub fn load_script<T: LuaScripted>(&mut self, entity: &T) -> Result<bool> {
@@ -103,15 +105,31 @@ impl LuaInterface {
         // run under that env
         self.lua.load(&script).set_environment(env.clone()).exec()?;
 
-        for func_name in entity.functions() {
-            // Check if the function exists in the environment
-            let func: Function = env.get(func_name)?;
-            let key: RegistryKey = self.lua.create_registry_value(func)?;
+        // 4) For each func name your trait advertises, extract & stash it
+        for name in entity.functions() {
+            // skip missing entries
+            if !env.contains_key(name.clone())? {
+                continue;
+            }
 
-            // cache under the entity’s ID
+            let mut holder = ScriptedFunctions {
+                on_get_attack_damage: None,
+                on_update:            None,
+                on_death:             None,
+            };
+
+            let f: Function       = env.get(name.clone())?;
+            let key: RegistryKey  = self.lua.create_registry_value(f)?;
+            match name.as_str() {
+                "on_get_attack_damage" => holder.on_get_attack_damage = Some(key),
+                "on_update"            => holder.on_update            = Some(key),
+                "on_death"             => holder.on_death             = Some(key),
+                _                      => {}  // ignore anything else
+            }
+
             self.script_cache.insert(
                 entity.script_id(),
-                HoldableFunctions { on_get_attack_damage: key },
+                holder,
             );
         }
 
@@ -130,13 +148,33 @@ impl LuaInterface {
             })?;
 
         // Retrieve the Function from the registry
-        let func: Function = self.lua.registry_value(&funcs.on_get_attack_damage)?;
+        let func: Function = self.lua.registry_value(&funcs.on_get_attack_damage.as_ref().unwrap())?;
 
         let lua_weapon = self.setup_weapon(weapon)?;
         let lua_player = self.setup_player(player)?;
-        let lua_target = self.setup_target(monster)?; // Dummy target for now
+        let lua_target = self.setup_monster(monster)?;
 
         // Invoke and return result
         func.call((lua_weapon, lua_player, lua_target))
+    }
+
+    pub fn on_death(&self, monster: &Monster) -> Result<bool> {
+        let funcs = self
+            .script_cache
+            .get(&monster.kind.id)
+            .ok_or_else(|| {
+                Error::external(format!(
+                    "No Lua script loaded for monster type `{}`",
+                    monster.kind.id
+                ))
+            })?;
+
+        // Retrieve the Function from the registry
+        let func: Function = self.lua.registry_value(funcs.on_death.as_ref().unwrap())?;
+
+        let lua_monster = self.setup_monster(monster)?;
+
+        // Invoke and return result
+        func.call(lua_monster)
     }
 }

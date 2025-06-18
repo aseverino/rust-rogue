@@ -22,29 +22,64 @@
 
 use macroquad::prelude::*;
 use serde::Deserialize;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use serde_json::from_str;
 
-pub async fn load_monster_types() -> HashMap<String, Arc<MonsterType>> {
-    let file = load_string("assets/monsters.json").await.unwrap();
+use crate::lua_interface::{LuaInterface, LuaScripted};
+
+pub async fn load_monster_types(lua_interface: &mut LuaInterface) -> Vec<Arc<MonsterType>> {
+    let file: String = load_string("assets/monsters.json").await.unwrap();
     let list: Vec<MonsterType> = from_str(&file).unwrap();
 
-    list.into_iter()
-        .map(|mt| (mt.name.clone(), Arc::new(mt)))
+    list
+        .into_iter()
+        .map(|mut mt| {
+            if mt.script.is_some() {
+                let script_result = lua_interface.load_script(&mt);
+                if let Err(e) = script_result {
+                    eprintln!("Error loading monster script: {}", e);
+                } else {
+                    mt.scripted = script_result.unwrap();
+                }
+            }
+            Arc::new(mt)
+        })
         .collect()
 }
 
 #[derive(Debug, Deserialize)]
 pub struct MonsterType {
+    pub id: u32,
     pub name: String,
     pub glyph: char,
     pub color: [u8; 3], // RGB, will convert to macroquad::Color
     pub max_hp: u32,
     pub melee_damage: i32,
+    pub script: Option<String>,
+    #[serde(default)]
+    pub scripted: bool
 }
 
 impl MonsterType {
     pub fn color(&self) -> Color {
         Color::from_rgba(self.color[0], self.color[1], self.color[2], 255)
+    }
+}
+
+impl LuaScripted for MonsterType {
+    fn script_id(&self) -> u32 {
+        self.id
+    }
+
+    fn script_path(&self) -> Option<String> {
+        self.script.clone()
+    }
+
+    fn is_scripted(&self) -> bool {
+        self.scripted
+    }
+
+    fn functions(&self) -> Vec<String> {
+        vec!["on_update".to_string(), "on_death".to_string()]
     }
 }

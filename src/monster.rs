@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::lua_interface::LuaScripted;
 use crate::maps::TILE_SIZE;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
@@ -27,20 +28,26 @@ use crate::creature::Creature;
 use crate::position::Position;
 use crate::monster_type::MonsterType;
 use std::cmp::{max, min};
+use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
 pub struct Monster {
     pub hp: u32,
     pub kind: Arc<MonsterType>,
     pub position: Position,
+    pub id: u32,
 }
+
+static MONSTER_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl Monster {
     pub fn new(pos: Position, kind: Arc<MonsterType>) -> Self {
+        let id = MONSTER_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self {
             position: pos,
             hp: kind.max_hp,
             kind,
+            id,
         }
     }
 }

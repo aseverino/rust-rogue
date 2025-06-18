@@ -33,6 +33,7 @@ use bitflags::bitflags;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
+use crate::lua_interface::LuaInterface;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{map::Map, GRID_WIDTH, GRID_HEIGHT};
 use crate::monster_type::{load_monster_types, MonsterType};
@@ -124,7 +125,7 @@ pub struct MapAssignment {
     pub map: Map,
 }
 
-type MonsterCollection = HashMap<String, Arc<MonsterType>>;
+type MonsterCollection = Vec<Arc<MonsterType>>;
 type MonsterTypes = Arc<Mutex<MonsterCollection>>;
 
 pub struct MapGenerator {
@@ -134,11 +135,11 @@ pub struct MapGenerator {
 }
 
 impl MapGenerator {
-    pub async fn new() -> Self {
+    pub async fn new(lua_interface: &mut LuaInterface) -> Self {
         Self {
             command_tx: None,
             thread_handle: None,
-            monster_types: Arc::new(Mutex::new(load_monster_types().await))
+            monster_types: Arc::new(Mutex::new(load_monster_types(lua_interface).await))
         }
     }
 

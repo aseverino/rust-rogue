@@ -25,7 +25,7 @@ use std::{sync::{mpsc, Arc, Mutex}};
 
 use macroquad::miniquad::ElapsedQuery;
 
-use crate::{maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
+use crate::{lua_interface::LuaInterface, maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverworldPos {
@@ -87,13 +87,13 @@ impl Overworld {
         }
     }
     
-    pub async fn new() -> Arc<Mutex<Self>> {
+    pub async fn new(lua_interface: &mut LuaInterface) -> Arc<Mutex<Self>> {
         let maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>> =
             Arc::new(Mutex::new(vec![
                 std::array::from_fn(|_| std::array::from_fn(|_| None))
             ]));
 
-        let map_generator = MapGenerator::new().await;
+        let map_generator = MapGenerator::new(lua_interface).await;
 
         let overworld = Arc::new(Mutex::new(Self {
             maps: Arc::clone(&maps),

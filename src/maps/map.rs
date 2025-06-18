@@ -32,7 +32,9 @@ use std::sync::Arc;
 use crate::creature::Creature;
 use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
+use crate::lua_interface;
 use crate::lua_interface::LuaInterface;
+use crate::lua_interface::LuaScripted;
 use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
 use crate::monster_type::MonsterType;
@@ -294,7 +296,7 @@ impl Map {
     
     pub(crate) fn add_random_monsters(
         &mut self,
-        monster_types: &HashMap<String, Arc<MonsterType>>,
+        monster_types: &Vec<Arc<MonsterType>>,
         count: usize,
     ) {
         let mut rng = thread_rng();
@@ -309,10 +311,8 @@ impl Map {
             .drain(len.saturating_sub(count)..)
             .collect();
 
-        let all_types: Vec<_> = monster_types.values().cloned().collect();
-
         for pos in positions {
-            let kind = all_types
+            let kind = monster_types
                 .choose(&mut rng)
                 .expect("Monster type list is empty")
                 .clone();
@@ -326,7 +326,7 @@ impl Map {
         self.walkable_cache.shuffle(&mut rng);
     }
 
-    fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32) {
+    fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32, lua_interface: &mut LuaInterface) {
         let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
             player
         } else {
@@ -340,7 +340,20 @@ impl Map {
         if target.get_health().0 <= 0 {
             self.tiles[target.pos()].creature = NO_CREATURE; // Remove monster from tile
             println!("{} has been defeated!", target.name());
+            if target.is_monster() {
+            // Only call on_death and remove if it's a monster
+            if let Some(monster) = self.monsters.get_mut(target_id as usize) {
+                if monster.kind.is_scripted() {
+                    let r = lua_interface.on_death(monster);
+                    if let Err(e) = r {
+                        eprintln!("Error calling Lua on_death: {}", e);
+                    }
+                }
+            }
             self.monsters.remove(target_id as usize);
+        } else {
+            println!("{} has {} HP left.", target.name(), target.get_health().0);
+        }
         } else {
             println!("{} has {} HP left.", target.name(), target.get_health().0);
         }
@@ -375,11 +388,11 @@ impl Map {
 
         let creature_id = self.tiles[target_pos].creature;
         if creature_id >= 0 {
-            self.do_damage(player, creature_id as u32, damage as i32);
+            self.do_damage(player, creature_id as u32, damage as i32, lua_interface);
         }
     }
 
-    fn do_spell_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, spell_index: usize) {
+    fn do_spell_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, spell_index: usize, lua_interface: &mut LuaInterface) {
         if !self.is_tile_walkable(target_pos) {
             println!("Target position is not walkable for spell casting.");
             return;
@@ -402,7 +415,7 @@ impl Map {
         });
 
         for target_creature in target_creatures {
-            self.do_damage(player, target_creature, damage);
+            self.do_damage(player, target_creature, damage, lua_interface);
         }
 
         // let target = self.monsters.get_mut(target_creature as usize)
@@ -464,7 +477,7 @@ impl Map {
                 }
 
                 if should_cast {
-                    self.do_spell_combat(player, player_pos, player_goal, index);
+                    self.do_spell_combat(player, player_pos, player_goal, index, lua_interface);
                     update_monsters = true;
                 }
 
@@ -473,7 +486,7 @@ impl Map {
                 self.last_player_event = Some(PlayerEvent::SpellCast);
             }
             else {
-                let path = Navigator::find_path(player_pos, player_goal, |pos| {
+                let path: Option<Vec<Position>> = Navigator::find_path(player_pos, player_goal, |pos| {
                     self.is_tile_walkable(pos)
                 });
 

@@ -380,18 +380,23 @@ impl Map {
             if let Some(weapon) = &player_ref.read().unwrap().equipment.weapon {
                 let mut damage: u32 = 0;
 
-                let lua_check = lua_interface.on_get_attack_damage(&*weapon.borrow(), player_ref, &self.monsters[self.tiles[target_pos].creature as usize]);
-                match lua_check {
-                    Ok(lua_damage) => {
-                        damage = lua_damage as u32;
-                        println!("Damage from Lua script: {}", damage);
-                    }
-                    Err(_) => {
-                        for &d in weapon.borrow().attack_dice.iter() {
-                            let mut rng = thread_rng();
-                            let roll = rng.gen_range(1..=d);
-                            damage += roll + weapon.borrow().base_holdable.modifier as u32;
+                if weapon.borrow().is_scripted() {
+                    let lua_check = lua_interface.on_get_attack_damage(weapon, player_ref, &self.monsters[self.tiles[target_pos].creature as usize]);
+                        match lua_check {
+                            Ok(lua_damage) => {
+                                damage = lua_damage as u32;
+                                println!("Damage from Lua script: {}", damage);
+                            }
+                            Err(e) => {
+                                eprintln!("Error calling Lua on_get_attack_damage: {}", e);
+                            }
                         }
+                }
+                else {
+                    for &d in weapon.borrow().attack_dice.iter() {
+                        let mut rng = thread_rng();
+                        let roll = rng.gen_range(1..=d);
+                        damage += roll + weapon.borrow().base_holdable.modifier as u32;
                     }
                 }
                 

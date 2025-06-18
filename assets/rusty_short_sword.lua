@@ -22,10 +22,10 @@
 
 function on_get_attack_damage(weapon, player, target)
     local damage = 0
-    for _, die in ipairs(weapon.attack_dice) do
+    for _, die in ipairs(weapon:get_attack_dice()) do
         damage = damage + math.random(1, die)
     end
-    return damage + weapon.modifier
+    return damage + weapon:get_modifier()
 end
 
 function on_check_accuracy(weapon, player, target)

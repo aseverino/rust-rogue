@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use rlua::{UserData, UserDataMethods};
 use crate::items::holdable::*;
 use crate::items::base_item::{downcast_rc_item, Item};
 use crate::maps::{TILE_SIZE};
@@ -35,11 +36,11 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-type WeaponRef = Rc<RefCell<Weapon>>;
-type ShieldRef = Rc<RefCell<Shield>>;
-type HelmetRef = Rc<RefCell<Helmet>>;
-type ArmorRef = Rc<RefCell<Armor>>;
-type BootsRef = Rc<RefCell<Boots>>;
+pub type WeaponRef = Rc<RefCell<Weapon>>;
+pub type ShieldRef = Rc<RefCell<Shield>>;
+pub type HelmetRef = Rc<RefCell<Helmet>>;
+pub type ArmorRef = Rc<RefCell<Armor>>;
+pub type BootsRef = Rc<RefCell<Boots>>;
 
 pub type PlayerRef = Arc<RwLock<Player>>;
 
@@ -204,5 +205,17 @@ impl Creature for Player {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl UserData for Player {
+    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("get_mana", |_, this, ()| {
+            Ok(this.get_mana())
+        });
+
+        methods.add_method("get_soul_points", |_, this, ()| {
+            Ok(this.get_soul_points())
+        });
     }
 }

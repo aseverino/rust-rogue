@@ -48,8 +48,7 @@
                 "attribute_modifier": "DEX",
                 "required": [ ["STR", 5], ["DEX", 5] ],
                 "slot": "hand",
-                "two-handed": true,
-                "script": ""
+                "two-handed": true
             },
             {
                 "id": 2,
@@ -61,8 +60,7 @@
                 "attribute_modifier": "INT",
                 "required": [ ["STR", 5], ["DEX", 5] ],
                 "slot": "hand",
-                "two-handed": false,
-                "script": ""
+                "two-handed": false
             }
         ]
     },
@@ -77,8 +75,7 @@
                 "modifier": 0,
                 "attribute_modifier": "STR",
                 "required": [ ["STR", 5], ["DEX", 5] ],
-                "slot": "body",
-                "script": ""
+                "slot": "body"
             },
             {
                 "id": 4,
@@ -89,8 +86,7 @@
                 "modifier": 0,
                 "attribute_modifier": "STR",
                 "required": [ ["STR", 10], ["DEX", 5] ],
-                "slot": "body",
-                "script": ""
+                "slot": "body"
             }
         ]
     },

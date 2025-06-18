@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use rlua::{UserData, UserDataMethods};
 use serde::Deserialize;
 
 use crate::items::base_item::{BaseItemData, Item};
@@ -90,6 +91,18 @@ pub struct Weapon {
     pub attack_dice: Vec<u32>,
     #[serde(rename = "two-handed")]
     pub two_handed: bool,
+}
+
+impl UserData for Weapon {
+    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("get_attack_dice", |_, this, ()| {
+            Ok(this.attack_dice.clone())
+        });
+
+        methods.add_method("get_modifier", |_, this, ()| {
+            Ok(this.base_holdable.modifier)
+        });
+    }
 }
 
 impl_lua_scripted!(Weapon, [ "on_get_attack_damage" ]);

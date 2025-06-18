@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use std::fs;
 use rlua::{Lua, Table, Function, RegistryKey, Error, Result};
 
-use crate::{items::holdable::Weapon, monster::{Monster, MonsterRef}, player::{Player, PlayerRef}};
+use crate::{items::holdable::Weapon, monster::{Monster, MonsterRef}, player::{Player, PlayerRef, WeaponRef}};
 
 pub trait LuaScripted {
     fn script_id(&self) -> u32;
@@ -57,33 +57,6 @@ impl LuaInterface {
             lua: Lua::new(),
             script_cache: HashMap::new(),
         }
-    }
-
-    fn setup_player<'lua>(&'lua self, player_ref: &PlayerRef) -> rlua::Result<Table<'lua>> {
-        let player = player_ref.read().unwrap();
-        let lua_player = self.lua.create_table()?;
-        lua_player.set("strength", player.strength)?;
-        lua_player.set("dexterity", player.dexterity)?;
-        lua_player.set("intelligence", player.intelligence)?;
-        Ok(lua_player)
-    }
-
-    pub fn setup_weapon<'lua>(&'lua self, weapon: &Weapon) -> rlua::Result<Table<'lua>> {
-        let lua_weapon = self.lua.create_table()?;
-        lua_weapon.set("attack_dice", weapon.attack_dice.clone())?;
-        lua_weapon.set("modifier", weapon.base_holdable.modifier)?;
-        lua_weapon.set("attribute_modifier", weapon.base_holdable.attribute_modifier.clone())?;
-        lua_weapon.set("slot", weapon.base_holdable.slot.clone())?;
-        lua_weapon.set("two_handed", weapon.two_handed)?;
-
-        Ok(lua_weapon)
-    }
-
-    fn setup_monster<'lua>(&'lua self, monster_ref: &MonsterRef) -> rlua::Result<Table<'lua>> {
-        let monster = monster_ref.read().unwrap();
-        let lua_monster = self.lua.create_table()?;
-        lua_monster.set("health", monster.hp)?;
-        Ok(lua_monster)
     }
 
     pub fn load_script<T: LuaScripted>(&mut self, entity: &T) -> Result<bool> {
@@ -136,7 +109,8 @@ impl LuaInterface {
         Ok(true)
     }
 
-    pub fn on_get_attack_damage(&self, weapon: &Weapon, player: &PlayerRef, monster: &MonsterRef) -> Result<f32> {
+    pub fn on_get_attack_damage(&self, weapon_ref: &WeaponRef, player_ref: &PlayerRef, monster_ref: &MonsterRef) -> Result<f32> {
+        let weapon = weapon_ref.borrow();
         let funcs = self
             .script_cache
             .get(&weapon.base_holdable.base_item.id)
@@ -150,9 +124,9 @@ impl LuaInterface {
         // Retrieve the Function from the registry
         let func: Function = self.lua.registry_value(&funcs.on_get_attack_damage.as_ref().unwrap())?;
 
-        let lua_weapon = self.setup_weapon(weapon)?;
-        let lua_player = self.setup_player(player)?;
-        let lua_target = self.setup_monster(monster)?;
+        let lua_weapon = self.lua.create_userdata(weapon_ref.clone())?;
+        let lua_player = self.lua.create_userdata(player_ref.clone())?;
+        let lua_target = self.lua.create_userdata(monster_ref.clone())?;
 
         // Invoke and return result
         func.call((lua_weapon, lua_player, lua_target))
@@ -173,7 +147,7 @@ impl LuaInterface {
         // Retrieve the Function from the registry
         let func: Function = self.lua.registry_value(funcs.on_death.as_ref().unwrap())?;
 
-        let lua_monster = self.setup_monster(monster_ref)?;
+        let lua_monster = self.lua.create_userdata(monster_ref.clone())?;
 
         // Invoke and return result
         func.call(lua_monster)

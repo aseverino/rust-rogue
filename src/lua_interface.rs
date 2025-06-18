@@ -20,27 +20,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// Cargo.toml
+// [dependencies]
+// rlua = "0.20.1"
+
+use std::collections::HashMap;
 use std::fs;
+use rlua::{Lua, Table, Function, RegistryKey, Error, Result};
 
-use rlua::{Function, Table};
+use crate::{items::holdable::Weapon, monster::Monster, player::Player};
 
-use crate::{items::{base_item::Item, holdable::Weapon}, monster::Monster, player::Player};
+/// Holds the registry key for each Lua function we care about.
+struct HoldableFunctions {
+    on_get_attack_damage: RegistryKey,
+}
 
+/// Manages one Lua VM and a cache of loaded scripts → functions.
 pub struct LuaInterface {
-    lua: rlua::Lua,
+    lua: Lua,
+    script_cache: HashMap<u32, HoldableFunctions>,
 }
 
 impl LuaInterface {
+    /// Create a fresh Lua VM.
     pub fn new() -> Self {
-        let lua = rlua::Lua::new();
-        Self { lua }
+        LuaInterface {
+            lua: Lua::new(),
+            script_cache: HashMap::new(),
+        }
     }
 
-    pub fn execute_script(&self, script: &str) -> rlua::Result<()> {
-        self.lua.load(script).exec()
-    }
-
-    fn setup_player(&self, player: &Player) -> rlua::Result<Table<'_>> {
+    fn setup_player<'lua>(&'lua self, player: &Player) -> rlua::Result<Table<'lua>> {
         // Prepare player table to pass to Lua
         let lua_player = self.lua.create_table()?;
         lua_player.set("strength", player.strength)?;
@@ -49,56 +59,82 @@ impl LuaInterface {
         Ok(lua_player)
     }
 
-    fn setup_weapon(&self, weapon: &Weapon) -> rlua::Result<Table<'_>> {
-        // Load the Lua script
-        let script_contents = fs::read_to_string(&weapon.base_holdable.script)?;
-        self.lua.load(&script_contents).exec()?;
+    pub fn setup_weapon<'lua>(&'lua self, weapon: &Weapon) -> rlua::Result<Table<'lua>> {
+        let lua_weapon = self.lua.create_table()?;
+        lua_weapon.set("attack_dice", weapon.attack_dice.clone())?;
+        lua_weapon.set("modifier", weapon.base_holdable.modifier)?;
+        lua_weapon.set("attribute_modifier", weapon.base_holdable.attribute_modifier.clone())?;
+        lua_weapon.set("slot", weapon.base_holdable.slot.clone())?;
+        lua_weapon.set("two_handed", weapon.two_handed)?;
 
-        // Prepare item table to pass to Lua
-        let lua_item = self.lua.create_table()?;
-        lua_item.set("attack_dice", weapon.attack_dice.clone())?;
-        lua_item.set("modifier", weapon.base_holdable.modifier)?;
-        lua_item.set("attribute_modifier", weapon.base_holdable.attribute_modifier.clone())?;
-        lua_item.set("slot", weapon.base_holdable.slot.clone())?;
-        lua_item.set("two_handed", weapon.two_handed)?;
-        Ok(lua_item)
+        Ok(lua_weapon)
     }
 
-    fn setup_target(&self, target: &Monster) -> rlua::Result<Table<'_>> {
+    fn setup_target<'lua>(&'lua self, target: &Monster) -> rlua::Result<Table<'lua>> {
         // Prepare target table to pass to Lua
         let lua_target = self.lua.create_table()?;
         lua_target.set("health", target.hp)?;
         Ok(lua_target)
     }
 
-    pub fn on_get_attack_damage(&self, player: &Player, weapon: &Weapon, target: &Monster) -> rlua::Result<f32> {
-        let lua_player = self.setup_player(&player)?;
-        let lua_weapon = self.setup_weapon(&weapon)?;
-        let lua_target = self.setup_target(&target)?;
+    /// Load the script once (if present & non-empty), extract `on_get_attack_damage`,
+    /// and stash it in the registry.  If `script` is `None` or `""`, this is a no-op.
+    pub fn load_script_for_weapon(&mut self, weapon: &Weapon) -> Result<bool> {
+        // Check for an actual script path
+        let script_path = match &weapon.base_holdable.script {
+            Some(path) if !path.is_empty() => path,
+            _ => return Ok(false),
+        };
 
-        // Call on_get_attack_damage
-        let on_get_attack_damage: Function = self.lua.globals().get("on_get_attack_damage")?;
-        let damage: i32 = on_get_attack_damage.call((lua_player, lua_weapon, lua_target))?;
-        println!(" -> Damage: {}", damage);
+        // Read the Lua file
+        let script = fs::read_to_string(script_path)
+            .map_err(|e| Error::external(format!("Failed to read {}: {}", script_path, e)))?;
 
-        // Call on_check_accuracy
-        // let on_check_accuracy: Function = self.lua.globals().get("on_check_accuracy")?;
-        // let accuracy: f32 = on_check_accuracy.call(lua_item)?;
-        // println!(" -> Accuracy: {:.0}%", accuracy * 100.0);
+        // Create an isolated environment table
+        let env: Table = self.lua.create_table()?;
+        let globals = self.lua.globals();
+        let mt: Table = self.lua.create_table()?;
+        mt.set("__index", globals)?;
+        env.set_metatable(Some(mt));
 
-        Ok(damage as f32)
+        // Load & execute the chunk in that env
+        let chunk = self.lua.load(&script).set_environment(env.clone());
+        chunk.exec()?;
+
+        // Grab the function and store it in the registry
+        let func: Function = env.get("on_get_attack_damage")?;
+        let key: RegistryKey = self.lua.create_registry_value(func)?;
+
+        // Cache by weapon ID
+        self.script_cache.insert(
+            weapon.base_holdable.base_item.id,
+            HoldableFunctions { on_get_attack_damage: key },
+        );
+
+        Ok(true)
     }
 
-    pub fn on_check_accuracy(&self, player: &Player, weapon: &Weapon, target: &Monster) -> rlua::Result<f32> {
-        let lua_player = self.setup_player(&player)?;
-        let lua_weapon = self.setup_weapon(&weapon)?;
-        let lua_target = self.setup_target(&target)?;
+    /// Call the cached `on_get_attack_damage(item)` for this weapon.
+    /// You should only call this if you know a script was loaded.
+    pub fn on_get_attack_damage(&self, weapon: &Weapon, player: &Player, monster: &Monster) -> Result<f32> {
+        let funcs = self
+            .script_cache
+            .get(&weapon.base_holdable.base_item.id)
+            .ok_or_else(|| {
+                Error::external(format!(
+                    "No Lua script loaded for weapon `{}`",
+                    weapon.base_holdable.base_item.id
+                ))
+            })?;
 
-        // Call on_check_accuracy
-        let on_check_accuracy: Function = self.lua.globals().get("on_check_accuracy")?;
-        let accuracy: f32 = on_check_accuracy.call((lua_player, lua_weapon, lua_target))?;
-        println!(" -> Accuracy: {:.0}%", accuracy * 100.0);
+        // Retrieve the Function from the registry
+        let func: Function = self.lua.registry_value(&funcs.on_get_attack_damage)?;
 
-        Ok(accuracy as f32)
+        let lua_weapon = self.setup_weapon(weapon)?;
+        let lua_player = self.setup_player(player)?;
+        let lua_target = self.setup_target(monster)?; // Dummy target for now
+
+        // Invoke and return result
+        func.call((lua_weapon, lua_player, lua_target))
     }
 }

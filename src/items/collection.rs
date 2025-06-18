@@ -22,7 +22,7 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::{Rc, Weak}};
 
-use crate::items::{holdable::{HoldableGroup, HoldableGroupKind}, base_item::Item};
+use crate::{items::{base_item::Item, holdable::{HoldableGroup, HoldableGroupKind}}, lua_interface::LuaInterface};
 
 pub struct Items {
     pub items: Vec<Rc<RefCell<dyn Item>>>,
@@ -36,15 +36,26 @@ impl Items {
             holdable_items: HashMap::new(),
         }
     }
-    pub async fn load_holdable_items(&mut self) {
+    pub async fn load_holdable_items(&mut self, lua_interface: &mut LuaInterface) {
         let json_str = std::fs::read_to_string("assets/items.json").unwrap();
         let groups: Vec<HoldableGroup> = serde_json::from_str(&json_str).unwrap();
 
         for group in groups {
             match group {
                 HoldableGroup::Weapons { weapons } => {
-                    for weapon in weapons {
-                        self.items.push(Rc::new(RefCell::new(weapon)));
+                    for mut weapon in weapons {
+                        if weapon.base_holdable.script.is_some() {
+                            // Load the Lua script for the weapon
+                            let script_result = lua_interface.load_script_for_weapon(&weapon);
+                            if let Err(e) = script_result {
+                                eprintln!("Error loading weapon script: {}", e);
+                            } else {
+                                weapon.base_holdable.scripted = script_result.unwrap();
+                            }
+                        }
+
+                        let weapon_ref = Rc::new(RefCell::new(weapon));
+                        self.items.push(weapon_ref);
                         let ptr_copy = self.items.last().unwrap().clone();
                         self.holdable_items.entry(HoldableGroupKind::Weapons).or_default().push(Rc::downgrade(&ptr_copy));
                     }

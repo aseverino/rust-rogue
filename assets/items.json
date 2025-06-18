@@ -15,6 +15,30 @@
                 "script": "assets/rusty_short_sword.lua"
             },
             {
+                "id": 0,
+                "name": "Small Old Axe",
+                "description": "",
+                "class": "Axe",
+                "attack_dice": [6],
+                "modifier": 100,
+                "attribute_modifier": "STR",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": false
+            },
+            {
+                "id": 0,
+                "name": "Small Carpenter Hammer",
+                "description": "",
+                "class": "Hammer",
+                "attack_dice": [6],
+                "modifier": 100,
+                "attribute_modifier": "STR",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": false
+            },
+            {
                 "id": 1,
                 "name": "Rotten Wood Bow",
                 "description": "",

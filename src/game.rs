@@ -94,7 +94,7 @@ pub async fn run() {
         lua_interface: LuaInterface::new(),
     };
 
-    game.items.load_holdable_items().await;
+    game.items.load_holdable_items(&mut game.lua_interface).await;
 
     let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
     let mut current_downstair_teleport_pos: Option<Position>;

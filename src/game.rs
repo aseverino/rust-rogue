@@ -30,7 +30,7 @@ use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
-use crate::ui::manager::Ui;
+use crate::ui::manager::{with_ui, Ui};
 use crate::player::{Player, PlayerRef};
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
@@ -45,7 +45,6 @@ use std::sync::{Arc, Mutex, RwLock};
 pub struct GameState {
     pub player: PlayerRef,
     pub overworld: Arc<Mutex<Overworld>>,
-    pub ui: Ui,
     pub items: Items,
     pub lua_interface: LuaInterface
 }
@@ -70,23 +69,25 @@ impl GameState {
 }
 
 fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
-    if !game.ui.is_focused {
-        map.draw(&game.player, game_interface_offset);
-    }
-    
-    game.ui.update_geometry(SizeF::new(screen_width(), screen_height()));
+    with_ui(|ui| {
+        if !ui.is_focused {
+            map.draw(&game.player, game_interface_offset);
+        }
+        
+        ui.update_geometry(SizeF::new(screen_width(), screen_height()));
 
-    let (hp, max_hp) = game.get_player_hp();
-    let (mp, max_mp) = game.get_player_mp();
-    game.ui.set_player_hp(hp, max_hp);
-    game.ui.set_player_mp(mp, max_mp);
+        let (hp, max_hp) = game.get_player_hp();
+        let (mp, max_mp) = game.get_player_mp();
+        ui.set_player_hp(hp, max_hp);
+        ui.set_player_mp(mp, max_mp);
 
-    let player = game.player.read().unwrap();
+        let player = game.player.read().unwrap();
 
-    game.ui.set_player_sp(player.sp);
-    game.ui.set_player_str(player.strength);
+        ui.set_player_sp(player.sp);
+        ui.set_player_str(player.strength);
 
-    game.ui.draw();
+        ui.draw();
+    });
 }
 
 pub async fn run() {
@@ -99,7 +100,6 @@ pub async fn run() {
     let mut game = GameState {
         player: Arc::new(RwLock::new(Player::new(Position::new(1, 1)))),
         overworld: Overworld::new(&mut lua_interface).await,
-        ui: Ui::new(),
         items: Items::new(),
         lua_interface: lua_interface
     };
@@ -205,7 +205,7 @@ pub async fn run() {
                 let mut map = current_map_arc.lock().unwrap();
                 map.remove_chest(player.position);
             }
-            game.ui.hide();
+            with_ui(|ui| { ui.hide(); });
         }
 
         let now = get_time();
@@ -237,72 +237,74 @@ pub async fn run() {
 
         {
             let mut map = current_map_arc.lock().unwrap();
-            map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
-            map.hovered_tile = Some(current_tile);
-            game.ui.update_mouse_position(global_mouse_pos);
+            with_ui(|ui|
+            {
+                
+                map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
+                map.hovered_tile = Some(current_tile);
+                ui.update_mouse_position(global_mouse_pos);
 
-            if let Some(_click) = input.click {
-                if game.ui.is_focused {
-                    game.ui.handle_click(global_mouse_pos);
+                if let Some(_click) = input.click {
+                    if ui.is_focused {
+                        ui.handle_click(global_mouse_pos);
+                    }
+                    else {
+                        goal_position = Some(current_tile)
+                    }
+                };
+
+                if ui.is_focused {
+                    if input.keyboard_action == KeyboardAction::Cancel {
+                        ui.hide();
+                    }
                 }
                 else {
-                    goal_position = Some(current_tile)
-                }
-            };
+                    if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
+                        ui.toggle_character_sheet();
+                    }
+                    else {
+                        map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
+                        let player_pos = { game.player.read().unwrap().position };
 
-            if game.ui.is_focused {
-                if input.keyboard_action == KeyboardAction::Cancel {
-                    game.ui.hide();
-                }
-            }
-            else {
-                if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
-                    game.ui.toggle_character_sheet();
-                }
-                else {
-                    map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
-                    let player_pos = { game.player.read().unwrap().position };
+                        if player_event == Some(PlayerEvent::OpenChest) {
+                            if let Some(items_vec) = map.get_chest_items(&player_pos) {
+                                
+                                let actual_items: Vec<(u32, String)> = items_vec.iter()
+                                    .filter_map(|item_id| {
+                                        game.items.items.iter()
+                                            .find(|item| item.read().unwrap().get_id() == *item_id)
+                                            .map(|item_rc| {
+                                                let item_ref = item_rc.read().unwrap();
+                                                (item_ref.get_id(), item_ref.get_name().to_string())
+                                            })
+                                    })
+                                    .collect();
 
-                    if player_event == Some(PlayerEvent::OpenChest) {
-                        if let Some(items_vec) = map.get_chest_items(&player_pos) {
-                            
-                            let actual_items: Vec<(u32, String)> = items_vec.iter()
-                                .filter_map(|item_id| {
-                                    game.items.items.iter()
-                                        .find(|item| item.read().unwrap().get_id() == *item_id)
-                                        .map(|item_rc| {
-                                            let item_ref = item_rc.read().unwrap();
-                                            (item_ref.get_id(), item_ref.get_name().to_string())
-                                        })
-                                })
-                                .collect();
+                                let chest_action_clone = chest_action.clone();
 
-                            let chest_action_clone = chest_action.clone();
-
-                            game.ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                                *chest_action_clone.write().unwrap() = Some(item_id);
-                            }));
+                                ui.show_chest_view(&actual_items, Box::new(move |item_id| {
+                                    *chest_action_clone.write().unwrap() = Some(item_id);
+                                }));
+                            }
+                        }
+                        else if player_event == Some(PlayerEvent::ReachBorder) {
+                            map_update = PlayerOverworldEvent::BorderCross;
+                        }
+                        else if player_event == Some(PlayerEvent::ClimbDown) {
+                            map_update = PlayerOverworldEvent::ClimbDown;
                         }
                     }
-                    else if player_event == Some(PlayerEvent::ReachBorder) {
-                        map_update = PlayerOverworldEvent::BorderCross;
-                    }
-                    else if player_event == Some(PlayerEvent::ClimbDown) {
-                        map_update = PlayerOverworldEvent::ClimbDown;
-                    }
                 }
-            }
 
-            if map.last_player_event == Some(PlayerEvent::AutoMove) {
-                last_move_time = now; // Update last move time for auto step
-            } else {
-                goal_position = None;
-            }
+                if map.last_player_event == Some(PlayerEvent::AutoMove) {
+                    last_move_time = now; // Update last move time for auto step
+                } else {
+                    goal_position = None;
+                }
+            });
 
             draw(&mut game, &mut map, game_interface_offset);
         }
         next_frame().await;
     }
 }
-
-//static INSTANCE: Lazy<GameState> = Lazy::new(|| GameState { value: 42 });

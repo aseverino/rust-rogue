@@ -24,20 +24,20 @@ use std::{cell::RefCell, rc::Rc, sync::{Arc, RwLock}};
 
 use serde::Deserialize;
 
-use crate::items::{container::Container, holdable::{Armor, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb, teleport::Teleport};
+use crate::items::{container::Container, holdable::{Armor, BaseHoldableItemData, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb, teleport::Teleport};
 
-pub fn downcast_arc_item<T: 'static>(arc: &Arc<RwLock<dyn Item>>) -> Option<Arc<RwLock<T>>> {
-    if arc.write().unwrap().as_any().is::<T>() {
-        // SAFETY: we just checked type, so we can clone Rc and transmute its type
-        let raw = Arc::as_ptr(arc) as *const RwLock<T>;
-        let cloned = unsafe { Arc::from_raw(raw) };
-        let result = Arc::clone(&cloned);
-        std::mem::forget(cloned); // avoid dropping original
-        Some(result)
-    } else {
-        None
-    }
-}
+// pub fn downcast_arc_item<T: 'static>(arc: &Arc<RwLock<dyn Item>>) -> Option<Arc<RwLock<T>>> {
+//     if arc.write().unwrap().as_any().is::<T>() {
+//         // SAFETY: we just checked type, so we can clone Rc and transmute its type
+//         let raw = Arc::as_ptr(arc) as *const RwLock<T>;
+//         let cloned = unsafe { Arc::from_raw(raw) };
+//         let result = Arc::clone(&cloned);
+//         std::mem::forget(cloned); // avoid dropping original
+//         Some(result)
+//     } else {
+//         None
+//     }
+// }
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct BaseItemData {
@@ -54,21 +54,77 @@ pub enum ItemKind {
     Container(Container),
 }
 
-pub trait Item {
-    fn get_id(&self) -> u32;
-    fn get_name(&self) -> &str;
-    // Type query methods
-    fn is_weapon(&self) -> bool { false }
-    fn is_shield(&self) -> bool { false }
-    fn is_helmet(&self) -> bool { false }
-    fn is_armor(&self) -> bool { false }
-    fn is_boots(&self) -> bool { false }
-    fn as_weapon(&self) -> Option<&Weapon> { None }
-    fn as_shield(&self) -> Option<&Shield> { None }
-    fn as_helmet(&self) -> Option<&Helmet> { None }
-    fn as_armor(&self) -> Option<&Armor> { None }
-    fn as_boots(&self) -> Option<&Boots> { None }
-    fn as_any(&self) -> &dyn std::any::Any;
+// pub trait Item {
+//     fn get_id(&self) -> u32;
+//     fn get_name(&self) -> &str;
+//     // Type query methods
+//     fn is_weapon(&self) -> bool { false }
+//     fn is_shield(&self) -> bool { false }
+//     fn is_helmet(&self) -> bool { false }
+//     fn is_armor(&self) -> bool { false }
+//     fn is_boots(&self) -> bool { false }
+//     fn as_weapon(&self) -> Option<&Weapon> { None }
+//     fn as_shield(&self) -> Option<&Shield> { None }
+//     fn as_helmet(&self) -> Option<&Helmet> { None }
+//     fn as_armor(&self) -> Option<&Armor> { None }
+//     fn as_boots(&self) -> Option<&Boots> { None }
+//     fn as_any(&self) -> &dyn std::any::Any;
+// }
+
+#[derive(Clone, Debug)]
+pub enum Item {
+    Weapon(Weapon),
+    Armor(Armor),
+    Shield(Shield),
+    Helmet(Helmet),
+    Boots(Boots),
+}
+
+impl Item {
+    pub fn name(&self) -> &str {
+        match self {
+            Item::Weapon(w) => &w.base_holdable.base_item.name,
+            Item::Armor(a) => &a.base_holdable.base_item.name,
+            Item::Shield(s) => &s.base_holdable.base_item.name,
+            Item::Helmet(h) => &h.base_holdable.base_item.name,
+            Item::Boots(b) => &b.base_holdable.base_item.name,
+        }
+    }
+
+    pub fn id(&self) -> u32 {
+        match self {
+            Item::Weapon(w) => w.base_holdable.base_item.id,
+            Item::Armor(a) => a.base_holdable.base_item.id,
+            Item::Shield(s) => s.base_holdable.base_item.id,
+            Item::Helmet(h) => h.base_holdable.base_item.id,
+            Item::Boots(b) => b.base_holdable.base_item.id,
+        }
+    }
+
+    pub fn is_holdable(&self) -> bool {
+        matches!(
+            self,
+            Item::Weapon(_) | Item::Armor(_) | Item::Shield(_) | Item::Helmet(_) | Item::Boots(_)
+        )
+    }
+
+    pub fn as_holdable(&self) -> Option<&BaseHoldableItemData> {
+        match self {
+            Item::Weapon(w) => Some(&w.base_holdable),
+            Item::Armor(a) => Some(&a.base_holdable),
+            Item::Shield(s) => Some(&s.base_holdable),
+            Item::Helmet(h) => Some(&h.base_holdable),
+            Item::Boots(b) => Some(&b.base_holdable),
+            _ => None,
+        }
+    }
+
+    pub fn as_weapon(&self) -> Option<&Weapon> {
+        match self {
+            Item::Weapon(w) => Some(w),
+            _ => None,
+        }
+    }
 }
 
 // use std::{collections::HashMap, rc::Rc};

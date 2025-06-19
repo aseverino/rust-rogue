@@ -26,17 +26,3 @@ use crate::items::base_item::Item;
 pub struct Orb {
     //
 }
-
-impl Item for Orb {
-    fn get_id(&self) -> u32 {
-        u32::MAX
-    }
-
-    fn get_name(&self) -> &str {
-        "Orb"
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}

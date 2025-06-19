@@ -22,7 +22,7 @@
 
 use macroquad::prelude::*;
 use once_cell::sync::Lazy;
-use crate::creature::CreatureRef;
+// use crate::creature::CreatureRef;
 use crate::items::collection::Items;
 use crate::lua_interface::LuaInterface;
 use crate::maps::overworld::{self, Overworld, OverworldPos};
@@ -31,7 +31,7 @@ use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
 use crate::ui::manager::{with_ui, Ui};
-use crate::player::{Player, PlayerRef};
+use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
 
@@ -43,7 +43,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex, RwLock};
 
 pub struct GameState {
-    pub player: PlayerRef,
+    pub player: Player,
     pub overworld: Arc<Mutex<Overworld>>,
     pub items: Items,
     pub lua_interface: LuaInterface
@@ -58,20 +58,18 @@ enum PlayerOverworldEvent {
 
 impl GameState {
     pub fn get_player_hp(&self) -> (u32, u32) {
-        let player = self.player.read().unwrap();
-        (player.hp, player.max_hp)
+        (self.player.hp, self.player.max_hp)
     }
 
     pub fn get_player_mp(&self) -> (u32, u32) {
-        let player = self.player.read().unwrap();
-        (player.mp, player.max_mp)
+        (self.player.mp, self.player.max_mp)
     }
 }
 
 fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
     with_ui(|ui| {
         if !ui.is_focused {
-            map.draw(&game.player, game_interface_offset);
+            map.draw(&mut game.player, game_interface_offset);
         }
         
         ui.update_geometry(SizeF::new(screen_width(), screen_height()));
@@ -81,10 +79,8 @@ fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
         ui.set_player_hp(hp, max_hp);
         ui.set_player_mp(mp, max_mp);
 
-        let player = game.player.read().unwrap();
-
-        ui.set_player_sp(player.sp);
-        ui.set_player_str(player.strength);
+        ui.set_player_sp(game.player.sp);
+        ui.set_player_str(game.player.strength);
 
         ui.draw();
     });
@@ -98,7 +94,7 @@ pub async fn run() {
     spell_type::set_global_spell_types(spell_types);
 
     let mut game = GameState {
-        player: Arc::new(RwLock::new(Player::new(Position::new(1, 1)))),
+        player: Player::new(Position::new(1, 1)),
         overworld: Overworld::new(&mut lua_interface).await,
         items: Items::new(),
         lua_interface: lua_interface
@@ -130,7 +126,7 @@ pub async fn run() {
     loop {
         if map_update != PlayerOverworldEvent::None {
             // Determine player's current border position
-            let mut player_pos = game.player.read().unwrap().position;
+            let mut player_pos = game.player.position;
             let mut new_opos = overworld_pos.clone();
 
             if map_update == PlayerOverworldEvent::BorderCross {
@@ -156,8 +152,7 @@ pub async fn run() {
                 if let Some(new_map_arc) = overworld.get_map_ptr(new_opos) {
                     {
                         let mut map = current_map_arc.lock().unwrap();
-                        let player_as_creature = Arc::clone(&mut game.player) as CreatureRef;
-                        map.remove_creature(&player_as_creature);
+                        map.remove_creature(&mut game.player);
                     }
 
                     current_map_arc = new_map_arc;
@@ -199,11 +194,10 @@ pub async fn run() {
         }
         else if let Some(item_id) = chest_action.write().unwrap().take() {
             let item = game.items.items[item_id as usize].clone();
-            let player = &mut game.player.write().unwrap();
-            player.add_item(item);
+            game.player.add_item(item);
             {
                 let mut map = current_map_arc.lock().unwrap();
-                map.remove_chest(player.position);
+                map.remove_chest(game.player.position);
             }
             with_ui(|ui| { ui.hide(); });
         }
@@ -264,7 +258,7 @@ pub async fn run() {
                     }
                     else {
                         map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
-                        let player_pos = { game.player.read().unwrap().position };
+                        let player_pos = game.player.position;
 
                         if player_event == Some(PlayerEvent::OpenChest) {
                             if let Some(items_vec) = map.get_chest_items(&player_pos) {
@@ -272,10 +266,9 @@ pub async fn run() {
                                 let actual_items: Vec<(u32, String)> = items_vec.iter()
                                     .filter_map(|item_id| {
                                         game.items.items.iter()
-                                            .find(|item| item.read().unwrap().get_id() == *item_id)
-                                            .map(|item_rc| {
-                                                let item_ref = item_rc.read().unwrap();
-                                                (item_ref.get_id(), item_ref.get_name().to_string())
+                                            .find(|item| item.id() == *item_id)
+                                            .map(|item| {
+                                                (item.id(), item.name().to_string())
                                             })
                                     })
                                     .collect();

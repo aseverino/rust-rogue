@@ -26,7 +26,7 @@ use serde::Deserialize;
 use crate::items::base_item::{BaseItemData, Item};
 use crate::lua_interface::LuaScripted;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct BaseHoldableItemData {
     #[serde(flatten)]
     pub base_item: BaseItemData,
@@ -84,7 +84,7 @@ macro_rules! impl_lua_scripted {
     };
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Weapon {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
@@ -107,28 +107,7 @@ impl UserData for Weapon {
 
 impl_lua_scripted!(Weapon, [ "on_get_attack_damage" ]);
 
-impl Item for Weapon {
-    fn get_id(&self) -> u32 {
-        self.base_holdable.base_item.id
-    }
-    fn get_name(&self) -> &str {
-        &self.base_holdable.base_item.name
-    }
-
-    fn is_weapon(&self) -> bool {
-        true
-    }
-
-    fn as_weapon(&self) -> Option<&Weapon> {
-        Some(self)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Armor {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
@@ -137,28 +116,7 @@ pub struct Armor {
 
 impl_lua_scripted!(Armor, []);
 
-impl Item for Armor {
-    fn get_id(&self) -> u32 {
-        self.base_holdable.base_item.id
-    }
-    fn get_name(&self) -> &str {
-        &self.base_holdable.base_item.name
-    }
-
-    fn is_armor(&self) -> bool {
-        true
-    }
-
-    fn as_armor(&self) -> Option<&Armor> {
-        Some(self)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Shield {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
@@ -166,28 +124,7 @@ pub struct Shield {
 
 impl_lua_scripted!(Shield, []);
 
-impl Item for Shield {
-    fn get_id(&self) -> u32 {
-        self.base_holdable.base_item.id
-    }
-    fn get_name(&self) -> &str {
-        &self.base_holdable.base_item.name
-    }
-
-    fn is_shield(&self) -> bool {
-        true
-    }
-
-    fn as_shield(&self) -> Option<&Shield> {
-        Some(self)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Helmet {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
@@ -195,52 +132,10 @@ pub struct Helmet {
 
 impl_lua_scripted!(Helmet, []);
 
-impl Item for Helmet {
-    fn get_id(&self) -> u32 {
-        self.base_holdable.base_item.id
-    }
-    fn get_name(&self) -> &str {
-        &self.base_holdable.base_item.name
-    }
-
-    fn is_helmet(&self) -> bool {
-        true
-    }
-
-    fn as_helmet(&self) -> Option<&Helmet> {
-        Some(self)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Boots {
     #[serde(flatten)]
     pub base_holdable: BaseHoldableItemData,
 }
 
 impl_lua_scripted!(Boots, []);
-
-impl Item for Boots {
-    fn get_id(&self) -> u32 {
-        self.base_holdable.base_item.id
-    }
-    fn get_name(&self) -> &str {
-        &self.base_holdable.base_item.name
-    }
-
-    fn is_boots(&self) -> bool {
-        true
-    }
-
-    fn as_boots(&self) -> Option<&Boots> {
-        Some(self)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}

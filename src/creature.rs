@@ -39,17 +39,17 @@ pub trait Creature {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-pub type CreatureRef = Arc<RwLock<dyn Creature>>;
+// pub type CreatureRef = Arc<RwLock<dyn Creature>>;
 
-pub fn downcast_rc_creature<T: 'static>(rc: &Rc<dyn Creature>) -> Option<Rc<T>> {
-    if rc.as_any().is::<T>() {
-        // SAFETY: we just checked type, so we can clone Rc and transmute its type
-        let raw = Rc::as_ptr(rc) as *const T;
-        let cloned = unsafe { Rc::from_raw(raw) };
-        let result = Rc::clone(&cloned);
-        std::mem::forget(cloned); // avoid dropping original
-        Some(result)
-    } else {
-        None
-    }
-}
+// pub fn downcast_rc_creature<T: 'static>(rc: &Rc<dyn Creature>) -> Option<Rc<T>> {
+//     if rc.as_any().is::<T>() {
+//         // SAFETY: we just checked type, so we can clone Rc and transmute its type
+//         let raw = Rc::as_ptr(rc) as *const T;
+//         let cloned = unsafe { Rc::from_raw(raw) };
+//         let result = Rc::clone(&cloned);
+//         std::mem::forget(cloned); // avoid dropping original
+//         Some(result)
+//     } else {
+//         None
+//     }
+// }

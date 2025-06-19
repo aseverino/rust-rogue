@@ -33,7 +33,7 @@ use std::cmp::{max, min};
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Monster {
     pub hp: u32,
     pub kind: Arc<MonsterType>,

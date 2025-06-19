@@ -23,7 +23,7 @@
 use macroquad::prelude::*;
 use rlua::{UserData, UserDataMethods};
 use crate::items::holdable::*;
-use crate::items::base_item::{downcast_arc_item, Item};
+use crate::items::base_item::Item;
 use crate::maps::{TILE_SIZE};
 use crate::creature::Creature;
 use crate::position::{ Position };
@@ -36,22 +36,16 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-pub type WeaponRef = Arc<RwLock<Weapon>>;
-pub type ShieldRef = Arc<RwLock<Shield>>;
-pub type HelmetRef = Arc<RwLock<Helmet>>;
-pub type ArmorRef = Arc<RwLock<Armor>>;
-pub type BootsRef = Arc<RwLock<Boots>>;
-
-pub type PlayerRef = Arc<RwLock<Player>>;
-
+#[derive(Clone)]
 pub struct Equipment {
-    pub weapon: Option<WeaponRef>,
-    pub shield: Option<ShieldRef>,
-    pub helmet: Option<HelmetRef>,
-    pub armor: Option<ArmorRef>,
-    pub boots: Option<BootsRef>,
+    pub weapon: Option<Weapon>,
+    pub shield: Option<Shield>,
+    pub helmet: Option<Helmet>,
+    pub armor: Option<Armor>,
+    pub boots: Option<Boots>,
 }
 
+#[derive(Clone)]
 pub struct Player {
     pub hp: u32,
     pub max_hp: u32,
@@ -124,36 +118,16 @@ impl Player {
         self.sp
     }
 
-    pub fn add_item(&mut self, item_ref: Arc<RwLock<dyn Item>>) {
-        let item = item_ref.read().unwrap();
-
-        if item.is_weapon() {
-            drop(item);
-            if let Some(weapon_rc) = downcast_arc_item::<Weapon>(&item_ref) {
-                self.equipment.weapon = Some(weapon_rc);
+    pub fn add_item(&mut self, item: Item) {
+        match item {
+            Item::Weapon(w) => self.equipment.weapon = Some(w),
+            Item::Armor(a) => self.equipment.armor = Some(a),
+            Item::Shield(s) => self.equipment.shield = Some(s),
+            Item::Helmet(h) => self.equipment.helmet = Some(h),
+            Item::Boots(b) => self.equipment.boots = Some(b),
+            _ => {
+                println!("Cannot equip this item.");
             }
-        } else if item.is_shield() {
-            drop(item);
-            if let Some(shield_rc) = downcast_arc_item::<Shield>(&item_ref) {
-                self.equipment.shield = Some(shield_rc);
-            }
-        } else if item.is_helmet() {
-            drop(item);
-            if let Some(helmet_rc) = downcast_arc_item::<Helmet>(&item_ref) {
-                self.equipment.helmet = Some(helmet_rc);
-            }
-        } else if item.is_armor() {
-            drop(item);
-            if let Some(armor_rc) = downcast_arc_item::<Armor>(&item_ref) {
-                self.equipment.armor = Some(armor_rc);
-            }
-        } else if item.is_boots() {
-            drop(item);
-            if let Some(boots_rc) = downcast_arc_item::<Boots>(&item_ref) {
-                self.equipment.boots = Some(boots_rc);
-            }
-        } else {
-            println!("Unknown item type!");
         }
     }
 }

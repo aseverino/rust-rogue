@@ -26,17 +26,3 @@ use crate::items::base_item::Item;
 pub struct Teleport {
     //
 }
-
-impl Item for Teleport {
-    fn get_id(&self) -> u32 {
-        u32::MAX
-    }
-
-    fn get_name(&self) -> &str {
-        "Teleport"
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}

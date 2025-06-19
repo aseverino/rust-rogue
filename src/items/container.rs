@@ -52,17 +52,3 @@ impl Container {
         }
     }
 }
-
-impl Item for Container {
-    fn get_id(&self) -> u32 {
-        u32::MAX
-    }
-
-    fn get_name(&self) -> &str {
-        "Container"
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}

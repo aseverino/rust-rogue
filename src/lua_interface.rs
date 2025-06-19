@@ -24,11 +24,12 @@
 // [dependencies]
 // rlua = "0.20.1"
 
-use std::collections::HashMap;
+use std::rc::Rc;
+use std::{cell::RefCell, collections::HashMap};
 use std::fs;
 use rlua::{Context, Error, Function, Lua, RegistryKey, Result, Table};
 
-use crate::{items::holdable::Weapon, monster::{Monster, MonsterRef}, player::{Player, PlayerRef, WeaponRef}, position::Position};
+use crate::{items::holdable::Weapon, monster::Monster, player::Player, position::Position};
 
 pub trait LuaScripted {
     fn script_id(&self) -> u32;
@@ -131,8 +132,7 @@ impl LuaInterface {
         Ok(true)
     }
 
-    pub fn on_get_attack_damage(&self, weapon_ref: &WeaponRef, player_ref: &PlayerRef, monster_ref: &MonsterRef) -> Result<f32> {
-        let weapon = weapon_ref.read().unwrap();
+    pub fn on_get_attack_damage(&self, weapon: &mut Weapon, player: &mut Player, monster: &mut Monster) -> Result<f32> {
         let funcs = self
             .script_cache
             .get(&weapon.base_holdable.base_item.id)
@@ -146,16 +146,25 @@ impl LuaInterface {
         // Retrieve the Function from the registry
         let func: Function = self.lua.registry_value(&funcs.on_get_attack_damage.as_ref().unwrap())?;
 
-        let lua_weapon = self.lua.create_userdata(weapon_ref.clone())?;
-        let lua_player = self.lua.create_userdata(player_ref.clone())?;
-        let lua_target = self.lua.create_userdata(monster_ref.clone())?;
+        let lua_weapon = Rc::new(RefCell::new(weapon.clone()));
+        let lua_player = Rc::new(RefCell::new(player.clone()));
+        let lua_monster = Rc::new(RefCell::new(monster.clone()));
+
+        let lua_weapon_ud = self.lua.create_userdata(lua_weapon.clone())?;
+        let lua_player_ud = self.lua.create_userdata(lua_player.clone())?;
+        let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
 
         // Invoke and return result
-        func.call((lua_weapon, lua_player, lua_target))
+        let result = func.call((lua_weapon_ud, lua_player_ud, lua_monster_ud));
+
+        *weapon = lua_weapon.borrow().clone();
+        *player = lua_player.borrow().clone();
+        *monster = lua_monster.borrow().clone();
+
+        result
     }
 
-    pub fn on_death(&self, monster_ref: &MonsterRef) -> Result<bool> {
-        let monster = monster_ref.read().unwrap();
+    pub fn on_death(&self, monster: &mut Monster) -> Result<bool> {
         let funcs = self
             .script_cache
             .get(&monster.kind.id)
@@ -169,9 +178,14 @@ impl LuaInterface {
         // Retrieve the Function from the registry
         let func: Function = self.lua.registry_value(funcs.on_death.as_ref().unwrap())?;
 
-        let lua_monster = self.lua.create_userdata(monster_ref.clone())?;
+        let lua_monster = Rc::new(RefCell::new(monster.clone()));
+        let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
 
         // Invoke and return result
-        func.call(lua_monster)
+        let result = func.call(lua_monster_ud);
+
+        *monster = lua_monster.borrow().clone();
+
+        result
     }
 }

@@ -25,15 +25,15 @@ use std::{cell::RefCell, collections::HashMap, sync::{Arc, RwLock, Weak}};
 use crate::{items::{base_item::Item, holdable::{HoldableGroup, HoldableGroupKind}}, lua_interface::LuaInterface};
 
 pub struct Items {
-    pub items: Vec<Arc<RwLock<dyn Item>>>,
-    holdable_items: HashMap<HoldableGroupKind, Vec<Weak<RwLock<dyn Item>>>>// = HashMap::new();
+    pub items: Vec<Item>,
+    //holdable_items: HashMap<HoldableGroupKind, Vec<Weak<RwLock<dyn Item>>>>// = HashMap::new();
 }
 
 impl Items {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
-            holdable_items: HashMap::new(),
+            //holdable_items: HashMap::new(),
         }
     }
     pub async fn load_holdable_items(&mut self, lua_interface: &mut LuaInterface) {
@@ -54,38 +54,68 @@ impl Items {
                             }
                         }
 
-                        let weapon_ref = Arc::new(RwLock::new(weapon));
-                        self.items.push(weapon_ref);
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Weapons).or_default().push(Arc::downgrade(&ptr_copy));
+                        self.items.push(Item::Weapon(weapon));
                     }
                 }
                 HoldableGroup::Armor { armor } => {
-                    for armor in armor {
-                        self.items.push(Arc::new(RwLock::new(armor)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Armor).or_default().push(Arc::downgrade(&ptr_copy));
+                    for mut armor_item in armor {
+                        if armor_item.base_holdable.script.is_some() {
+                            // Load the Lua script for the armor
+                            let script_result = lua_interface.load_script(&armor_item);
+                            if let Err(e) = script_result {
+                                eprintln!("Error loading armor script: {}", e);
+                            } else {
+                                armor_item.base_holdable.scripted = script_result.unwrap();
+                            }
+                        }
+
+                        self.items.push(Item::Armor(armor_item));
                     }
                 }
-                HoldableGroup::Shields { shields } => {
-                    for shield in shields {
-                        self.items.push(Arc::new(RwLock::new(shield)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Shields).or_default().push(Arc::downgrade(&ptr_copy));
-                    }
-                }
+
                 HoldableGroup::Helmets { helmets } => {
-                    for helmet in helmets {
-                        self.items.push(Arc::new(RwLock::new(helmet)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Helmets).or_default().push(Arc::downgrade(&ptr_copy));
+                    for mut helmet_item in helmets {
+                        if helmet_item.base_holdable.script.is_some() {
+                            // Load the Lua script for the helmet
+                            let script_result = lua_interface.load_script(&helmet_item);
+                            if let Err(e) = script_result {
+                                eprintln!("Error loading helmet script: {}", e);
+                            } else {
+                                helmet_item.base_holdable.scripted = script_result.unwrap();
+                            }
+                        }
+
+                        self.items.push(Item::Helmet(helmet_item));
                     }
                 }
                 HoldableGroup::Boots { boots } => {
-                    for boots in boots {
-                        self.items.push(Arc::new(RwLock::new(boots)));
-                        let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Boots).or_default().push(Arc::downgrade(&ptr_copy));
+                    for mut boots_item in boots {
+                        if boots_item.base_holdable.script.is_some() {
+                            // Load the Lua script for the boots
+                            let script_result = lua_interface.load_script(&boots_item);
+                            if let Err(e) = script_result {
+                                eprintln!("Error loading boots script: {}", e);
+                            } else {
+                                boots_item.base_holdable.scripted = script_result.unwrap();
+                            }
+                        }
+
+                        self.items.push(Item::Boots(boots_item));
+                    }
+                }
+                HoldableGroup::Shields { shields } => {
+                    for mut shield_item in shields {
+                        if shield_item.base_holdable.script.is_some() {
+                            // Load the Lua script for the shield
+                            let script_result = lua_interface.load_script(&shield_item);
+                            if let Err(e) = script_result {
+                                eprintln!("Error loading shield script: {}", e);
+                            } else {
+                                shield_item.base_holdable.scripted = script_result.unwrap();
+                            }
+                        }
+
+                        self.items.push(Item::Shield(shield_item));
                     }
                 }
             }

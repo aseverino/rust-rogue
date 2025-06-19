@@ -132,7 +132,7 @@ pub async fn run() {
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
-    let mut chest_action: Option<u32> = None;
+    let mut chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
     let mut map_update = PlayerOverworldEvent::None;
     let mut ui = Ui::new();
 
@@ -205,7 +205,7 @@ pub async fn run() {
             }
             map_update = PlayerOverworldEvent::None;
         }
-        else if let Some(item_id) = chest_action {
+        else if let Some(item_id) = chest_action.take() {
             let item = game.items.items[item_id as usize].clone();
             game.player.add_item(item);
             {
@@ -284,8 +284,9 @@ pub async fn run() {
                                 })
                                 .collect();
 
+                            let chest_action_clone = chest_action.clone();
                             ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                                chest_action = Some(item_id);
+                                *chest_action_clone.borrow_mut() = Some(item_id);
                             }));
                         }
                     }

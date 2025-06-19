@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{cell::RefCell, rc::{Rc, Weak}, sync::OnceLock};
+use std::{cell::RefCell, rc::{Rc, Weak}};
 
 use macroquad::prelude::*;
 
@@ -560,18 +560,4 @@ impl Ui {
 
         self.widgets[ROOT_ID as usize].borrow_mut().draw(ui_ref);
     }
-}
-
-thread_local! {
-    pub static UI_INSTANCE: RefCell<Option<Ui>> = RefCell::new(None);
-}
-
-pub fn with_ui<F: FnOnce(&mut Ui)>(f: F) {
-    UI_INSTANCE.with(|cell| {
-        if let Some(ui) = &mut *cell.borrow_mut() {
-            f(ui);
-        } else {
-            panic!("UI not initialized");
-        }
-    });
 }

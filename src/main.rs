@@ -39,8 +39,6 @@ mod player;
 
 use macroquad::prelude::*;
 
-use crate::ui::manager::{Ui, UI_INSTANCE};
-
 fn window_conf() -> Conf {
     Conf {
         window_title: "Rust Rogue".to_string(),
@@ -55,9 +53,5 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    UI_INSTANCE.with(|cell| {
-        let mut instance = cell.borrow_mut();
-        *instance = Some(Ui::new());
-    });
     game::run().await;
 }

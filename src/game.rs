@@ -28,7 +28,7 @@ use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
-use crate::ui::manager::{with_ui, Ui};
+use crate::ui::manager::Ui;
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
@@ -65,24 +65,23 @@ impl GameState {
     }
 }
 
-fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
-    with_ui(|ui| {
-        if !ui.is_focused {
-            map.draw(&mut game.player, game_interface_offset);
-        }
-        
-        ui.update_geometry(SizeF::new(screen_width(), screen_height()));
+fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset: PointF)
+{
+    if !ui.is_focused {
+        map.draw(&mut game.player, game_interface_offset);
+    }
+    
+    ui.update_geometry(SizeF::new(screen_width(), screen_height()));
 
-        let (hp, max_hp) = game.get_player_hp();
-        let (mp, max_mp) = game.get_player_mp();
-        ui.set_player_hp(hp, max_hp);
-        ui.set_player_mp(mp, max_mp);
+    let (hp, max_hp) = game.get_player_hp();
+    let (mp, max_mp) = game.get_player_mp();
+    ui.set_player_hp(hp, max_hp);
+    ui.set_player_mp(mp, max_mp);
 
-        ui.set_player_sp(game.player.sp);
-        ui.set_player_str(game.player.strength);
+    ui.set_player_sp(game.player.sp);
+    ui.set_player_str(game.player.strength);
 
-        ui.draw();
-    });
+    ui.draw();
 }
 
 fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<Map>> {
@@ -135,6 +134,7 @@ pub async fn run() {
     let game_interface_offset = PointF::new(410.0, 10.0);
     let mut chest_action: Option<u32> = None;
     let mut map_update = PlayerOverworldEvent::None;
+    let mut ui = Ui::new();
 
     loop {
         if map_update != PlayerOverworldEvent::None {
@@ -212,14 +212,14 @@ pub async fn run() {
                 let mut map = current_map_rc.borrow_mut();
                 map.remove_chest(game.player.position);
             }
-            with_ui(|ui| { ui.hide(); });
+            ui.hide();
         }
 
         let now = get_time();
         if now - last_move_time < move_interval {
             {
                 let mut map = current_map_rc.borrow_mut();
-                draw(&mut game, &mut map, game_interface_offset);
+                draw(&mut game, &mut ui, &mut map, game_interface_offset);
             }
             next_frame().await;
             continue;
@@ -244,70 +244,67 @@ pub async fn run() {
 
         {
             let mut map = current_map_rc.borrow_mut();
-            with_ui(|ui|
-            {
                 
-                map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
-                map.hovered_tile = Some(current_tile);
-                ui.update_mouse_position(global_mouse_pos);
+            map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
+            map.hovered_tile = Some(current_tile);
+            ui.update_mouse_position(global_mouse_pos);
 
-                if let Some(_click) = input.click {
-                    if ui.is_focused {
-                        ui.handle_click(global_mouse_pos);
-                    }
-                    else {
-                        goal_position = Some(current_tile)
-                    }
-                };
-
+            if let Some(_click) = input.click {
                 if ui.is_focused {
-                    if input.keyboard_action == KeyboardAction::Cancel {
-                        ui.hide();
-                    }
+                    ui.handle_click(global_mouse_pos);
                 }
                 else {
-                    if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
-                        ui.toggle_character_sheet();
+                    goal_position = Some(current_tile)
+                }
+            };
+
+            if ui.is_focused {
+                if input.keyboard_action == KeyboardAction::Cancel {
+                    ui.hide();
+                }
+            }
+            else {
+                if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
+                    ui.toggle_character_sheet();
+                }
+                else {
+                    map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
+                    let player_pos = game.player.position;
+
+                    if player_event == Some(PlayerEvent::OpenChest) {
+                        if let Some(items_vec) = map.get_chest_items(&player_pos) {
+                            
+                            let actual_items: Vec<(u32, String)> = items_vec.iter()
+                                .filter_map(|item_id| {
+                                    game.items.items.iter()
+                                        .find(|item| item.id() == *item_id)
+                                        .map(|item| {
+                                            (item.id(), item.name().to_string())
+                                        })
+                                })
+                                .collect();
+
+                            ui.show_chest_view(&actual_items, Box::new(move |item_id| {
+                                chest_action = Some(item_id);
+                            }));
+                        }
                     }
-                    else {
-                        map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
-                        let player_pos = game.player.position;
-
-                        if player_event == Some(PlayerEvent::OpenChest) {
-                            if let Some(items_vec) = map.get_chest_items(&player_pos) {
-                                
-                                let actual_items: Vec<(u32, String)> = items_vec.iter()
-                                    .filter_map(|item_id| {
-                                        game.items.items.iter()
-                                            .find(|item| item.id() == *item_id)
-                                            .map(|item| {
-                                                (item.id(), item.name().to_string())
-                                            })
-                                    })
-                                    .collect();
-
-                                ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                                    chest_action = Some(item_id);
-                                }));
-                            }
-                        }
-                        else if player_event == Some(PlayerEvent::ReachBorder) {
-                            map_update = PlayerOverworldEvent::BorderCross;
-                        }
-                        else if player_event == Some(PlayerEvent::ClimbDown) {
-                            map_update = PlayerOverworldEvent::ClimbDown;
-                        }
+                    else if player_event == Some(PlayerEvent::ReachBorder) {
+                        map_update = PlayerOverworldEvent::BorderCross;
+                    }
+                    else if player_event == Some(PlayerEvent::ClimbDown) {
+                        map_update = PlayerOverworldEvent::ClimbDown;
                     }
                 }
+            }
 
-                if map.last_player_event == Some(PlayerEvent::AutoMove) {
-                    last_move_time = now; // Update last move time for auto step
-                } else {
-                    goal_position = None;
-                }
-            });
+            if map.last_player_event == Some(PlayerEvent::AutoMove) {
+                last_move_time = now; // Update last move time for auto step
+            } else {
+                goal_position = None;
+            }
 
-            draw(&mut game, &mut map, game_interface_offset);
+            draw(&mut game, &mut ui, &mut map, game_interface_offset);
         }
         next_frame().await;
     }

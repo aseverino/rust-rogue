@@ -35,7 +35,7 @@ use rand::{thread_rng, Rng};
 
 use crate::lua_interface::LuaInterface;
 use crate::maps::overworld::OverworldPos;
-use crate::maps::{map::Map, GRID_WIDTH, GRID_HEIGHT};
+use crate::maps::{map::GeneratedMap, GRID_WIDTH, GRID_HEIGHT};
 use crate::monster_type::{load_monster_types, MonsterType};
 use crate::tile::{Tile, TileKind};
 use crate::position::Position;
@@ -83,7 +83,7 @@ impl Border {
 pub enum MapStatus {
     NotRequested,
     Requested,
-    Ready(Arc<Mutex<Map>>),
+    Ready(Arc<Mutex<GeneratedMap>>),
 }
 
 type SharedMapStatus = Arc<(Mutex<MapStatus>, Condvar)>;
@@ -143,7 +143,7 @@ enum Command {
 
 pub struct MapAssignment {
     pub opos: OverworldPos,
-    pub map: Arc<Mutex<Map>>,
+    pub map: Arc<Mutex<GeneratedMap>>,
 }
 
 type MonsterCollection = Vec<Arc<MonsterType>>;
@@ -426,7 +426,7 @@ impl MapGenerator {
         anchors
     }
 
-    fn generate_map(params: &GenerationParams) -> Map {
+    fn generate_map(params: &GenerationParams) -> GeneratedMap {
         let mut rng = thread_rng();
 
         let tile_type = match params.theme {
@@ -547,7 +547,7 @@ impl MapGenerator {
 
         let mut available_walkable_cache = walkable_cache.clone();
         available_walkable_cache.shuffle(&mut rng);
-        let mut map = Map::new(tiles, walkable_cache, available_walkable_cache);
+        let mut map = GeneratedMap::new(tiles, walkable_cache, available_walkable_cache);
 
         for x in 0..GRID_WIDTH {
             if map.tiles[Position::new(x, 0)].kind == TileKind::Floor {
@@ -569,7 +569,7 @@ impl MapGenerator {
         map
     }
 
-    fn populate_map(map: &mut Map, params: &GenerationParams, monster_types: &MonsterTypes) {
+    fn populate_map(map: &mut GeneratedMap, params: &GenerationParams, monster_types: &MonsterTypes) {
         let monster_types_guard = monster_types.lock().unwrap();
         map.add_random_monsters(&*monster_types_guard, 1);
 

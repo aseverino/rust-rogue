@@ -30,10 +30,11 @@ use crate::position::Position;
 use crate::monster_type::MonsterType;
 use std::cell::RefCell;
 use std::cmp::{max, min};
+use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct Monster {
     pub hp: u32,
     pub kind: Arc<MonsterType>,
@@ -41,7 +42,8 @@ pub struct Monster {
     pub id: u32,
 }
 
-pub type MonsterRef = Arc<RwLock<Monster>>;
+pub type MonsterRef = Rc<RefCell<Monster>>;
+pub type MonsterArc = Arc<RwLock<Monster>>;
 
 static MONSTER_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 

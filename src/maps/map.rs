@@ -39,6 +39,7 @@ use crate::lua_interface::LuaInterface;
 use crate::lua_interface::LuaScripted;
 use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
+use crate::monster::MonsterArc;
 use crate::monster::MonsterRef;
 use crate::monster_type::MonsterType;
 use crate::player;
@@ -89,6 +90,66 @@ impl SpellFovCache {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GeneratedMap {
+    pub tiles: TileMap,
+    pub walkable_cache: Vec<Position>,
+    pub available_walkable_cache: Vec<Position>,
+    pub monsters: Vec<MonsterArc>,
+    pub border_positions: [Vec<Position>; 4],
+    pub downstair_teleport: Option<Position>,
+}
+
+impl GeneratedMap {
+    pub fn new(tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
+        Self {
+            tiles: TileMap::new(tiles),
+            walkable_cache,
+            available_walkable_cache,
+            monsters: Vec::new(),
+            border_positions: [
+                Vec::new(), // Up border
+                Vec::new(), // Right border
+                Vec::new(), // Down border
+                Vec::new(), // Left border
+            ],
+            downstair_teleport: None,
+        }
+    }
+
+    pub(crate) fn add_random_monsters(
+        &mut self,
+        monster_types: &Vec<Arc<MonsterType>>,
+        count: usize,
+    ) {
+        let mut rng = thread_rng();
+
+        // let mut positions = self.walkable_cache.clone(); // clone so we can shuffle safely
+        // 2. Shuffle the positions randomly
+        // positions.shuffle(&mut rng);
+
+        // 3. Pick up to `count` positions
+        let len = self.available_walkable_cache.len();
+        let positions: Vec<Position> = self.available_walkable_cache
+            .drain(len.saturating_sub(count)..)
+            .collect();
+
+        for pos in positions {
+            let kind = monster_types
+                .choose(&mut rng)
+                .expect("Monster type list is empty")
+                .clone();
+
+            let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
+            self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
+            // Wrap the monster in Rc and push to creatures
+            self.monsters.push(monster);
+        }
+
+        self.walkable_cache.shuffle(&mut rng);
+    }
+}
+
 #[derive(Debug)]
 pub struct Map {
     pub tiles: TileMap,
@@ -105,9 +166,9 @@ pub struct Map {
 }
 
 impl Map {
-    pub fn new(tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
+    pub fn new(tiles: TileMap, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
         Self {
-            tiles: TileMap::new(tiles),
+            tiles,
             walkable_cache,
             available_walkable_cache,
             monsters: Vec::new(),
@@ -124,6 +185,31 @@ impl Map {
             ],
             downstair_teleport: None,
         }
+    }
+
+    fn convert_monsters(monsters: Vec<MonsterArc>) -> Vec<Monster> 
+    where
+        Monster: Clone,
+    {
+        monsters
+            .into_iter()
+            .map(|arc_mutex| {
+                let monster = arc_mutex.read().unwrap();
+                monster.clone()
+            })
+            .collect()
+    }
+
+    pub fn from_generated_map(generated_map: GeneratedMap) -> Self {
+        let mut map = Self::new(
+            generated_map.tiles,
+            generated_map.walkable_cache,
+            generated_map.available_walkable_cache,
+        );
+        map.monsters = Self::convert_monsters(generated_map.monsters);
+        map.border_positions = generated_map.border_positions;
+        map.downstair_teleport = generated_map.downstair_teleport;
+        map
     }
 
     //pub async fn init(&mut self, _player: &mut Player) {
@@ -298,38 +384,6 @@ impl Map {
 
     pub fn is_tile_walkable(&self, pos: Position) -> bool {
         pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
-    }
-    
-    pub(crate) fn add_random_monsters(
-        &mut self,
-        monster_types: &Vec<Arc<MonsterType>>,
-        count: usize,
-    ) {
-        let mut rng = thread_rng();
-
-        // let mut positions = self.walkable_cache.clone(); // clone so we can shuffle safely
-        // 2. Shuffle the positions randomly
-        // positions.shuffle(&mut rng);
-
-        // 3. Pick up to `count` positions
-        let len = self.available_walkable_cache.len();
-        let positions: Vec<Position> = self.available_walkable_cache
-            .drain(len.saturating_sub(count)..)
-            .collect();
-
-        for pos in positions {
-            let kind = monster_types
-                .choose(&mut rng)
-                .expect("Monster type list is empty")
-                .clone();
-
-            let monster = Monster::new(pos.clone(), kind);
-            self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
-            // Wrap the monster in Rc and push to creatures
-            self.monsters.push(monster);
-        }
-
-        self.walkable_cache.shuffle(&mut rng);
     }
 
     fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32, lua_interface: &mut LuaInterface) {

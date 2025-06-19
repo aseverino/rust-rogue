@@ -21,11 +21,11 @@
 // SOFTWARE.
 
 use core::panic;
-use std::{sync::{mpsc, Arc, Mutex}};
+use std::{cell::RefCell, rc::Rc, sync::{mpsc, Arc, Mutex}};
 
 use macroquad::miniquad::ElapsedQuery;
 
-use crate::{lua_interface::LuaInterface, maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapStatus, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
+use crate::{lua_interface::LuaInterface, maps::{map::{GeneratedMap, Map}, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapStatus, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverworldPos {
@@ -35,11 +35,53 @@ pub struct OverworldPos {
 }
 
 pub struct Overworld {
-    pub maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>>, // this is a list of floors; each floor has fixed 5x5 maps; The maps are represented by their IDs
-    map_generator: MapGenerator,
+    pub maps: Rc<RefCell<Vec<[[Option<Rc<RefCell<Map>>>; 5]; 5]>>>,
 }
 
 impl Overworld {
+    pub fn new() -> Self {
+        let maps: Rc<RefCell<Vec<[[Option<Rc<RefCell<Map>>>; 5]; 5]>>> =
+            Rc::new(RefCell::new(vec![
+                std::array::from_fn(|_| std::array::from_fn(|_| None))
+            ]));
+        Self {
+            maps: maps,
+        }
+    }
+
+    pub fn add_map(&self, opos: OverworldPos, generated_map: Arc<Mutex<GeneratedMap>>) -> Rc<RefCell<Map>> {
+        let mut maps_guard = self.maps.borrow_mut();
+        if opos.floor >= maps_guard.len() {
+            maps_guard.resize_with(opos.floor + 1, || {
+                std::array::from_fn(|_| std::array::from_fn(|_| None))
+            });
+        }
+        
+        if maps_guard[opos.floor][opos.x][opos.y].is_none() {
+            let map = Rc::new(RefCell::new(Map::from_generated_map(generated_map.lock().unwrap().clone())));
+            maps_guard[opos.floor][opos.x][opos.y] = Some(Rc::clone(&map));
+            map
+        } else {
+            panic!("Map at position {:?} already exists!", opos);
+        }
+    }
+
+    pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<Rc<RefCell<Map>>> {
+        let maps_guard = self.maps.borrow_mut();
+        if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
+            maps_guard[opos.floor][opos.x][opos.y].as_ref().map(Rc::clone)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct OverworldGenerator {
+    pub generated_maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<GeneratedMap>>>; 5]; 5]>>>,
+    map_generator: MapGenerator,
+}
+
+impl OverworldGenerator {
     fn fill_predefined_borders(&self,
                                opos: OverworldPos,
                                params: &mut GenerationParams) {
@@ -64,7 +106,7 @@ impl Overworld {
             // outside the 5×5 slice – ignore
             if !(0..5).contains(&nx) || !(0..5).contains(&ny) { continue; }
 
-            if let Some(neigh_map) = self.get_map_ptr(OverworldPos { floor: opos.floor,
+            if let Some(neigh_map) = self.get_generated_map_ptr(OverworldPos { floor: opos.floor,
                                                                      x: nx as usize,
                                                                      y: ny as usize }) {
                 let mut vec = neigh_map.lock().unwrap()
@@ -88,7 +130,7 @@ impl Overworld {
     }
     
     pub async fn new(lua_interface: &mut LuaInterface) -> Arc<Mutex<Self>> {
-        let maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<Map>>>; 5]; 5]>>> =
+        let generated_maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<GeneratedMap>>>; 5]; 5]>>> =
             Arc::new(Mutex::new(vec![
                 std::array::from_fn(|_| std::array::from_fn(|_| None))
             ]));
@@ -96,28 +138,29 @@ impl Overworld {
         let map_generator = MapGenerator::new(lua_interface).await;
 
         let overworld = Arc::new(Mutex::new(Self {
-            maps: Arc::clone(&maps),
+            generated_maps: Arc::clone(&generated_maps),
+            //maps: Arc::clone(&maps),
             map_generator,
         }));
 
         let overworld_weak = Arc::downgrade(&overworld);
-        let maps_clone = Arc::clone(&maps);
+        let generated_maps_clone = Arc::clone(&generated_maps);
 
         let callback = Box::new(move |assignment: MapAssignment| {
-            let mut maps = maps_clone.lock().unwrap();
+            let mut generated_maps = generated_maps_clone.lock().unwrap();
             let OverworldPos { floor, x, y } = assignment.opos;
 
-            if floor >= maps.len() {
-                maps.resize_with(floor + 1, || {
+            if floor >= generated_maps.len() {
+                generated_maps.resize_with(floor + 1, || {
                     std::array::from_fn(|_| std::array::from_fn(|_| None))
                 });
             }
 
-            maps[floor][x][y] = Some(assignment.map.clone());
-            drop(maps);
+            generated_maps[floor][x][y] = Some(assignment.map);
+            drop(generated_maps);
 
             if x == 2 && y == 2 && floor == 0 {
-                let stairs_pos = maps_clone.lock().unwrap()
+                let stairs_pos = generated_maps_clone.lock().unwrap()
                     .get(0).and_then(|floor| floor[2][2].as_ref())
                     .and_then(|map| map.lock().unwrap().downstair_teleport);
                 
@@ -152,7 +195,7 @@ impl Overworld {
                 if new_x >= 0 && new_x < 5 && new_y >= 0 && new_y < 5 {
                     let opos = OverworldPos { floor, x: new_x as usize, y: new_y as usize };
                     // Check if this adjacent map is already generated
-                    if self.get_map_ptr(opos).is_none() {
+                    if self.get_generated_map_ptr(opos).is_none() {
                         // If not, setup the GenerationParams with appropriate borders (they should not have borders at the edges of the 5x5 grid)
                         let mut gen_params = GenerationParams::default();
                         if new_x != 0 {
@@ -185,7 +228,7 @@ impl Overworld {
         self.map_generator.request_generation(opos, gen_params);
     }
 
-    pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<Arc<Mutex<Map>>> {
+    pub fn get_generated_map_ptr(&self, opos: OverworldPos) -> Option<Arc<Mutex<GeneratedMap>>> {
         let shared_status_opt = self.map_generator.map_statuses.lock().ok()?.get(&opos).cloned();
 
         let shared_status = shared_status_opt?;
@@ -199,7 +242,7 @@ impl Overworld {
 
         match &*status {
             MapStatus::Ready(map_arc) => {
-                let maps_guard = self.maps.lock().ok()?;
+                let maps_guard = self.generated_maps.lock().ok()?;
                 if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
                     maps_guard[opos.floor][opos.x][opos.y].as_ref().map(Arc::clone)
                 } else {

@@ -21,11 +21,9 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
-use once_cell::sync::Lazy;
-// use crate::creature::CreatureRef;
 use crate::items::collection::Items;
 use crate::lua_interface::LuaInterface;
-use crate::maps::overworld::{self, Overworld, OverworldPos};
+use crate::maps::overworld::{Overworld, OverworldGenerator, OverworldPos};
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
 use crate::ui::point_f::PointF;
@@ -40,11 +38,12 @@ use macroquad::time::get_time;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 pub struct GameState {
     pub player: Player,
-    pub overworld: Arc<Mutex<Overworld>>,
+    pub overworld_generator: Arc<Mutex<OverworldGenerator>>,
+    pub overworld: Overworld,
     pub items: Items,
     pub lua_interface: LuaInterface
 }
@@ -86,6 +85,23 @@ fn draw(game: &mut GameState, map: &mut Map, game_interface_offset: PointF) {
     });
 }
 
+fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<Map>> {
+    let current_map_rc = game.overworld.get_map_ptr(overworld_pos);
+
+    if current_map_rc.is_none() {
+        let generated_map_arc = if let Some(generated_map_arc) = game.overworld_generator.lock().unwrap().get_generated_map_ptr(overworld_pos) {
+            generated_map_arc
+        } else {
+            panic!("Failed to get map pointer from overworld");
+        };
+
+        game.overworld.add_map(overworld_pos, generated_map_arc.clone())
+    }
+    else {
+        current_map_rc.unwrap()
+    }
+}
+
 pub async fn run() {
     let mut lua_interface = LuaInterface::new();
     lua_interface.init().unwrap();
@@ -95,7 +111,8 @@ pub async fn run() {
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld: Overworld::new(&mut lua_interface).await,
+        overworld_generator: OverworldGenerator::new(&mut lua_interface).await,
+        overworld: Overworld::new(),
         items: Items::new(),
         lua_interface: lua_interface
     };
@@ -105,14 +122,10 @@ pub async fn run() {
     let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
     let mut current_downstair_teleport_pos: Option<Position>;
 
-    let map_arc = if let Some(map_arc) = game.overworld.lock().unwrap().get_map_ptr(overworld_pos) {
-        map_arc
-    } else {
-        panic!("Failed to get map pointer from overworld");
-    };
-    let mut current_map_arc = map_arc;
+    let mut current_map_rc = get_map_ptr(&mut game, overworld_pos);
+
     {
-        let mut map = current_map_arc.lock().unwrap();
+        let mut map = current_map_rc.borrow_mut();
         map.add_player_first_map(&mut game.player);
     }
 
@@ -120,7 +133,7 @@ pub async fn run() {
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
-    let chest_action: Arc<RwLock<Option<u32>>> = Arc::new(RwLock::new(None));
+    let mut chest_action: Option<u32> = None;
     let mut map_update = PlayerOverworldEvent::None;
 
     loop {
@@ -148,24 +161,27 @@ pub async fn run() {
             }
 
             {
-                let mut overworld = game.overworld.lock().unwrap();
-                if let Some(new_map_arc) = overworld.get_map_ptr(new_opos) {
+                let new_map_rc = get_map_ptr(&mut game, new_opos);
+
                     {
-                        let mut map = current_map_arc.lock().unwrap();
-                        map.remove_creature(&mut game.player);
+                    let mut map = current_map_rc.borrow_mut();
+                    map.remove_creature(&mut game.player);
                     }
 
-                    current_map_arc = new_map_arc;
+                current_map_rc = new_map_rc;
                     
                     current_downstair_teleport_pos = {
-                        let map = current_map_arc.lock().unwrap();
+                    let map = current_map_rc.borrow();
                         map.downstair_teleport.clone()
                     };
                     println!("Current downstairs: {:?}", current_downstair_teleport_pos);
 
                     // Setting up the map adjacencies has to be done before locking it
-                    overworld.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
-                    let mut map = current_map_arc.lock().unwrap();
+                {
+                    let mut overworld_generator = game.overworld_generator.lock().unwrap();
+                    overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
+                }
+                let mut map = current_map_rc.borrow_mut();
 
                     if map_update == PlayerOverworldEvent::BorderCross {
                         if player_pos.x == 0 {
@@ -186,17 +202,14 @@ pub async fn run() {
                     println!("Player moved to new map at position: {:?}", new_opos);
                     
                     overworld_pos = new_opos;
-                } else {
-                    panic!("Failed to get map pointer from overworld");
-                }
             }
             map_update = PlayerOverworldEvent::None;
         }
-        else if let Some(item_id) = chest_action.write().unwrap().take() {
+        else if let Some(item_id) = chest_action {
             let item = game.items.items[item_id as usize].clone();
             game.player.add_item(item);
             {
-                let mut map = current_map_arc.lock().unwrap();
+                let mut map = current_map_rc.borrow_mut();
                 map.remove_chest(game.player.position);
             }
             with_ui(|ui| { ui.hide(); });
@@ -205,7 +218,7 @@ pub async fn run() {
         let now = get_time();
         if now - last_move_time < move_interval {
             {
-                let mut map = current_map_arc.lock().unwrap();
+                let mut map = current_map_rc.borrow_mut();
                 draw(&mut game, &mut map, game_interface_offset);
             }
             next_frame().await;
@@ -213,7 +226,7 @@ pub async fn run() {
         }
         clear_background(BLACK);
 
-        let player_event = { current_map_arc.lock().unwrap().last_player_event.clone() };
+        let player_event = { current_map_rc.borrow_mut().last_player_event.clone() };
 
         if player_event == Some(PlayerEvent::Death) {
             draw_text("Game Over!", 10.0, 20.0, 30.0, WHITE);
@@ -230,7 +243,7 @@ pub async fn run() {
         let current_tile = Position { x: map_hover_x, y: map_hover_y };
 
         {
-            let mut map = current_map_arc.lock().unwrap();
+            let mut map = current_map_rc.borrow_mut();
             with_ui(|ui|
             {
                 
@@ -273,10 +286,8 @@ pub async fn run() {
                                     })
                                     .collect();
 
-                                let chest_action_clone = chest_action.clone();
-
                                 ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                                    *chest_action_clone.write().unwrap() = Some(item_id);
+                                    chest_action = Some(item_id);
                                 }));
                             }
                         }

@@ -46,7 +46,7 @@ pub struct BaseItemData {
     pub description: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ItemKind {
     Orb(Orb),
     Teleport(Teleport),

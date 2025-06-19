@@ -27,14 +27,14 @@ use crate::{items::{base_item::ItemKind, orb::Orb, teleport::Teleport}, maps::{G
 pub const NO_CREATURE: i32 = -1;
 pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum TileKind {
     Chasm,
     Wall,
     Floor,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tile {
     pub kind: TileKind,
     pub creature: i32, // Index of creatures on this tile

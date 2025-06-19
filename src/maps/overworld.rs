@@ -25,7 +25,7 @@ use std::{sync::{mpsc, Arc, Mutex}};
 
 use macroquad::miniquad::ElapsedQuery;
 
-use crate::{lua_interface::LuaInterface, maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
+use crate::{lua_interface::LuaInterface, maps::{map::Map, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapStatus, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, position::Position};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverworldPos {
@@ -113,7 +113,7 @@ impl Overworld {
                 });
             }
 
-            maps[floor][x][y] = Some(Arc::new(Mutex::new(assignment.map)));
+            maps[floor][x][y] = Some(assignment.map.clone());
             drop(maps);
 
             if x == 2 && y == 2 && floor == 0 {
@@ -186,11 +186,27 @@ impl Overworld {
     }
 
     pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<Arc<Mutex<Map>>> {
-        let maps_guard = self.maps.lock().ok()?;
-        if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
-            maps_guard[opos.floor][opos.x][opos.y].as_ref().map(Arc::clone)
-        } else {
-            None
+        let shared_status_opt = self.map_generator.map_statuses.lock().ok()?.get(&opos).cloned();
+
+        let shared_status = shared_status_opt?;
+        let (lock, cvar) = &*shared_status;
+
+        let mut status = lock.lock().ok()?;
+
+        while let MapStatus::Requested = *status {
+            status = cvar.wait(status).ok()?; // Wait until notified
+        }
+
+        match &*status {
+            MapStatus::Ready(map_arc) => {
+                let maps_guard = self.maps.lock().ok()?;
+                if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
+                    maps_guard[opos.floor][opos.x][opos.y].as_ref().map(Arc::clone)
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }

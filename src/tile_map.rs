@@ -24,6 +24,7 @@ use crate::tile::Tile;
 use crate::position::Position;
 use std::ops::{Index, IndexMut};
 
+#[derive(Debug)]
 pub struct TileMap {
     tiles: Vec<Vec<Tile>>,
 }

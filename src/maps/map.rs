@@ -73,6 +73,7 @@ pub enum PlayerEvent {
     ClimbDown,
 }
 
+#[derive(Debug)]
 pub struct SpellFovCache {
     pub radius: u32,
     pub origin: Position,
@@ -89,6 +90,7 @@ impl SpellFovCache {
     }
 }
 
+#[derive(Debug)]
 pub struct Map {
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,

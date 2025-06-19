@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::ops::BitOr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use bitflags::bitflags;
@@ -80,6 +80,27 @@ impl Border {
 }
 
 #[derive(Debug, Clone)]
+pub enum MapStatus {
+    NotRequested,
+    Requested,
+    Ready(Arc<Mutex<Map>>),
+}
+
+type SharedMapStatus = Arc<(Mutex<MapStatus>, Condvar)>;
+
+impl PartialEq for MapStatus {
+    fn eq(&self, other: &Self) -> bool {
+        use MapStatus::*;
+        match (self, other) {
+            (NotRequested, NotRequested) => true,
+            (Requested, Requested) => true,
+            (Ready(a), Ready(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct GenerationParams {
     pub num_walks: usize,
     pub walk_length: usize,
@@ -122,7 +143,7 @@ enum Command {
 
 pub struct MapAssignment {
     pub opos: OverworldPos,
-    pub map: Map,
+    pub map: Arc<Mutex<Map>>,
 }
 
 type MonsterCollection = Vec<Arc<MonsterType>>;
@@ -132,6 +153,7 @@ pub struct MapGenerator {
     command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
     monster_types: MonsterTypes,
+    pub map_statuses: Arc<Mutex<HashMap<OverworldPos, SharedMapStatus>>>,
 }
 
 impl MapGenerator {
@@ -139,7 +161,17 @@ impl MapGenerator {
         Self {
             command_tx: None,
             thread_handle: None,
-            monster_types: Arc::new(Mutex::new(load_monster_types(lua_interface).await))
+            monster_types: Arc::new(Mutex::new(load_monster_types(lua_interface).await)),
+            map_statuses: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn get_map_status(&self, opos: &OverworldPos) -> MapStatus {
+        if let Some(shared_status) = self.map_statuses.lock().unwrap().get(opos) {
+            let (mutex, _) = &**shared_status;
+            mutex.lock().unwrap().clone()
+        } else {
+            MapStatus::NotRequested
         }
     }
 
@@ -147,13 +179,30 @@ impl MapGenerator {
         let (command_tx, command_rx) = mpsc::channel::<Command>();
         self.command_tx = Some(command_tx);
         let monster_types = Arc::clone(&self.monster_types);
+        let statuses = Arc::clone(&self.map_statuses);
         self.thread_handle = Some(thread::spawn(move || {
             for command in command_rx {
                 match command {
                     Command::Generate(pos, params) => {
                         let mut map = Self::generate_map(&params);
                         Self::populate_map(&mut map, &params, &monster_types);
-                        callback(MapAssignment { opos: pos, map });
+                        let map_arc = Arc::new(Mutex::new(map));
+                        {
+                            let mut statuses = statuses.lock().unwrap();
+                            if let Some(shared_status) = statuses.get(&pos) {
+                                let (mutex, cvar) = &**shared_status;
+                                let mut status = mutex.lock().unwrap();
+                                *status = MapStatus::Ready(Arc::clone(&map_arc));
+                                cvar.notify_all();
+                            } else {
+                                let shared_status = Arc::new((
+                                    Mutex::new(MapStatus::Ready(Arc::clone(&map_arc))),
+                                    Condvar::new(),
+                                ));
+                                statuses.insert(pos, shared_status);
+                            }
+                        }
+                        callback(MapAssignment { opos: pos, map: Arc::clone(&map_arc) });
                     }
                     Command::Stop => {
                         println!("[MapGenerator] Stopping...");
@@ -165,7 +214,24 @@ impl MapGenerator {
     }
 
     pub fn request_generation(&mut self, opos: OverworldPos, params: GenerationParams) {
-        println!("[MapGenerator] Requesting generation for {:?}", opos);
+        let mut statuses = self.map_statuses.lock().unwrap();
+        let entry = statuses.entry(opos).or_insert_with(|| {
+            Arc::new((Mutex::new(MapStatus::NotRequested), Condvar::new()))
+        });
+
+        let (lock, _) = &**entry;
+        let mut state = lock.lock().unwrap();
+
+        match *state {
+            MapStatus::NotRequested => {
+                *state = MapStatus::Requested;
+            }
+            MapStatus::Requested | MapStatus::Ready(_) => {
+                return; // Already requested or done
+            }
+        }
+
+        drop(state); // release lock before sending
         if let Some(ref tx) = self.command_tx {
             let _ = tx.send(Command::Generate(opos, params));
         }

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use once_cell::sync::Lazy;
 use crate::creature::CreatureRef;
 use crate::items::collection::Items;
 use crate::lua_interface::LuaInterface;
@@ -123,7 +124,7 @@ pub async fn run() {
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
-    let chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
+    let chest_action: Arc<RwLock<Option<u32>>> = Arc::new(RwLock::new(None));
     let mut map_update = PlayerOverworldEvent::None;
 
     loop {
@@ -196,7 +197,7 @@ pub async fn run() {
             }
             map_update = PlayerOverworldEvent::None;
         }
-        else if let Some(item_id) = chest_action.take() {
+        else if let Some(item_id) = chest_action.write().unwrap().take() {
             let item = game.items.items[item_id as usize].clone();
             let player = &mut game.player.write().unwrap();
             player.add_item(item);
@@ -268,9 +269,9 @@ pub async fn run() {
                             let actual_items: Vec<(u32, String)> = items_vec.iter()
                                 .filter_map(|item_id| {
                                     game.items.items.iter()
-                                        .find(|item| item.borrow().get_id() == *item_id)
+                                        .find(|item| item.read().unwrap().get_id() == *item_id)
                                         .map(|item_rc| {
-                                            let item_ref = item_rc.borrow();
+                                            let item_ref = item_rc.read().unwrap();
                                             (item_ref.get_id(), item_ref.get_name().to_string())
                                         })
                                 })
@@ -279,7 +280,7 @@ pub async fn run() {
                             let chest_action_clone = chest_action.clone();
 
                             game.ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                                *chest_action_clone.borrow_mut() = Some(item_id);
+                                *chest_action_clone.write().unwrap() = Some(item_id);
                             }));
                         }
                     }
@@ -303,3 +304,5 @@ pub async fn run() {
         next_frame().await;
     }
 }
+
+//static INSTANCE: Lazy<GameState> = Lazy::new(|| GameState { value: 42 });

@@ -132,7 +132,7 @@ impl LuaInterface {
     }
 
     pub fn on_get_attack_damage(&self, weapon_ref: &WeaponRef, player_ref: &PlayerRef, monster_ref: &MonsterRef) -> Result<f32> {
-        let weapon = weapon_ref.borrow();
+        let weapon = weapon_ref.read().unwrap();
         let funcs = self
             .script_cache
             .get(&weapon.base_holdable.base_item.id)

@@ -20,18 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::{Arc, RwLock}};
 
 use serde::Deserialize;
 
 use crate::items::{container::Container, holdable::{Armor, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb, teleport::Teleport};
 
-pub fn downcast_rc_item<T: 'static>(rc: &Rc<RefCell<dyn Item>>) -> Option<Rc<RefCell<T>>> {
-    if rc.borrow().as_any().is::<T>() {
+pub fn downcast_arc_item<T: 'static>(arc: &Arc<RwLock<dyn Item>>) -> Option<Arc<RwLock<T>>> {
+    if arc.write().unwrap().as_any().is::<T>() {
         // SAFETY: we just checked type, so we can clone Rc and transmute its type
-        let raw = Rc::as_ptr(rc) as *const RefCell<T>;
-        let cloned = unsafe { Rc::from_raw(raw) };
-        let result = Rc::clone(&cloned);
+        let raw = Arc::as_ptr(arc) as *const RwLock<T>;
+        let cloned = unsafe { Arc::from_raw(raw) };
+        let result = Arc::clone(&cloned);
         std::mem::forget(cloned); // avoid dropping original
         Some(result)
     } else {

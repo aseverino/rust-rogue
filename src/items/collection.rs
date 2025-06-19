@@ -20,13 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{cell::RefCell, collections::HashMap, rc::{Rc, Weak}};
+use std::{cell::RefCell, collections::HashMap, sync::{Arc, RwLock, Weak}};
 
 use crate::{items::{base_item::Item, holdable::{HoldableGroup, HoldableGroupKind}}, lua_interface::LuaInterface};
 
 pub struct Items {
-    pub items: Vec<Rc<RefCell<dyn Item>>>,
-    holdable_items: HashMap<HoldableGroupKind, Vec<Weak<RefCell<dyn Item>>>>// = HashMap::new();
+    pub items: Vec<Arc<RwLock<dyn Item>>>,
+    holdable_items: HashMap<HoldableGroupKind, Vec<Weak<RwLock<dyn Item>>>>// = HashMap::new();
 }
 
 impl Items {
@@ -54,38 +54,38 @@ impl Items {
                             }
                         }
 
-                        let weapon_ref = Rc::new(RefCell::new(weapon));
+                        let weapon_ref = Arc::new(RwLock::new(weapon));
                         self.items.push(weapon_ref);
                         let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Weapons).or_default().push(Rc::downgrade(&ptr_copy));
+                        self.holdable_items.entry(HoldableGroupKind::Weapons).or_default().push(Arc::downgrade(&ptr_copy));
                     }
                 }
                 HoldableGroup::Armor { armor } => {
                     for armor in armor {
-                        self.items.push(Rc::new(RefCell::new(armor)));
+                        self.items.push(Arc::new(RwLock::new(armor)));
                         let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Armor).or_default().push(Rc::downgrade(&ptr_copy));
+                        self.holdable_items.entry(HoldableGroupKind::Armor).or_default().push(Arc::downgrade(&ptr_copy));
                     }
                 }
                 HoldableGroup::Shields { shields } => {
                     for shield in shields {
-                        self.items.push(Rc::new(RefCell::new(shield)));
+                        self.items.push(Arc::new(RwLock::new(shield)));
                         let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Shields).or_default().push(Rc::downgrade(&ptr_copy));
+                        self.holdable_items.entry(HoldableGroupKind::Shields).or_default().push(Arc::downgrade(&ptr_copy));
                     }
                 }
                 HoldableGroup::Helmets { helmets } => {
                     for helmet in helmets {
-                        self.items.push(Rc::new(RefCell::new(helmet)));
+                        self.items.push(Arc::new(RwLock::new(helmet)));
                         let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Helmets).or_default().push(Rc::downgrade(&ptr_copy));
+                        self.holdable_items.entry(HoldableGroupKind::Helmets).or_default().push(Arc::downgrade(&ptr_copy));
                     }
                 }
                 HoldableGroup::Boots { boots } => {
                     for boots in boots {
-                        self.items.push(Rc::new(RefCell::new(boots)));
+                        self.items.push(Arc::new(RwLock::new(boots)));
                         let ptr_copy = self.items.last().unwrap().clone();
-                        self.holdable_items.entry(HoldableGroupKind::Boots).or_default().push(Rc::downgrade(&ptr_copy));
+                        self.holdable_items.entry(HoldableGroupKind::Boots).or_default().push(Arc::downgrade(&ptr_copy));
                     }
                 }
             }

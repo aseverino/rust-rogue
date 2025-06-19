@@ -377,11 +377,12 @@ impl Map {
 
     fn do_melee_combat(&mut self, player_ref: &PlayerRef, _attacker_pos: Position, target_pos: Position, lua_interface: &mut LuaInterface) {
         let damage = {
-            if let Some(weapon) = &player_ref.read().unwrap().equipment.weapon {
+            if let Some(weapon_ref) = &player_ref.read().unwrap().equipment.weapon {
+                let weapon = weapon_ref.read().unwrap();
                 let mut damage: u32 = 0;
 
-                if weapon.borrow().is_scripted() {
-                    let lua_check = lua_interface.on_get_attack_damage(weapon, player_ref, &self.monsters[self.tiles[target_pos].creature as usize]);
+                if weapon.is_scripted() {
+                    let lua_check = lua_interface.on_get_attack_damage(weapon_ref, player_ref, &self.monsters[self.tiles[target_pos].creature as usize]);
                         match lua_check {
                             Ok(lua_damage) => {
                                 damage = lua_damage as u32;
@@ -393,10 +394,10 @@ impl Map {
                         }
                 }
                 else {
-                    for &d in weapon.borrow().attack_dice.iter() {
+                    for &d in weapon.attack_dice.iter() {
                         let mut rng = thread_rng();
                         let roll = rng.gen_range(1..=d);
-                        damage += roll + weapon.borrow().base_holdable.modifier as u32;
+                        damage += roll + weapon.base_holdable.modifier as u32;
                     }
                 }
                 

@@ -23,7 +23,7 @@
 use macroquad::prelude::*;
 use rlua::{UserData, UserDataMethods};
 use crate::items::holdable::*;
-use crate::items::base_item::{downcast_rc_item, Item};
+use crate::items::base_item::{downcast_arc_item, Item};
 use crate::maps::{TILE_SIZE};
 use crate::creature::Creature;
 use crate::position::{ Position };
@@ -36,11 +36,11 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-pub type WeaponRef = Rc<RefCell<Weapon>>;
-pub type ShieldRef = Rc<RefCell<Shield>>;
-pub type HelmetRef = Rc<RefCell<Helmet>>;
-pub type ArmorRef = Rc<RefCell<Armor>>;
-pub type BootsRef = Rc<RefCell<Boots>>;
+pub type WeaponRef = Arc<RwLock<Weapon>>;
+pub type ShieldRef = Arc<RwLock<Shield>>;
+pub type HelmetRef = Arc<RwLock<Helmet>>;
+pub type ArmorRef = Arc<RwLock<Armor>>;
+pub type BootsRef = Arc<RwLock<Boots>>;
 
 pub type PlayerRef = Arc<RwLock<Player>>;
 
@@ -124,32 +124,32 @@ impl Player {
         self.sp
     }
 
-    pub fn add_item(&mut self, item: Rc<RefCell<dyn Item>>) {
-        let item_ref = item.borrow();
+    pub fn add_item(&mut self, item_ref: Arc<RwLock<dyn Item>>) {
+        let item = item_ref.read().unwrap();
 
-        if item_ref.is_weapon() {
-            drop(item_ref);
-            if let Some(weapon_rc) = downcast_rc_item::<Weapon>(&item) {
+        if item.is_weapon() {
+            drop(item);
+            if let Some(weapon_rc) = downcast_arc_item::<Weapon>(&item_ref) {
                 self.equipment.weapon = Some(weapon_rc);
             }
-        } else if item_ref.is_shield() {
-            drop(item_ref);
-            if let Some(shield_rc) = downcast_rc_item::<Shield>(&item) {
+        } else if item.is_shield() {
+            drop(item);
+            if let Some(shield_rc) = downcast_arc_item::<Shield>(&item_ref) {
                 self.equipment.shield = Some(shield_rc);
             }
-        } else if item_ref.is_helmet() {
-            drop(item_ref);
-            if let Some(helmet_rc) = downcast_rc_item::<Helmet>(&item) {
+        } else if item.is_helmet() {
+            drop(item);
+            if let Some(helmet_rc) = downcast_arc_item::<Helmet>(&item_ref) {
                 self.equipment.helmet = Some(helmet_rc);
             }
-        } else if item_ref.is_armor() {
-            drop(item_ref);
-            if let Some(armor_rc) = downcast_rc_item::<Armor>(&item) {
+        } else if item.is_armor() {
+            drop(item);
+            if let Some(armor_rc) = downcast_arc_item::<Armor>(&item_ref) {
                 self.equipment.armor = Some(armor_rc);
             }
-        } else if item_ref.is_boots() {
-            drop(item_ref);
-            if let Some(boots_rc) = downcast_rc_item::<Boots>(&item) {
+        } else if item.is_boots() {
+            drop(item);
+            if let Some(boots_rc) = downcast_arc_item::<Boots>(&item_ref) {
                 self.equipment.boots = Some(boots_rc);
             }
         } else {

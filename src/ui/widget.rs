@@ -62,6 +62,7 @@ pub struct WidgetBase {
     pub dirty: bool,
     pub visible: bool,
     pub color: Color,
+    pub manually_added: bool,
 }
 
 impl WidgetBase {
@@ -80,6 +81,7 @@ impl WidgetBase {
             dirty: true,
             visible: true,
             color: BLANK,
+            manually_added: false,
         };
 
         if let Some(ref parent) = w.parent {
@@ -117,6 +119,14 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         }
 
         w
+    }
+
+    fn set_manually_added(&mut self) {
+        self.get_base_mut().manually_added = true;
+    }
+
+    fn is_manually_added(&self) -> bool {
+        self.get_base().manually_added
     }
 
     fn get_base(&self) -> &WidgetBase;

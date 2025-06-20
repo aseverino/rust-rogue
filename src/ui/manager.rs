@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{cell::RefCell, rc::{Rc, Weak}};
+use std::{cell::RefCell, collections::VecDeque, rc::{Rc, Weak}};
 
 use macroquad::prelude::*;
 
@@ -29,6 +29,13 @@ use std::fmt::Debug;
 
 
 static ROOT_ID: u32 = 0;
+
+#[derive(Debug, Clone)]
+pub enum UiEvent {
+    IncStrength,
+    IncDexterity,
+    IncIntelligence,
+}
 
 #[derive(Debug)]
 pub struct Ui {
@@ -48,9 +55,14 @@ pub struct Ui {
     hp_bar_id: u32,
     mp_bar_id: u32,
     sp_value_id: u32,
+    str_area_button_id: u32,
+    dex_area_button_id: u32,
+    int_area_button_id: u32,
     str_value_bound_ids: Vec<u32>,
     dex_value_bound_ids: Vec<u32>,
     int_value_bound_ids: Vec<u32>,
+
+    pub events: VecDeque<UiEvent>,
     
     id_counter: u32,
     pub widgets: Vec<Rc<RefCell<dyn Widget>>>,
@@ -70,7 +82,7 @@ impl Ui {
             player_dex: 0,
             player_int: 0,
             is_focused: false,
-            id_counter: 1,
+            id_counter: 0,
             left_panel_id: u32::MAX,
             right_panel_id: u32::MAX,
             character_sheet_id: u32::MAX,
@@ -78,9 +90,15 @@ impl Ui {
             hp_bar_id: u32::MAX,
             mp_bar_id: u32::MAX,
             sp_value_id: u32::MAX,
+            str_area_button_id: u32::MAX,
+            dex_area_button_id: u32::MAX,
+            int_area_button_id: u32::MAX,
             str_value_bound_ids: Vec::new(),
             dex_value_bound_ids: Vec::new(),
             int_value_bound_ids: Vec::new(),
+
+            events: VecDeque::new(),
+
             widgets: Vec::new(),
         };
 
@@ -274,32 +292,42 @@ impl Ui {
 
     
 
-    pub fn add_widget(&mut self, widget: Rc<RefCell<dyn Widget>>) {
-        self.widgets.push(widget);
-        self.id_counter += 1;
-    }
+    // pub fn add_widget(&mut self, widget: Rc<RefCell<dyn Widget>>) {
+    //     self.id_counter += 1;
+    //     self.widgets.push(widget);
+    // }
 
 
     pub fn create_widget<T: Widget + 'static>(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<T>> {
+        self.id_counter += 1;
         let widget = T::new(self, self.id_counter, parent);
         let widget_dyn: Rc<RefCell<dyn Widget>> = widget.clone();
 
-        self.add_widget(widget_dyn);
+        if !widget.borrow().is_manually_added() {
+            self.widgets.push(widget_dyn);    
+        }
+
+        if self.widgets.len() != self.id_counter as usize + 1 {
+            panic!("Widget ID mismatch: expected {}, got {}", self.id_counter, self.widgets.len() - 1);
+        }
 
         widget
     }
 
-    pub fn create_attr_button(&mut self, label: &str, value: u32, parent: &Rc<RefCell<dyn Widget>>, margin_top: f32) -> (Rc<RefCell<dyn Widget>>, u32) {
+    pub fn create_attr_button(&mut self, event: UiEvent, label: &str, value: u32, parent: &Rc<RefCell<dyn Widget>>, margin_top: f32) -> (Rc<RefCell<dyn Widget>>, u32) {
         let button = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(parent))
         );
         {
-            let mut attr_panel = button.borrow_mut();
+            let mut attr_button = button.borrow_mut();
+            attr_button.set_on_click(Box::new(move |ui, _| {
+                ui.events.push_back(event.clone());
+            }));
             //attr_panel.set_border(WHITE, 1.0);
-            attr_panel.set_size(SizeF::new(150.0, 50.0));
-            attr_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-            attr_panel.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
-            attr_panel.set_margin_top(margin_top);
+            attr_button.set_size(SizeF::new(150.0, 50.0));
+            attr_button.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            attr_button.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            attr_button.set_margin_top(margin_top);
         }
 
         let label_widget = self.create_widget::<WidgetText>(
@@ -313,7 +341,7 @@ impl Ui {
             lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
 
-        let value_id = self.id_counter;
+        let value_id = self.id_counter + 1;
         let value_widget = self.create_widget::<WidgetText>(
                         Some(Rc::downgrade(&(button.clone() as Rc<RefCell<dyn Widget>>)))
                     );
@@ -329,7 +357,7 @@ impl Ui {
     }
 
     fn create_left_panel(&mut self) {
-        self.left_panel_id = self.id_counter;
+        self.left_panel_id = self.id_counter + 1;
         let left_panel_rc = self.create_widget::<WidgetPanel>(
             Some(Rc::downgrade(&self.widgets[ROOT_ID as usize]))
         );
@@ -358,7 +386,7 @@ impl Ui {
             lbl.add_anchor_to_parent(AnchorKind::Left,   AnchorKind::Left);
         }
 
-        self.hp_bar_id = self.id_counter;
+        self.hp_bar_id = self.id_counter + 1;
         let hp_bar = self.create_widget::<WidgetBar>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -388,7 +416,7 @@ impl Ui {
             lbl.add_anchor(AnchorKind::Left, hp_label.borrow().get_id(), AnchorKind::Left);
         }
 
-        self.mp_bar_id = self.id_counter;
+        self.mp_bar_id = self.id_counter + 1;
         let mp_bar = self.create_widget::<WidgetBar>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -418,7 +446,7 @@ impl Ui {
             lbl.add_anchor(AnchorKind::Left, mp_label.borrow().get_id(), AnchorKind::Left);
         }
 
-        self.sp_value_id = self.id_counter;
+        self.sp_value_id = self.id_counter + 1;
         let soul_value = self.create_widget::<WidgetText>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -442,7 +470,7 @@ impl Ui {
             lbl.add_anchor(AnchorKind::Left, soul_label.borrow().get_id(), AnchorKind::Left);
         }
 
-        self.str_value_bound_ids.push(self.id_counter);
+        self.str_value_bound_ids.push(self.id_counter + 1);
         let str_value = self.create_widget::<WidgetText>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -456,7 +484,7 @@ impl Ui {
     }
 
     fn create_right_panel(&mut self) {
-        self.right_panel_id = self.id_counter;
+        self.right_panel_id = self.id_counter + 1;
         let right_panel_rc = self.create_widget::<WidgetPanel>(
             Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
         {
@@ -470,7 +498,7 @@ impl Ui {
     }
 
     fn create_character_sheet(&mut self) {
-        self.character_sheet_id = self.id_counter;
+        self.character_sheet_id = self.id_counter + 1;
         let character_sheet_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
         {
             let mut character_sheet = character_sheet_rc.borrow_mut();
@@ -487,7 +515,7 @@ impl Ui {
 
         let parent_dyn = Rc::clone(&self.widgets[self.character_sheet_id as usize]);
 
-        let attributes_tab_id = self.id_counter;
+        let attributes_tab_id = self.id_counter + 1;
         let attributes_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -500,7 +528,7 @@ impl Ui {
             lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
 
-        let skills_tab_id = self.id_counter;
+        let skills_tab_id = self.id_counter + 1;
         let skills_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -512,7 +540,7 @@ impl Ui {
             lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
 
-        let abilities_tab_id = self.id_counter;
+        let abilities_tab_id = self.id_counter + 1;
         let abilities_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -524,7 +552,7 @@ impl Ui {
             lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
 
-        let equipment_tab_id = self.id_counter;
+        let equipment_tab_id = self.id_counter + 1;
         let equipment_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -536,7 +564,7 @@ impl Ui {
             lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
 
-        let inventory_tab_id = self.id_counter;
+        let inventory_tab_id = self.id_counter + 1;
         let inventory_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -548,7 +576,7 @@ impl Ui {
             lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
 
-        let attributes_sheet_id = self.id_counter;
+        let attributes_sheet_id = self.id_counter + 1;
         let attributes_sheet_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
         {
             let mut attr_sheet = attributes_sheet_rc.borrow_mut();
@@ -562,6 +590,7 @@ impl Ui {
         let attr_as_parent_dyn = Rc::clone(&self.widgets[attributes_sheet_id as usize]);
 
         let (dex_area, dex_value_id) = self.create_attr_button(
+            UiEvent::IncDexterity,
             "DEX",
             self.player_dex,
             &attr_as_parent_dyn,
@@ -571,10 +600,12 @@ impl Ui {
         {
             let mut dex_area_button = dex_area.borrow_mut();
             dex_area_button.center_parent();
+            self.dex_area_button_id = dex_area_button.get_id();
         }
         self.dex_value_bound_ids.push(dex_value_id);
 
         let (str_area, str_value_id) = self.create_attr_button(
+            UiEvent::IncStrength,
             "STR",
             self.player_str,
             &attr_as_parent_dyn,
@@ -586,10 +617,12 @@ impl Ui {
             str_area_button.break_anchors();
             str_area_button.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
             str_area_button.add_anchor_to_prev(AnchorKind::Right, AnchorKind::Left);
+            self.str_area_button_id = str_area_button.get_id();
         }
         self.str_value_bound_ids.push(str_value_id);
 
         let (int_area, int_value_id) = self.create_attr_button(
+            UiEvent::IncIntelligence,
             "INT",
             self.player_int,
             &attr_as_parent_dyn,
@@ -601,6 +634,7 @@ impl Ui {
             int_area_button.break_anchors();
             int_area_button.add_anchor(AnchorKind::Top, dex_area.borrow().get_id(), AnchorKind::Top);
             int_area_button.add_anchor(AnchorKind::Left, dex_area.borrow().get_id(), AnchorKind::Right);
+            self.int_area_button_id = int_area_button.get_id();
         }
         self.int_value_bound_ids.push(int_value_id);
         // let dex_title = self.create_widget::<WidgetText>(
@@ -649,7 +683,7 @@ impl Ui {
     }
 
     fn create_chest_view(&mut self) {
-        self.chest_view_id = self.id_counter;
+        self.chest_view_id = self.id_counter + 1;
         let chest_view_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
         {
             let mut chest_view = chest_view_rc.borrow_mut();
@@ -664,7 +698,7 @@ impl Ui {
 
         let parent_dyn = Rc::clone(&self.widgets[self.chest_view_id as usize]);
 
-        let title_id = self.id_counter;
+        let title_id = self.id_counter + 1;
         let title = self.create_widget::<WidgetText>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -676,6 +710,20 @@ impl Ui {
             lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
     }
+
+    // pub fn set_on_click_attr_button(&mut self, attr: &str, callback: Box<dyn FnMut(&mut Ui, PointF)>) {
+    //     let button_id = match attr {
+    //         "str" => self.str_area_button_id,
+    //         "dex" => self.dex_area_button_id,
+    //         "int" => self.int_area_button_id,
+    //         _ => return, // Invalid attribute
+    //     };
+
+    //     if let Some(button) = self.widgets.get(button_id as usize) {
+    //         let mut button_ref = button.borrow_mut();
+    //         button_ref.set_on_click(callback);
+    //     }
+    // }
 
     pub fn draw(&mut self) {
         let ui_ref = self as &Ui;

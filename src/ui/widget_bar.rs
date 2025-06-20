@@ -121,10 +121,11 @@ impl Widget for WidgetBar {
     impl_widget_fns!(WidgetBar, base);
     fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
         let w = Self::new_default(id, parent);
-        ui.add_widget(w.clone());
+        let w_dyn: Rc<RefCell<dyn Widget>> = w.clone();
+        ui.widgets.push(w.clone());
+        w.borrow_mut().set_manually_added();
         
-        let background = &mut ui.create_widget::<WidgetPanel>(
-            Some(Rc::downgrade(&ui.widgets[id as usize])));
+        let background = &mut ui.create_widget::<WidgetPanel>(Some(Rc::downgrade(&w_dyn)));
         w.borrow_mut().background = Some(Rc::downgrade(background));
 
         if let Some(bg_weak) = &w.borrow().background {
@@ -134,8 +135,7 @@ impl Widget for WidgetBar {
             }
         }
 
-        let foreground = &mut ui.create_widget::<WidgetPanel>(
-            Some(Rc::downgrade(&ui.widgets[id as usize])));
+        let foreground = &mut ui.create_widget::<WidgetPanel>(Some(Rc::downgrade(&w_dyn)));
         w.borrow_mut().foreground = Some(Rc::downgrade(foreground));
 
         if let Some(fg_weak) = &w.borrow().foreground {
@@ -151,8 +151,7 @@ impl Widget for WidgetBar {
             }
         }
 
-        let text = &mut ui.create_widget::<WidgetText>(
-            Some(Rc::downgrade(&ui.widgets[id as usize])));
+        let text = &mut ui.create_widget::<WidgetText>(Some(Rc::downgrade(&w_dyn)));
         w.borrow_mut().text = Some(Rc::downgrade(text));
 
         if let Some(text_weak) = &w.borrow().text {

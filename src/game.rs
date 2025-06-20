@@ -34,7 +34,7 @@ use crate::monster::Monster;
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
-use crate::ui::manager::Ui;
+use crate::ui::manager::{Ui, UiEvent};
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::{Direction, Position};
@@ -149,6 +149,23 @@ pub async fn run() {
     let mut map_update = PlayerOverworldEvent::None;
     let mut ui = Ui::new();
 
+    // let ui_events: Rc<RefCell<Vec<UiEvent>>> = Rc::new(RefCell::new(Vec::new()));
+    
+    // let ui_events_clone = Rc::clone(&ui_events);
+    // ui.set_on_click_attr_button("str", Box::new(move |ui, _| {
+    //     ui_events_clone.borrow_mut().push(UiEvent::IncStrength);
+    // }));
+    
+    // let ui_events_clone = Rc::clone(&ui_events);
+    // ui.set_on_click_attr_button("dex", Box::new(move |ui, _| {
+    //     ui_events_clone.borrow_mut().push(UiEvent::IncDexterity);
+    // }));
+    
+    // let ui_events_clone = Rc::clone(&ui_events);
+    // ui.set_on_click_attr_button("int", Box::new(move |ui, _| {
+    //     ui_events_clone.borrow_mut().push(UiEvent::IncIntelligence);
+    // }));
+
     game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
         let binding = monster_types.lock().unwrap();
         let kind = binding.iter()
@@ -168,6 +185,19 @@ pub async fn run() {
     let _ = LuaInterface::register_api(&game.lua_interface);
 
     loop {
+        while ui.events.len() > 0 {
+            let event = ui.events.pop_front().unwrap();
+            if game.player.sp > 0 {
+                match event {
+                    UiEvent::IncStrength => game.player.strength += 1,
+                    UiEvent::IncDexterity => game.player.dexterity += 1,
+                    UiEvent::IncIntelligence => game.player.intelligence += 1,
+                    _ => {}
+                }
+
+                game.player.sp -= 1;
+            }
+        }
         if map_update != PlayerOverworldEvent::None {
             // Determine player's current border position
             let mut player_pos = game.player.position;

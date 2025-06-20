@@ -36,6 +36,7 @@ mod spell_type;
 mod player_spell;
 mod spell_execution;
 mod player;
+mod combat;
 
 use macroquad::prelude::*;
 

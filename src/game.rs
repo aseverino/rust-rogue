@@ -21,21 +21,28 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
+use crate::creature::Creature;
+use crate::items::base_item::ItemKind;
 use crate::items::collection::Items;
 use crate::lua_interface::{LuaInterface, LuaInterfaceRc};
+use crate::maps::map::MapRef;
+use crate::maps::navigator::Navigator;
 use crate::maps::overworld::{Overworld, OverworldGenerator, OverworldPos};
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
+use crate::monster::Monster;
+use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
 use crate::ui::manager::Ui;
 use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
-use crate::position::Position;
+use crate::position::{Direction, Position};
 
-use crate::{monster_type, spell_type};
+use crate::{combat, monster_type, spell_type};
 use macroquad::time::get_time;
 
+use std::cmp::max;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
@@ -45,7 +52,8 @@ pub struct GameState {
     pub overworld_generator: Arc<Mutex<OverworldGenerator>>,
     pub overworld: Overworld,
     pub items: Items,
-    pub lua_interface: LuaInterfaceRc
+    pub lua_interface: LuaInterfaceRc,
+    pub last_player_event: PlayerEvent,
 }
 
 #[derive(PartialEq, Debug)]
@@ -114,14 +122,20 @@ pub async fn run() {
         overworld_generator: OverworldGenerator::new(&lua_interface, &monster_types).await,
         overworld: Overworld::new(),
         items: Items::new(),
-        lua_interface: lua_interface
+        lua_interface: lua_interface,
+        last_player_event: PlayerEvent::None,
     };
 
     game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
-        // let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
-        //     self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
-        //     // Wrap the monster in Rc and push to creatures
-        //     self.monsters.push(monster);
+        // let kind = monster_types.lock().unwrap().iter()
+        //     .find(|mt| mt.id == kind_id)
+        //     .expect("Monster type not found");
+
+        // // Create a new monster and wrap it in Rc
+        // let monster = Monster::new(pos.clone(), *kind);
+        // map.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
+        // // Wrap the monster in Rc and push to creatures
+        // self.monsters.push(monster);
     }));
 
     let _ = LuaInterface::register_api(&game.lua_interface);
@@ -132,6 +146,7 @@ pub async fn run() {
     let mut current_downstair_teleport_pos: Option<Position>;
 
     let mut current_map_rc = get_map_ptr(&mut game, overworld_pos);
+    let shared_map_ptr: Rc<RefCell<Rc<RefCell<Map>>>> = Rc::new(RefCell::new(current_map_rc.clone()));
 
     {
         let mut map = current_map_rc.borrow_mut();
@@ -236,9 +251,9 @@ pub async fn run() {
         }
         clear_background(BLACK);
 
-        let player_event = { current_map_rc.borrow_mut().last_player_event.clone() };
+        let player_event = game.last_player_event;
 
-        if player_event == Some(PlayerEvent::Death) {
+        if player_event == PlayerEvent::Death {
             draw_text("Game Over!", 10.0, 20.0, 30.0, WHITE);
             next_frame().await;
             continue;
@@ -254,61 +269,64 @@ pub async fn run() {
 
         {
             let mut map = current_map_rc.borrow_mut();
-                
             map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
             map.hovered_tile = Some(current_tile);
-            ui.update_mouse_position(global_mouse_pos);
+        }
 
-            if let Some(_click) = input.click {
-                if ui.is_focused {
-                    ui.handle_click(global_mouse_pos);
-                }
-                else {
-                    goal_position = Some(current_tile)
-                }
-            };
+        ui.update_mouse_position(global_mouse_pos);
 
+        if let Some(_click) = input.click {
             if ui.is_focused {
-                if input.keyboard_action == KeyboardAction::Cancel {
-                    ui.hide();
-                }
+                ui.handle_click(global_mouse_pos);
             }
             else {
-                if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
-                    ui.toggle_character_sheet();
+                goal_position = Some(current_tile)
+            }
+        };
+
+        if ui.is_focused {
+            if input.keyboard_action == KeyboardAction::Cancel {
+                ui.hide();
+            }
+        }
+        else {
+            if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
+                ui.toggle_character_sheet();
+            }
+            else {
+                update(&mut game, &mut current_map_rc, input.keyboard_action, input.direction, input.spell, goal_position);
+                let player_pos = game.player.position;
+
+                if player_event == PlayerEvent::OpenChest {
+                    if let Some(items_vec) = current_map_rc.borrow_mut().get_chest_items(&player_pos) {
+                        
+                        let actual_items: Vec<(u32, String)> = items_vec.iter()
+                            .filter_map(|item_id| {
+                                game.items.items.iter()
+                                    .find(|item| item.id() == *item_id)
+                                    .map(|item| {
+                                        (item.id(), item.name().to_string())
+                                    })
+                            })
+                            .collect();
+
+                        let chest_action_clone = chest_action.clone();
+                        ui.show_chest_view(&actual_items, Box::new(move |item_id| {
+                            *chest_action_clone.borrow_mut() = Some(item_id);
+                        }));
+                    }
                 }
-                else {
-                    map.update(&mut game.player, &game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
-                    let player_pos = game.player.position;
-
-                    if player_event == Some(PlayerEvent::OpenChest) {
-                        if let Some(items_vec) = map.get_chest_items(&player_pos) {
-                            
-                            let actual_items: Vec<(u32, String)> = items_vec.iter()
-                                .filter_map(|item_id| {
-                                    game.items.items.iter()
-                                        .find(|item| item.id() == *item_id)
-                                        .map(|item| {
-                                            (item.id(), item.name().to_string())
-                                        })
-                                })
-                                .collect();
-
-                            let chest_action_clone = chest_action.clone();
-                            ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                                *chest_action_clone.borrow_mut() = Some(item_id);
-                            }));
-                        }
-                    }
-                    else if player_event == Some(PlayerEvent::ReachBorder) {
-                        map_update = PlayerOverworldEvent::BorderCross;
-                    }
-                    else if player_event == Some(PlayerEvent::ClimbDown) {
-                        map_update = PlayerOverworldEvent::ClimbDown;
-                    }
+                else if player_event == PlayerEvent::ReachBorder {
+                    map_update = PlayerOverworldEvent::BorderCross;
+                }
+                else if player_event == PlayerEvent::ClimbDown {
+                    map_update = PlayerOverworldEvent::ClimbDown;
                 }
             }
+        }
 
+        {
+            let mut map = current_map_rc.borrow_mut();
             if map.last_player_event == Some(PlayerEvent::AutoMove) {
                 last_move_time = now; // Update last move time for auto step
             } else {
@@ -317,6 +335,241 @@ pub async fn run() {
 
             draw(&mut game, &mut ui, &mut map, game_interface_offset);
         }
+        
         next_frame().await;
+    }
+}
+
+pub fn update(
+        game: &mut GameState,
+        map_ref: &mut MapRef,
+        player_action: KeyboardAction,
+        player_direction: Direction,
+        spell_action: i32,
+        player_goal_position: Option<Position>
+) {
+    game.last_player_event = PlayerEvent::None;
+    let player_pos = game.player.position;
+
+    let mut new_player_pos: Option<Position> = None;
+    let mut update_monsters = false;
+
+    if let Some(player_goal) = player_goal_position {
+        let spell_index = game.player.selected_spell;
+
+        if let Some(index) = spell_index {
+            let mut should_cast = false;
+            {
+                let (in_line_of_sight, spell_range) = {
+                    let in_line_of_sight = game.player.line_of_sight.contains(&player_goal);
+                    let spell_range = game.player.spells.get(index)
+                        .expect("Selected spell index out of bounds")
+                        .spell_type.range;
+                    (in_line_of_sight, spell_range)
+                };
+
+                if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
+                    if let Some(spell) = game.player.spells.get_mut(index) {
+                        if spell.charges > 0 {
+                            spell.charges -= 1;
+                            println!("Casting spell charges {}", spell.charges);
+                            should_cast = true;
+                        }
+                        else {
+                            println!("No charges left for this spell!");
+                        }
+                    }
+                }
+            }
+            
+            if should_cast {
+                combat::do_spell_combat(&mut game.player, map_ref, player_pos, player_goal, index, &game.lua_interface);
+                update_monsters = true;
+            }
+
+            game.player.selected_spell = None;
+            game.player.goal_position = None; // Clear goal position
+            game.last_player_event = PlayerEvent::SpellCast;
+        }
+        else {
+            let path: Option<Vec<Position>> = Navigator::find_path(player_pos, player_goal, |pos| {
+                map_ref.borrow().is_tile_walkable(pos)
+            });
+
+            if let Some(path) = path {
+                if path.len() > 1 {
+                    new_player_pos = Some(path[1]);
+                    game.last_player_event = PlayerEvent::AutoMove;
+                }
+                else {
+                    game.last_player_event = PlayerEvent::AutoMoveEnd;
+                }
+                game.player.goal_position = player_goal_position;
+            }
+            else {
+                game.player.goal_position = None; // Clear goal if no path found
+                game.last_player_event = PlayerEvent::AutoMoveEnd;
+            }
+        }
+        
+    }
+    else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
+        let index = spell_action as usize - 1;
+
+        let spell_name = {
+            game.player.spells.get(index).map(|spell| spell.spell_type.name.clone())
+        };
+        if let Some(name) = spell_name {
+            game.player.selected_spell = Some(index);
+            println!("Spell selected: {}", name);
+        } else {
+            println!("No spell selected!");
+        }
+
+        game.last_player_event = PlayerEvent::SpellSelect;
+    }
+    else if player_action == KeyboardAction::Cancel {
+        game.player.selected_spell = None;
+        game.player.goal_position = None; // Clear goal position
+
+        game.last_player_event = PlayerEvent::Cancel;
+    }
+    else if player_action == KeyboardAction::Move {
+        let pos_change = match player_direction {
+            Direction::Up => (0, -1),
+            Direction::Right => (1, 0),
+            Direction::Down => (0, 1),
+            Direction::Left => (-1, 0),
+            Direction::UpRight => (1, -1),
+            Direction::DownRight => (1, 1),
+            Direction::DownLeft => (-1, 1),
+            Direction::UpLeft => (-1, -1),
+            Direction::None => (0, 0),
+        };
+
+        let pos = Position {
+            x: (player_pos.x as isize + pos_change.0) as usize,
+            y: (player_pos.y as isize + pos_change.1) as usize
+        };
+
+        {
+            let map = map_ref.borrow();
+            if map.is_tile_enemy_occupied(pos) {
+                game.last_player_event = PlayerEvent::MeleeAttack;
+                update_monsters = true; // Update monsters if player attacks
+                drop(map);
+                combat::do_melee_combat(&mut game.player, map_ref, player_pos, pos, &game.lua_interface);
+            }
+            else if map.tiles[pos].is_border(&pos) && !map.monsters.is_empty() {
+                game.last_player_event = PlayerEvent::Cancel;
+            }
+            else {
+                if map.is_tile_walkable(pos) {
+                    new_player_pos = Some(pos);
+                    update_monsters = true; // Update monsters if player moves
+                }
+
+                game.last_player_event = PlayerEvent::Move;
+            }
+        }
+        
+        game.player.goal_position = None;
+    }
+    else if player_action == KeyboardAction::Wait {
+        new_player_pos = Some(player_pos); // Stay in place
+        game.player.goal_position = None; // Clear goal position
+
+        game.last_player_event = PlayerEvent::Wait;
+    }
+
+    if let Some(pos) = new_player_pos {
+        let mut map = map_ref.borrow_mut();
+        map.tiles[player_pos].creature = NO_CREATURE;
+        map.tiles[pos].creature = PLAYER_CREATURE_ID;
+
+        game.player.set_pos(pos);
+        
+        if new_player_pos == game.player.goal_position {
+            game.player.goal_position = None; // Clear goal position if reached
+        }
+
+        map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
+        update_monsters = true;
+
+        let mut to_remove: Vec<usize> = Vec::new();
+        
+        for (idx, item) in map.tiles[pos].items.iter().rev().enumerate() {
+            match item {
+                ItemKind::Orb(_) => {
+                    println!("Player picked up an orb at index {idx}!");
+                    game.player.sp += 1;
+                    to_remove.push(idx); // Collect for removal
+                }
+                ItemKind::Teleport(_) => {
+                    if map.monsters.is_empty() {
+                        println!("Player walked downstairs.");
+                        game.last_player_event = PlayerEvent::ClimbDown;
+                        return;
+                    }
+                }
+                ItemKind::Container(_) => {
+                    game.last_player_event = PlayerEvent::OpenChest;
+                    //to_remove.push(idx); // Collect for removal
+                }
+                _ => {
+                    // println!("Player found an item: {:?}", other_item);
+                }
+            }
+        }
+
+        for idx in to_remove {
+            map.tiles[pos].remove_item(idx);
+        }
+
+        if map.tiles[pos].is_border(&pos) {
+            game.last_player_event = PlayerEvent::ReachBorder;
+        }
+    }
+
+    if update_monsters {
+        let mut map = map_ref.borrow_mut();
+        let walkable_tiles = map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
+        let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
+
+        for (i, monster) in map.monsters.iter_mut().enumerate() {
+            if monster.hp <= 0 {
+                continue; // Skip dead monsters
+            }
+            let monster_pos = monster.pos();
+
+            let path = Navigator::find_path(monster_pos, game.player.position, |pos| {
+                pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && walkable_tiles[pos].is_walkable()
+            });
+
+            if let Some(path) = path {
+                if path.len() > 1 {
+                    let next_step = path[1];
+
+                    if next_step == game.player.position {
+                        println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
+                        game.player.add_health(-monster.kind.melee_damage);
+                        if game.player.hp <= 0 {
+                            println!("Player has been defeated!");
+                            game.last_player_event = PlayerEvent::Death;
+                            return;
+                        }
+                        continue;
+                    }
+
+                    monster_moves.push((monster_pos, next_step, i));
+                    monster.set_pos(next_step);
+                }
+            }
+        }
+
+        for (monster_pos, next_step, i) in monster_moves {
+            map.tiles[monster_pos].creature = NO_CREATURE;
+            map.tiles[next_step].creature = i as i32;
+        }
     }
 }

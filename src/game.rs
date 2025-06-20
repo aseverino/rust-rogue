@@ -73,11 +73,17 @@ pub struct GameState {
     pub last_player_event: PlayerEvent,
 }
 
-#[derive(PartialEq, Debug)]
-enum PlayerOverworldEvent {
-    None,
+#[derive(Clone, PartialEq, Debug)]
+enum MapTravelKind {
     BorderCross,
     ClimbDown,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+enum MapTravelEvent {
+    None,
+    Peek(MapTravelKind),
+    Visit(MapTravelKind),
 }
 
 impl GameState {
@@ -128,6 +134,113 @@ fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<
     }
 }
 
+fn get_new_opos(player_pos: &Position, map_update: &MapTravelEvent) -> OverworldPos {
+    let mut new_opos = OverworldPos { floor: 0, x: 2, y: 2 };
+    if *map_update == MapTravelEvent::Peek(MapTravelKind::BorderCross) || *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross) {
+        if player_pos.x == 0 {
+            new_opos.x -= 1;
+        }
+        else if player_pos.x == GRID_WIDTH - 1 {
+            new_opos.x += 1;
+        }
+        if player_pos.y == 0 {
+            new_opos.y -= 1;
+        }
+        else if player_pos.y == GRID_HEIGHT - 1 {
+            new_opos.y += 1;
+        }
+    }
+    else {
+        new_opos.floor += 1; // Climbing down
+    }
+
+    new_opos
+}
+
+fn check_for_map_update(
+    game: &mut GameState,
+    map_update: &mut MapTravelEvent,
+    peek_map_rc: &mut Option<MapRef>,
+    current_map_rc: &mut MapRef,
+    current_downstair_teleport_pos: &mut Option<Position>,
+    overworld_pos: &mut OverworldPos) {
+    if *map_update != MapTravelEvent::None {
+        // Determine player's current border position
+        let mut player_pos = game.player.position;
+        let new_opos = get_new_opos(&player_pos, &map_update);
+
+        let new_map_rc = get_map_ptr(game, new_opos);
+        
+        if let MapTravelEvent::Peek(_) = map_update {
+            let map = new_map_rc.borrow();
+            if map.visited {
+                if *map_update == MapTravelEvent::Peek(MapTravelKind::ClimbDown) {
+                    *map_update = MapTravelEvent::Visit(MapTravelKind::ClimbDown);
+                }
+                else {
+                    *map_update = MapTravelEvent::Visit(MapTravelKind::BorderCross);
+                }
+            }
+            else {
+                // If the map is not visited, we need to set it up
+                *peek_map_rc = Some(new_map_rc.clone());
+                println!("Peeked at new map: {:?}", new_opos);
+                *map_update = MapTravelEvent::None; // Reset map update to None
+                return;
+            }
+        }
+
+        if let MapTravelEvent::Visit(_) = map_update {
+            {
+                let new_map_rc = get_map_ptr(game, new_opos);
+
+                {
+                    let mut map = current_map_rc.borrow_mut();
+                    map.remove_creature(&mut game.player);
+                }
+
+                *current_map_rc = new_map_rc;
+                    
+                *current_downstair_teleport_pos = {
+                    let map = current_map_rc.borrow();
+                    map.downstair_teleport.clone()
+                };
+                println!("Current downstairs: {:?}", current_downstair_teleport_pos);
+
+                // Setting up the map adjacencies has to be done before locking it
+                {
+                    let mut overworld_generator = game.overworld_generator.lock().unwrap();
+                    overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
+                }
+
+                let mut map = current_map_rc.borrow_mut();
+
+                if *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross) {
+                    if player_pos.x == 0 {
+                        player_pos.x = GRID_WIDTH - 2;
+                    }
+                    else if player_pos.x == GRID_WIDTH - 1 {
+                        player_pos.x = 1;
+                    }
+                    if player_pos.y == 0 {
+                        player_pos.y = GRID_HEIGHT - 2;
+                    }
+                    else if player_pos.y == GRID_HEIGHT - 1 {
+                        player_pos.y = 1;
+                    }
+                }
+                
+                map.add_player(&mut game.player, player_pos);
+                println!("Player moved to new map at position: {:?}", new_opos);
+                
+                *overworld_pos = new_opos;
+            }
+        }
+        
+        *map_update = MapTravelEvent::None;
+    }
+}
+
 pub async fn run() {
     let lua_interface = LuaInterface::new();
     
@@ -148,21 +261,24 @@ pub async fn run() {
     game.items.load_holdable_items(&game.lua_interface).await;
 
     let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
-    let mut current_downstair_teleport_pos: Option<Position>;
+    let mut current_downstair_teleport_pos: Option<Position> = None;
 
     let mut current_map_rc = get_map_ptr(&mut game, overworld_pos);
+    let mut peek_map_rc: Option<MapRef> = None;
+
     let shared_map_ptr: Rc<RefCell<Rc<RefCell<Map>>>> = Rc::new(RefCell::new(current_map_rc.clone()));
 
     {
         let mut map = current_map_rc.borrow_mut();
         map.add_player_first_map(&mut game.player);
+        map.visited = true;
     }
 
     let mut last_move_time = 0.0;
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
-    let mut map_update = PlayerOverworldEvent::None;
+    let mut map_update = MapTravelEvent::None;
     let mut ui = Ui::new();
 
     game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
@@ -217,73 +333,23 @@ pub async fn run() {
                 _ => {}
             }
         }
-        if map_update != PlayerOverworldEvent::None {
-            // Determine player's current border position
-            let mut player_pos = game.player.position;
-            let mut new_opos = overworld_pos.clone();
 
-            if map_update == PlayerOverworldEvent::BorderCross {
-                if player_pos.x == 0 {
-                    new_opos.x -= 1;
-                }
-                else if player_pos.x == GRID_WIDTH - 1 {
-                    new_opos.x += 1;
-                }
-                if player_pos.y == 0 {
-                    new_opos.y -= 1;
-                }
-                else if player_pos.y == GRID_HEIGHT - 1 {
-                    new_opos.y += 1;
-                }
-            }
-            else {
-                new_opos.floor += 1; // Climbing down
-            }
+        check_for_map_update(
+            &mut game,
+            &mut map_update,
+            &mut peek_map_rc,
+            &mut current_map_rc,
+            &mut current_downstair_teleport_pos,
+            &mut overworld_pos
+        );
 
-            {
-                let new_map_rc = get_map_ptr(&mut game, new_opos);
-
-                    {
-                    let mut map = current_map_rc.borrow_mut();
-                    map.remove_creature(&mut game.player);
-                    }
-
-                current_map_rc = new_map_rc;
-                    
-                    current_downstair_teleport_pos = {
-                    let map = current_map_rc.borrow();
-                        map.downstair_teleport.clone()
-                    };
-                    println!("Current downstairs: {:?}", current_downstair_teleport_pos);
-
-                    // Setting up the map adjacencies has to be done before locking it
-                {
-                    let mut overworld_generator = game.overworld_generator.lock().unwrap();
-                    overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
-                }
-                let mut map = current_map_rc.borrow_mut();
-
-                    if map_update == PlayerOverworldEvent::BorderCross {
-                        if player_pos.x == 0 {
-                            player_pos.x = GRID_WIDTH - 2;
-                        }
-                        else if player_pos.x == GRID_WIDTH - 1 {
-                            player_pos.x = 1;
-                        }
-                        if player_pos.y == 0 {
-                            player_pos.y = GRID_HEIGHT - 2;
-                        }
-                        else if player_pos.y == GRID_HEIGHT - 1 {
-                            player_pos.y = 1;
-                        }
-                    }
-                    
-                    map.add_player(&mut game.player, player_pos);
-                    println!("Player moved to new map at position: {:?}", new_opos);
-                    
-                    overworld_pos = new_opos;
-            }
-            map_update = PlayerOverworldEvent::None;
+        if peek_map_rc.is_some() {
+            // If we peeked at a new map, we need to draw it
+            let mut map = peek_map_rc.as_mut().unwrap().borrow_mut();
+            map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
+            draw(&mut game, &mut ui, &mut map, game_interface_offset);
+            next_frame().await;
+            continue;
         }
 
         let now = get_time();
@@ -360,10 +426,10 @@ pub async fn run() {
                     }
                 }
                 else if player_event == PlayerEvent::ReachBorder {
-                    map_update = PlayerOverworldEvent::BorderCross;
+                    map_update = MapTravelEvent::Peek(MapTravelKind::BorderCross);
                 }
                 else if player_event == PlayerEvent::ClimbDown {
-                    map_update = PlayerOverworldEvent::ClimbDown;
+                    map_update = MapTravelEvent::Peek(MapTravelKind::ClimbDown);
                 }
             }
         }

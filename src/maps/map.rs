@@ -147,6 +147,7 @@ pub struct Map {
     pub should_draw_spell_fov: bool,
     pub border_positions: [Vec<Position>; 4],
     pub downstair_teleport: Option<Position>,
+    pub visited: bool,
 }
 
 impl Map {
@@ -167,6 +168,7 @@ impl Map {
                 Vec::new(), // Left border
             ],
             downstair_teleport: None,
+            visited: false,
         }
     }
 
@@ -358,7 +360,9 @@ impl Map {
             monster.draw(offset);
         }
 
-        player.draw(offset);
+        if self.visited {
+            player.draw(offset);
+        }
     }
 
     pub fn is_tile_enemy_occupied(&self, pos: Position) -> bool {

@@ -25,7 +25,7 @@ use crate::creature::Creature;
 use crate::items::base_item::ItemKind;
 use crate::items::collection::Items;
 use crate::lua_interface::{LuaInterface, LuaInterfaceRc};
-use crate::maps::map::MapRef;
+use crate::maps::map::{MapRef, VisitedState};
 use crate::maps::navigator::Navigator;
 use crate::maps::overworld::{Overworld, OverworldGenerator, OverworldPos};
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
@@ -55,6 +55,7 @@ pub enum PlayerEvent {
     AutoMoveEnd,
     Wait,
     Cancel,
+    Confirm,
     MeleeAttack,
     SpellSelect,
     SpellCast,
@@ -134,8 +135,8 @@ fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<
     }
 }
 
-fn get_new_opos(player_pos: &Position, map_update: &MapTravelEvent) -> OverworldPos {
-    let mut new_opos = OverworldPos { floor: 0, x: 2, y: 2 };
+fn get_new_opos(player_pos: &Position, player_opos: &OverworldPos, map_update: &MapTravelEvent) -> OverworldPos {
+    let mut new_opos = *player_opos;
     if *map_update == MapTravelEvent::Peek(MapTravelKind::BorderCross) || *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross) {
         if player_pos.x == 0 {
             new_opos.x -= 1;
@@ -160,6 +161,7 @@ fn get_new_opos(player_pos: &Position, map_update: &MapTravelEvent) -> Overworld
 fn check_for_map_update(
     game: &mut GameState,
     map_update: &mut MapTravelEvent,
+    last_map_travel_kind: &mut MapTravelKind,
     peek_map_rc: &mut Option<MapRef>,
     current_map_rc: &mut MapRef,
     current_downstair_teleport_pos: &mut Option<Position>,
@@ -167,13 +169,13 @@ fn check_for_map_update(
     if *map_update != MapTravelEvent::None {
         // Determine player's current border position
         let mut player_pos = game.player.position;
-        let new_opos = get_new_opos(&player_pos, &map_update);
+        let new_opos = get_new_opos(&player_pos, overworld_pos, &map_update);
 
         let new_map_rc = get_map_ptr(game, new_opos);
         
         if let MapTravelEvent::Peek(_) = map_update {
-            let map = new_map_rc.borrow();
-            if map.visited {
+            let mut map = new_map_rc.borrow_mut();
+            if map.visited_state == VisitedState::Visited {
                 if *map_update == MapTravelEvent::Peek(MapTravelKind::ClimbDown) {
                     *map_update = MapTravelEvent::Visit(MapTravelKind::ClimbDown);
                 }
@@ -186,6 +188,21 @@ fn check_for_map_update(
                 *peek_map_rc = Some(new_map_rc.clone());
                 println!("Peeked at new map: {:?}", new_opos);
                 *map_update = MapTravelEvent::None; // Reset map update to None
+
+                if map.visited_state == VisitedState::NotVisited {
+                    map.visited_state = VisitedState::Peeked;
+                    *current_downstair_teleport_pos = {
+                        let current_map = current_map_rc.borrow();
+                        current_map.downstair_teleport.clone()
+                    };
+                    // Setting up the map adjacencies has to be done before locking it
+                    {
+                        println!("peeking for the first time");
+                        let mut overworld_generator = game.overworld_generator.lock().unwrap();
+                        overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
+                    }
+                }
+                //*overworld_pos = new_opos;
                 return;
             }
         }
@@ -200,18 +217,6 @@ fn check_for_map_update(
                 }
 
                 *current_map_rc = new_map_rc;
-                    
-                *current_downstair_teleport_pos = {
-                    let map = current_map_rc.borrow();
-                    map.downstair_teleport.clone()
-                };
-                println!("Current downstairs: {:?}", current_downstair_teleport_pos);
-
-                // Setting up the map adjacencies has to be done before locking it
-                {
-                    let mut overworld_generator = game.overworld_generator.lock().unwrap();
-                    overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
-                }
 
                 let mut map = current_map_rc.borrow_mut();
 
@@ -230,13 +235,20 @@ fn check_for_map_update(
                     }
                 }
                 
+                map.visited_state = VisitedState::Visited;
                 map.add_player(&mut game.player, player_pos);
+                peek_map_rc.take();
                 println!("Player moved to new map at position: {:?}", new_opos);
                 
                 *overworld_pos = new_opos;
             }
         }
         
+        *last_map_travel_kind = match map_update {
+            MapTravelEvent::Peek(kind) => kind.clone(),
+            MapTravelEvent::Visit(kind) => kind.clone(),
+            MapTravelEvent::None => MapTravelKind::BorderCross, // Default case
+        };
         *map_update = MapTravelEvent::None;
     }
 }
@@ -271,7 +283,7 @@ pub async fn run() {
     {
         let mut map = current_map_rc.borrow_mut();
         map.add_player_first_map(&mut game.player);
-        map.visited = true;
+        map.visited_state = VisitedState::Visited;
     }
 
     let mut last_move_time = 0.0;
@@ -279,8 +291,10 @@ pub async fn run() {
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
     let mut map_update = MapTravelEvent::None;
+    let mut last_map_travel_kind = MapTravelKind::BorderCross;
     let mut ui = Ui::new();
 
+    let shared_map_ptr_clone = shared_map_ptr.clone();
     game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
         let binding = monster_types.lock().unwrap();
         let kind = binding.iter()
@@ -290,9 +304,9 @@ pub async fn run() {
         // Create a new monster and wrap it in Rc
         let monster = Monster::new(pos.clone(), kind.clone());
         
-        let binding = shared_map_ptr.borrow_mut();
+        let binding = shared_map_ptr_clone.borrow_mut();
         let mut map = binding.borrow_mut();
-        map.tiles[pos].creature = map.monsters.len() as u32; // Set the creature ID in the tile
+        map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
         // Wrap the monster in Rc and push to creatures
         map.monsters.insert(monster.id, monster);
     }));
@@ -337,19 +351,16 @@ pub async fn run() {
         check_for_map_update(
             &mut game,
             &mut map_update,
+            &mut last_map_travel_kind,
             &mut peek_map_rc,
             &mut current_map_rc,
             &mut current_downstair_teleport_pos,
             &mut overworld_pos
         );
 
-        if peek_map_rc.is_some() {
-            // If we peeked at a new map, we need to draw it
-            let mut map = peek_map_rc.as_mut().unwrap().borrow_mut();
-            map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
-            draw(&mut game, &mut ui, &mut map, game_interface_offset);
-            next_frame().await;
-            continue;
+        if !Rc::ptr_eq(&current_map_rc, &shared_map_ptr.borrow()) {
+            // Update the shared map pointer if it has changed
+            *shared_map_ptr.borrow_mut() = current_map_rc.clone();
         }
 
         let now = get_time();
@@ -372,6 +383,21 @@ pub async fn run() {
         }
 
         let input = Input::poll();
+
+        if peek_map_rc.is_some() {
+            if input.keyboard_action == KeyboardAction::Confirm {
+                map_update = MapTravelEvent::Visit(last_map_travel_kind.clone());
+            } else if input.keyboard_action == KeyboardAction::Cancel {
+                peek_map_rc = None; // Reset peek map
+            } else {
+                let mut map = peek_map_rc.as_mut().unwrap().borrow_mut();
+                map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
+                draw(&mut game, &mut ui, &mut map, game_interface_offset);
+            }
+
+            next_frame().await;
+            continue;
+        }
 
         let global_mouse_pos = PointF::new(input.mouse.x, input.mouse.y);
         let map_mouse_pos = PointF::new(input.mouse.x - game_interface_offset.x, input.mouse.y - game_interface_offset.y);

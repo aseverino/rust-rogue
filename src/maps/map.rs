@@ -61,6 +61,13 @@ pub struct SpellFovCache {
     pub area: HashSet<Position>,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum VisitedState {
+    NotVisited,
+    Peeked,
+    Visited
+}
+
 impl SpellFovCache {
     pub fn new() -> Self {
         Self {
@@ -147,7 +154,7 @@ pub struct Map {
     pub should_draw_spell_fov: bool,
     pub border_positions: [Vec<Position>; 4],
     pub downstair_teleport: Option<Position>,
-    pub visited: bool,
+    pub visited_state: VisitedState,
 }
 
 impl Map {
@@ -168,7 +175,7 @@ impl Map {
                 Vec::new(), // Left border
             ],
             downstair_teleport: None,
-            visited: false,
+            visited_state: VisitedState::NotVisited,
         }
     }
 
@@ -360,7 +367,7 @@ impl Map {
             monster.draw(offset);
         }
 
-        if self.visited {
+        if self.visited_state == VisitedState::Visited {
             player.draw(offset);
         }
     }

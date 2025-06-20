@@ -31,6 +31,7 @@ pub enum KeyboardAction {
     Move,
     Wait,
     Cancel,
+    Confirm,
     SpellSelect,
     OpenCharacterSheet,
 }
@@ -96,6 +97,9 @@ impl Input {
         }
         if is_key_pressed(KeyCode::Escape) {
             keyboard_action = KeyboardAction::Cancel;
+        }
+        if is_key_pressed(KeyCode::Enter) {
+            keyboard_action = KeyboardAction::Confirm;
         }
         if is_key_pressed(KeyCode::Key1) {
             keyboard_action = KeyboardAction::SpellSelect;

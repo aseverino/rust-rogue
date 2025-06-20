@@ -88,6 +88,8 @@ fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset:
 
     ui.set_player_sp(game.player.sp);
     ui.set_player_str(game.player.strength);
+    ui.set_player_dex(game.player.dexterity);
+    ui.set_player_int(game.player.intelligence);
 
     ui.draw();
 }

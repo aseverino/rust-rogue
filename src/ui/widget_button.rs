@@ -35,6 +35,8 @@ pub struct WidgetButton {
     pub click_callback: Option<Box<dyn FnMut(&mut Ui, PointF)>>,
     pub hovered: bool,
     pub hovered_color: Color,
+    pub toggled: bool,
+    pub toggled_color: Color,
 }
 
 impl WidgetButton {
@@ -50,6 +52,17 @@ impl WidgetButton {
                         drawing_coords.w,
                         drawing_coords.h,
                         self.hovered_color,
+                    );
+                }
+            }
+            else if self.toggled {
+                if self.toggled_color != BLANK {
+                    draw_rectangle(
+                        drawing_coords.x,
+                        drawing_coords.y,
+                        drawing_coords.w,
+                        drawing_coords.h,
+                        self.toggled_color,
                     );
                 }
             }
@@ -69,6 +82,20 @@ impl WidgetButton {
             }
         }
     }
+
+    // pub fn set_text(&mut self, text: &String) {
+    //     if let Some(text_weak) = &self.text {
+    //         if let Some(text_rc) = text_weak.upgrade() {
+    //             {
+    //                 let mut text_area = text_rc.borrow_mut();
+    //                 text_area.set_text(text);
+    //                 let offset_y = text_area.offset_y;
+    //                 let text_size_h = text_area.text_size.h;
+    //                 text_area.set_margin_top((offset_y - text_size_h) / 2.0);
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 impl fmt::Debug for WidgetButton {
@@ -84,7 +111,9 @@ impl WidgetBasicConstructor for WidgetButton {
             click_callback: None,
             hovered: false,
             hovered_color: Color::new(0.5, 0.5, 0.5, 1.0),
-            text: None
+            text: None,
+            toggled: false,
+            toggled_color: Color::new(0.3, 0.3, 0.3, 1.0),
         };
 
         w.base.size = SizeF::new(100.0, 30.0);
@@ -108,8 +137,7 @@ impl Widget for WidgetButton {
                 //bg_rc.borrow_mut().set_color(Color::from_rgba(255, 0, 0, 255));
                 {
                     let mut t = text.borrow_mut();
-                    t.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
-                    t.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
+                    t.center_parent();
                     t.base.color = WHITE;
                 }
             }

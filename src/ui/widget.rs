@@ -250,6 +250,11 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         // Default implementation does nothing
     }
 
+    fn break_anchors(&mut self) {
+        self.get_base_mut().anchors.clear();
+        self.get_base_mut().dirty = true;
+    }
+
     fn add_anchor(&mut self, this: AnchorKind, other_id: u32, other_side: AnchorKind) {
         self.get_base_mut().anchors.push(Anchor {
             anchor_this: this,
@@ -257,6 +262,11 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
             anchor_to: other_side,
         });
         self.get_base_mut().dirty = true;
+    }
+
+    fn center_parent(&mut self) {
+        self.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
+        self.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
     }
 
     fn add_anchor_to_parent(&mut self, this: AnchorKind, other_side: AnchorKind) {
@@ -345,59 +355,57 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
     fn recompute_quad(&self, ui: &Ui) -> QuadF {
         let mut quad = QuadF::zero();
-        let size = self.get_base().size;
+        let size   = self.get_base().size;
+        let margin = self.get_base().margin;
+        let pos    = self.get_base().position;
 
-        let mut left = None;
-        let mut right = None;
-        let mut top = None;
+        let mut left   = None;
+        let mut right  = None;
+        let mut top    = None;
         let mut bottom = None;
+        let mut did_horiz_center = false;
+        let mut did_vert_center  = false;
 
         for anchor in &self.get_base().anchors {
-            let anchor_widget = &ui.widgets[anchor.anchor_widget_id as usize];
+            let w = &ui.widgets[anchor.anchor_widget_id as usize];
             let anchor_pos = match anchor.anchor_to {
-                AnchorKind::Left => anchor_widget.borrow_mut().get_left(ui),
-                AnchorKind::Right => anchor_widget.borrow_mut().get_right(ui),
-                AnchorKind::Top => anchor_widget.borrow_mut().get_top(ui),
-                AnchorKind::Bottom => anchor_widget.borrow_mut().get_bottom(ui),
+                AnchorKind::Left   => w.borrow_mut().get_left(ui),
+                AnchorKind::Right  => w.borrow_mut().get_right(ui),
+                AnchorKind::Top    => w.borrow_mut().get_top(ui),
+                AnchorKind::Bottom => w.borrow_mut().get_bottom(ui),
                 AnchorKind::HorizontalCenter => {
-                    let left = anchor_widget.borrow_mut().get_left(ui);
-                    let right = anchor_widget.borrow_mut().get_right(ui);
-                    (left + right) / 2.0
+                    let l = w.borrow_mut().get_left(ui);
+                    let r = w.borrow_mut().get_right(ui);
+                    (l + r) / 2.0
                 }
                 AnchorKind::VerticalCenter => {
-                    let top = anchor_widget.borrow_mut().get_top(ui);
-                    let bottom = anchor_widget.borrow_mut().get_bottom(ui);
-                    (top + bottom) / 2.0
+                    let t = w.borrow_mut().get_top(ui);
+                    let b = w.borrow_mut().get_bottom(ui);
+                    (t + b) / 2.0
                 }
             };
 
             match anchor.anchor_this {
-                AnchorKind::Left => left = Some(anchor_pos),
-                AnchorKind::Right => right = Some(anchor_pos),
-                AnchorKind::Top => top = Some(anchor_pos),
+                AnchorKind::Left   => left   = Some(anchor_pos),
+                AnchorKind::Right  => right  = Some(anchor_pos),
+                AnchorKind::Top    => top    = Some(anchor_pos),
                 AnchorKind::Bottom => bottom = Some(anchor_pos),
 
                 AnchorKind::HorizontalCenter => {
                     quad.x = anchor_pos - size.w / 2.0;
                     quad.w = size.w;
-
-                    // Continue collecting vertical anchors, but skip horizontal logic
-                    // We'll break early if both vertical center and center-x are found.
-                    continue;
+                    did_horiz_center = true;
                 }
-
                 AnchorKind::VerticalCenter => {
                     quad.y = anchor_pos - size.h / 2.0;
                     quad.h = size.h;
-
-                    // Continue collecting horizontal anchors, but skip vertical logic
-                    continue;
+                    did_vert_center = true;
                 }
             }
         }
 
-        // Horizontal fallback
-        if quad.w == 0.0 {
+        // only do horizontal fallback if we weren't centered
+        if !did_horiz_center {
             if let (Some(l), Some(r)) = (left, right) {
                 quad.x = l;
                 quad.w = r - l;
@@ -406,15 +414,15 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
                 quad.w = size.w;
             } else if let Some(r) = right {
                 quad.w = size.w;
-                quad.x = r - quad.w;
+                quad.x = r - margin.w - size.w;
             } else {
-                quad.x = self.get_base().position.x;
+                quad.x = pos.x;
                 quad.w = size.w;
             }
         }
 
-        // Vertical fallback
-        if quad.h == 0.0 {
+        // only do vertical fallback if we weren't centered
+        if !did_vert_center {
             if let (Some(t), Some(b)) = (top, bottom) {
                 quad.y = t;
                 quad.h = b - t;
@@ -423,16 +431,18 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
                 quad.h = size.h;
             } else if let Some(b) = bottom {
                 quad.h = size.h;
-                quad.y = b - quad.h;
+                quad.y = b - margin.h - quad.h;
             } else {
-                quad.y = self.get_base().position.y;
+                quad.y = pos.y;
                 quad.h = size.h;
             }
         }
 
-        // Apply margins
-        quad.x += self.get_base().margin.x;
-        quad.y += self.get_base().margin.y;
+        // **now** apply margins exactly once
+        quad.x += margin.x;
+        quad.y += margin.y;
+        quad.w = (quad.w - margin.w).max(0.0);
+        quad.h = (quad.h - margin.h).max(0.0);
 
         quad
     }

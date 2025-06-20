@@ -48,9 +48,9 @@ pub struct Ui {
     hp_bar_id: u32,
     mp_bar_id: u32,
     sp_value_id: u32,
-    str_value_id: u32,
-    dex_value_id: u32,
-    int_value_id: u32,
+    str_value_bound_ids: Vec<u32>,
+    dex_value_bound_ids: Vec<u32>,
+    int_value_bound_ids: Vec<u32>,
     
     id_counter: u32,
     pub widgets: Vec<Rc<RefCell<dyn Widget>>>,
@@ -78,9 +78,9 @@ impl Ui {
             hp_bar_id: u32::MAX,
             mp_bar_id: u32::MAX,
             sp_value_id: u32::MAX,
-            str_value_id: u32::MAX,
-            dex_value_id: u32::MAX,
-            int_value_id: u32::MAX,
+            str_value_bound_ids: Vec::new(),
+            dex_value_bound_ids: Vec::new(),
+            int_value_bound_ids: Vec::new(),
             widgets: Vec::new(),
         };
 
@@ -158,10 +158,12 @@ impl Ui {
     pub fn set_player_str(&mut self, str: u32) {
         self.player_str = str;
 
-        if let Some(str_value) = self.widgets.get(self.str_value_id as usize) {
-            let mut text_ref = str_value.borrow_mut();
-            if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
-                text.set_text(&format!("{}", self.player_str));
+        for id in &self.str_value_bound_ids {
+            if let Some(str_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = str_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&format!("{}", self.player_str));
+                }
             }
         }
     }
@@ -169,10 +171,12 @@ impl Ui {
     pub fn set_player_dex(&mut self, dex: u32) {
         self.player_dex = dex;
 
-        if let Some(dex_value) = self.widgets.get(self.dex_value_id as usize) {
-            let mut text_ref = dex_value.borrow_mut();
-            if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
-                text.set_text(&format!("{}", self.player_dex));
+        for id in &self.dex_value_bound_ids {
+            if let Some(dex_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = dex_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&format!("{}", self.player_dex));
+                }
             }
         }
     }
@@ -180,10 +184,12 @@ impl Ui {
     pub fn set_player_int(&mut self, int: u32) {
         self.player_int = int;
 
-        if let Some(int_value) = self.widgets.get(self.int_value_id as usize) {
-            let mut text_ref = int_value.borrow_mut();
-            if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
-                text.set_text(&format!("{}", self.player_int));
+        for id in &self.int_value_bound_ids {
+            if let Some(int_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = int_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&format!("{}", self.player_int));
+                }
             }
         }
     }
@@ -266,44 +272,7 @@ impl Ui {
         self.is_focused = false;
     }
 
-    // fn add_widget(&mut self, widget: Rc<RefCell<dyn Widget>>) {
-    //     self.widgets.push(widget);
-    //     self.id_counter += 1;
-
-    //     if let Some(w) = self.widgets.last() {
-    //         let new_children: Vec<_> = w.borrow().get_children()
-    //             .iter()
-    //             .filter_map(|c| c.upgrade())
-    //             .collect();
-    //         for child in new_children {
-    //             self.widgets.push(child);
-    //             self.id_counter += 1;
-    //         }
-    //     }
-    // }
-
-    // fn add_widget_recursive(&mut self, widget: Rc<RefCell<dyn Widget>>) {
-    //     self.widgets.push(widget.clone());
-    //     self.id_counter += 1;
-
-    //     let children: Vec<_> = widget.borrow().get_children()
-    //         .iter()
-    //         .filter_map(|c| c.upgrade())
-    //         .collect();
-
-    //     for child in children {
-    //         self.add_widget_recursive(child);
-    //     }
-    // }
-
-    // fn create_widget<T: Widget + 'static>(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<T>> {
-    //     let widget = T::new(self, self.id_counter, parent);
-    //     let widget_dyn: Rc<RefCell<dyn Widget>> = widget.clone();
-
-    //     self.add_widget_recursive(widget_dyn);
-
-    //     widget
-    // }
+    
 
     pub fn add_widget(&mut self, widget: Rc<RefCell<dyn Widget>>) {
         self.widgets.push(widget);
@@ -318,6 +287,45 @@ impl Ui {
         self.add_widget(widget_dyn);
 
         widget
+    }
+
+    pub fn create_attr_button(&mut self, label: &str, value: u32, parent: &Rc<RefCell<dyn Widget>>, margin_top: f32) -> (Rc<RefCell<dyn Widget>>, u32) {
+        let button = self.create_widget::<WidgetButton>(
+            Some(Rc::downgrade(parent))
+        );
+        {
+            let mut attr_panel = button.borrow_mut();
+            //attr_panel.set_border(WHITE, 1.0);
+            attr_panel.set_size(SizeF::new(150.0, 50.0));
+            attr_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            attr_panel.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            attr_panel.set_margin_top(margin_top);
+        }
+
+        let label_widget = self.create_widget::<WidgetText>(
+                        Some(Rc::downgrade(&(button.clone() as Rc<RefCell<dyn Widget>>)))
+                    );
+        {
+            let mut lbl = label_widget.borrow_mut();
+            lbl.set_text(&label.to_string());
+            lbl.set_margin_left(30.0);
+            lbl.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
+            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        }
+
+        let value_id = self.id_counter;
+        let value_widget = self.create_widget::<WidgetText>(
+                        Some(Rc::downgrade(&(button.clone() as Rc<RefCell<dyn Widget>>)))
+                    );
+        {
+            let mut val = value_widget.borrow_mut();
+            val.set_text(&value.to_string());
+            val.set_margin_right(30.0);
+            val.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            val.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        }
+
+        (button, value_id)
     }
 
     fn create_left_panel(&mut self) {
@@ -434,7 +442,7 @@ impl Ui {
             lbl.add_anchor(AnchorKind::Left, soul_label.borrow().get_id(), AnchorKind::Left);
         }
 
-        self.str_value_id = self.id_counter;
+        self.str_value_bound_ids.push(self.id_counter);
         let str_value = self.create_widget::<WidgetText>(
             Some(Rc::downgrade(&parent_dyn))
         );
@@ -479,51 +487,165 @@ impl Ui {
 
         let parent_dyn = Rc::clone(&self.widgets[self.character_sheet_id as usize]);
 
-        let spell_title_id = self.id_counter;
-        let spells_title = self.create_widget::<WidgetText>(
+        let attributes_tab_id = self.id_counter;
+        let attributes_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
         {
-            let mut lbl = spells_title.borrow_mut();
-            lbl.set_text(&"Spells".to_string());
+            let mut lbl = attributes_tab.borrow_mut();
+            lbl.toggled = true;
+            lbl.set_text(&"Attrib".to_string());
             lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
             lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
             lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
-        
-        let spells_learn = self.create_widget::<WidgetText>(
-            Some(Rc::downgrade(&parent_dyn))
-        );
-        {
-            let mut lbl = spells_learn.borrow_mut();
-            lbl.set_text(&"Learn New Spell (S)".to_string());
-            lbl.set_margin_top(30.0);
-            lbl.add_anchor(AnchorKind::Top, spell_title_id, AnchorKind::Top);
-            lbl.add_anchor(AnchorKind::Left, spell_title_id, AnchorKind::Left);
-        }
 
-        let skills_title_id = self.id_counter;
-        let skills_title = self.create_widget::<WidgetText>(
+        let skills_tab_id = self.id_counter;
+        let skills_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
         {
-            let mut lbl = skills_title.borrow_mut();
+            let mut lbl = skills_tab.borrow_mut();
             lbl.set_text(&"Skills".to_string());
-            lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
-            lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::HorizontalCenter);
+            lbl.set_margin(QuadF::new(30.0, 0.0, 0.0, 0.0));
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
 
-        let skills_learn = self.create_widget::<WidgetText>(
+        let abilities_tab_id = self.id_counter;
+        let abilities_tab = self.create_widget::<WidgetButton>(
             Some(Rc::downgrade(&parent_dyn))
         );
         {
-            let mut lbl = skills_learn.borrow_mut();
-            lbl.set_text(&"Learn New Skill (K)".to_string());
-            lbl.set_margin_top(30.0);
-            lbl.add_anchor(AnchorKind::Top, skills_title_id, AnchorKind::Top);
-            lbl.add_anchor(AnchorKind::Left, skills_title_id, AnchorKind::Left);
+            let mut lbl = abilities_tab.borrow_mut();
+            lbl.set_text(&"Abilit".to_string());
+            lbl.set_margin(QuadF::new(30.0, 0.0, 0.0, 0.0));
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
+
+        let equipment_tab_id = self.id_counter;
+        let equipment_tab = self.create_widget::<WidgetButton>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = equipment_tab.borrow_mut();
+            lbl.set_text(&"Equip".to_string());
+            lbl.set_margin(QuadF::new(30.0, 0.0, 0.0, 0.0));
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
+        }
+
+        let inventory_tab_id = self.id_counter;
+        let inventory_tab = self.create_widget::<WidgetButton>(
+            Some(Rc::downgrade(&parent_dyn))
+        );
+        {
+            let mut lbl = inventory_tab.borrow_mut();
+            lbl.set_text(&"Invent".to_string());
+            lbl.set_margin(QuadF::new(30.0, 0.0, 0.0, 0.0));
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
+        }
+
+        let attributes_sheet_id = self.id_counter;
+        let attributes_sheet_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut attr_sheet = attributes_sheet_rc.borrow_mut();
+            attr_sheet.set_border(WHITE, 2.0);
+            attr_sheet.add_anchor(AnchorKind::Top, attributes_tab_id, AnchorKind::Bottom);
+            attr_sheet.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            attr_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+            attr_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+        }
+
+        let attr_as_parent_dyn = Rc::clone(&self.widgets[attributes_sheet_id as usize]);
+
+        let (dex_area, dex_value_id) = self.create_attr_button(
+            "DEX",
+            self.player_dex,
+            &attr_as_parent_dyn,
+            10.0
+        );
+
+        {
+            let mut dex_area_button = dex_area.borrow_mut();
+            dex_area_button.center_parent();
+        }
+        self.dex_value_bound_ids.push(dex_value_id);
+
+        let (str_area, str_value_id) = self.create_attr_button(
+            "STR",
+            self.player_str,
+            &attr_as_parent_dyn,
+            0.0
+        );
+
+        {
+            let mut str_area_button = str_area.borrow_mut();
+            str_area_button.break_anchors();
+            str_area_button.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            str_area_button.add_anchor_to_prev(AnchorKind::Right, AnchorKind::Left);
+        }
+        self.str_value_bound_ids.push(str_value_id);
+
+        let (int_area, int_value_id) = self.create_attr_button(
+            "INT",
+            self.player_int,
+            &attr_as_parent_dyn,
+            0.0
+        );
+
+        {
+            let mut int_area_button = int_area.borrow_mut();
+            int_area_button.break_anchors();
+            int_area_button.add_anchor(AnchorKind::Top, dex_area.borrow().get_id(), AnchorKind::Top);
+            int_area_button.add_anchor(AnchorKind::Left, dex_area.borrow().get_id(), AnchorKind::Right);
+        }
+        self.int_value_bound_ids.push(int_value_id);
+        // let dex_title = self.create_widget::<WidgetText>(
+        //     Some(Rc::downgrade(&attr_as_parent_dyn))
+        // );
+        // {
+        //     let mut lbl = dex_title.borrow_mut();
+        //     lbl.set_text(&"DEX".to_string());
+        //     lbl.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
+        //     lbl.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
+        // }
+        
+        // let spells_learn = self.create_widget::<WidgetText>(
+        //     Some(Rc::downgrade(&parent_dyn))
+        // );
+        // {
+        //     let mut lbl = spells_learn.borrow_mut();
+        //     lbl.set_text(&"Learn New Spell (S)".to_string());
+        //     lbl.set_margin_top(30.0);
+        //     lbl.add_anchor(AnchorKind::Top, spell_title_id, AnchorKind::Top);
+        //     lbl.add_anchor(AnchorKind::Left, spell_title_id, AnchorKind::Left);
+        // }
+
+        // let skills_title_id = self.id_counter;
+        // let skills_title = self.create_widget::<WidgetText>(
+        //     Some(Rc::downgrade(&parent_dyn))
+        // );
+        // {
+        //     let mut lbl = skills_title.borrow_mut();
+        //     lbl.set_text(&"Skills".to_string());
+        //     lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+        //     lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+        //     lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::HorizontalCenter);
+        // }
+
+        // let skills_learn = self.create_widget::<WidgetText>(
+        //     Some(Rc::downgrade(&parent_dyn))
+        // );
+        // {
+        //     let mut lbl = skills_learn.borrow_mut();
+        //     lbl.set_text(&"Learn New Skill (K)".to_string());
+        //     lbl.set_margin_top(30.0);
+        //     lbl.add_anchor(AnchorKind::Top, skills_title_id, AnchorKind::Top);
+        //     lbl.add_anchor(AnchorKind::Left, skills_title_id, AnchorKind::Left);
+        // }
     }
 
     fn create_chest_view(&mut self) {

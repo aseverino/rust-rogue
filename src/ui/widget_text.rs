@@ -39,7 +39,7 @@ pub struct WidgetText {
 impl WidgetText {
     pub fn draw(&self, _ui: &Ui) {
         if let Some(drawing_coords) = self.base.computed_quad {
-            let top = drawing_coords.y + self.base.size.h;
+            let top = drawing_coords.y + self.base.size.h + (self.offset_y - self.base.size.h) / 2.0;
             draw_text(&self.text, drawing_coords.x, top, 30.0, self.base.color);
         }
     }
@@ -49,7 +49,6 @@ impl WidgetText {
         let dim = measure_text(&text, None, 30, 1.0);
         self.text_size = SizeF::new(dim.width, dim.height);
         self.offset_y = dim.offset_y;
-        self.set_margin_top((self.offset_y - self.text_size.h) / 2.0);
         self.base.size = self.text_size;
         self.base.dirty = true;
     }

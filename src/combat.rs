@@ -52,7 +52,7 @@ fn do_damage(player: &mut Player, map_ref: &MapRef, target_id: u32, damage: i32,
     // Now safe to lock again
     if target_id != PLAYER_CREATURE_ID as u32 {
         {
-            let mut monster = map.monsters.get_mut(&target_id).unwrap_or_else(|| { panic!("No monster.")}).clone();
+            let mut monster = map.monsters.get_mut(&target_id).unwrap_or_else(|| { panic!("Error on do_damage: no monster.")}).clone();
             drop(map);
             if monster.kind.is_scripted() {
                 let r = lua_interface.borrow_mut().on_death(&mut monster);
@@ -85,7 +85,7 @@ pub(crate) fn do_melee_combat(player: &mut Player, map_ref: &mut MapRef, _attack
             {
                 let map = map_ref.borrow_mut();
                 let target_id = map.tiles[target_pos].creature;
-                (target_id, map.monsters.get(&target_id).unwrap_or_else(|| { panic!("No monster.")}).clone())
+                (target_id, map.monsters.get(&target_id).unwrap_or_else(|| { panic!("Error on do_melee_combat: no monster.")}).clone())
             };
 
             if weapon.is_scripted() {

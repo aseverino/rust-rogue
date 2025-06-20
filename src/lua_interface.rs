@@ -186,17 +186,21 @@ impl LuaInterface {
             })?;
 
         // Retrieve the Function from the registry
-        let func: Function = self.lua.registry_value(funcs.on_death.as_ref().unwrap())?;
+        if let Some(func_key) = &funcs.on_death {
+            let func: Function = self.lua.registry_value(func_key)?;
 
-        let lua_monster = Rc::new(RefCell::new(monster.clone()));
-        let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
+            let lua_monster = Rc::new(RefCell::new(monster.clone()));
+            let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
 
-        // Invoke and return result
-        let result = func.call(lua_monster_ud);
+            // Invoke and return result
+            let result = func.call(lua_monster_ud);
 
-        *monster = lua_monster.borrow().clone();
+            *monster = lua_monster.borrow().clone();
 
-        result
+            result
+        } else {
+            Ok(false)
+        }
     }
 }
 

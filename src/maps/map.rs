@@ -35,7 +35,7 @@ use crate::creature::Creature;
 use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
 use crate::lua_interface;
-use crate::lua_interface::LuaInterface;
+use crate::lua_interface::LuaInterfaceRc;
 use crate::lua_interface::LuaScripted;
 use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
@@ -386,7 +386,7 @@ impl Map {
         pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
     }
 
-    fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32, lua_interface: &mut LuaInterface) {
+    fn do_damage(&mut self, player: &mut Player, target_id: u32, damage: i32, lua_interface: &LuaInterfaceRc) {
         let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
             player as &mut dyn Creature
         } else {
@@ -413,7 +413,7 @@ impl Map {
             {
                 let monster = &mut self.monsters[target_id as usize];
                 if monster.kind.is_scripted() {
-                    let r = lua_interface.on_death(monster);
+                    let r = lua_interface.borrow_mut().on_death(monster);
                     if let Err(e) = r {
                         eprintln!("Error calling Lua on_death: {}", e);
                     }
@@ -424,7 +424,7 @@ impl Map {
         }
     }
 
-    fn do_melee_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, lua_interface: &mut LuaInterface) {
+    fn do_melee_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, lua_interface: &LuaInterfaceRc) {
         let damage = {
             if player.equipment.weapon.is_some() {
                 // Temporarily take the weapon out to avoid aliasing
@@ -433,7 +433,7 @@ impl Map {
                 let mut damage: u32 = 0;
             
                 if weapon.is_scripted() {
-                    let lua_result = lua_interface.on_get_attack_damage(
+                    let lua_result = lua_interface.borrow_mut().on_get_attack_damage(
                         &mut weapon,
                         player,
                         &mut self.monsters[self.tiles[target_pos].creature as usize]
@@ -472,7 +472,7 @@ impl Map {
         }
     }
 
-    fn do_spell_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, spell_index: usize, lua_interface: &mut LuaInterface) {
+    fn do_spell_combat(&mut self, player: &mut Player, _attacker_pos: Position, target_pos: Position, spell_index: usize, lua_interface: &LuaInterfaceRc) {
         if !self.is_tile_walkable(target_pos) {
             println!("Target position is not walkable for spell casting.");
             return;
@@ -515,7 +515,7 @@ impl Map {
 
     pub fn update(&mut self,
         player: &mut Player,
-        lua_interface: &mut LuaInterface,
+        lua_interface: &LuaInterfaceRc,
         player_action: KeyboardAction,
         player_direction: Direction,
         spell_action: i32,

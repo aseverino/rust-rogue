@@ -49,28 +49,38 @@ struct ScriptedFunctions {
 pub struct LuaInterface {
     lua: Lua,
     script_cache: HashMap<u32, ScriptedFunctions>,
+
+    pub add_monster_callback: Option<Rc<dyn Fn(u32, Position)>>,
 }
+
+pub type LuaInterfaceRc = Rc<RefCell<LuaInterface>>;
 
 impl LuaInterface {
     /// Create a fresh Lua VM.
-    pub fn new() -> Self {
-        LuaInterface {
+    pub fn new() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
             lua: Lua::new(),
             script_cache: HashMap::new(),
-        }
+            add_monster_callback: None,
+        }))
     }
 
-    pub fn init(&mut self) -> Result<()> {
-        let add_fn: Function = self.lua.create_function(Self::add_monster)?;
-        self.lua.globals().set("add_monster", add_fn)?;
-        Ok(())
-    }
+    pub fn register_api(lua_if: &LuaInterfaceRc) -> Result<()> {
+        // 1) Clone the Rc so cb_opt can be cheaply cloned into the closure
+        let cb_opt = lua_if.borrow().add_monster_callback.clone();
 
-    fn add_monster<'lua>(
-        _ctx: Context<'lua>,
-        (id, pos): (u32, Table<'lua>)
-    ) -> Result<()> {
-        Position::new(pos.get("x")?, pos.get("y")?);
+        lua_if.add_lua_fn("add_monster", move |id, pos: Table<'_>| {
+            let x: usize = pos.get("x")?;
+            let y: usize = pos.get("y")?;
+            let p = Position { x, y };
+
+            if let Some(cb) = &cb_opt {
+                cb(id, p);
+            } else {
+                eprintln!("No add_monster callback set!");
+            }
+            Ok(())
+        })?;
 
         Ok(())
     }
@@ -187,5 +197,38 @@ impl LuaInterface {
         *monster = lua_monster.borrow().clone();
 
         result
+    }
+}
+
+pub trait LuaBinder {
+    /// name: the global Lua function name (“add_monster”)
+    /// f: a pure Rust closure that takes (id, pos) and returns a Lua Result
+    fn add_lua_fn<F>(&self, name: &'static str, f: F) -> Result<()>
+    where
+        F: Fn(u32, Table<'_>) -> Result<()> + 'static;
+}
+
+impl LuaBinder for LuaInterfaceRc {
+    fn add_lua_fn<F>(&self, name: &'static str, f: F) -> Result<()>
+    where
+        F: Fn(u32, Table<'_>) -> Result<()> + 'static
+    {
+        // grab the Lua handle
+        let lua = &self.borrow().lua;
+        let globals = lua.globals();
+
+        // build the Lua‐callable function
+        // we clone the Rc so that the closure can refer back to our interface
+        let this_rc = self.clone();
+        let func: Function = lua.create_function(move |_ctx: Context<'_>, (id, pos): (u32, Table<'_>)| {
+            // now *inside* here you can do:
+            //    let this = this_rc.borrow();
+            // or directly call your callback.
+            f(id, pos)
+        })?;
+
+        // register in Lua globals
+        globals.set(name, func)?;
+        Ok(())
     }
 }

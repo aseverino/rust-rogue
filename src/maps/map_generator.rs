@@ -33,7 +33,7 @@ use bitflags::bitflags;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
-use crate::lua_interface::LuaInterface;
+use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{map::GeneratedMap, GRID_WIDTH, GRID_HEIGHT};
 use crate::monster_type::{load_monster_types, MonsterType};
@@ -157,7 +157,7 @@ pub struct MapGenerator {
 }
 
 impl MapGenerator {
-    pub async fn new(lua_interface: &mut LuaInterface) -> Self {
+    pub async fn new(lua_interface: &LuaInterfaceRc) -> Self {
         Self {
             command_tx: None,
             thread_handle: None,

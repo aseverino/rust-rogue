@@ -26,9 +26,10 @@ use serde::Deserialize;
 use std::sync::Arc;
 use serde_json::from_str;
 
-use crate::lua_interface::{LuaInterface, LuaScripted};
+use crate::lua_interface::{LuaInterfaceRc, LuaScripted};
 
-pub async fn load_monster_types(lua_interface: &mut LuaInterface) -> Vec<Arc<MonsterType>> {
+pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<MonsterType>> {
+    let mut lua_interface = lua_interface_rc.borrow_mut();
     let file: String = load_string("assets/monsters.json").await.unwrap();
     let list: Vec<MonsterType> = from_str(&file).unwrap();
 

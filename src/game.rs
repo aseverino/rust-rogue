@@ -22,7 +22,7 @@
 
 use macroquad::prelude::*;
 use crate::items::collection::Items;
-use crate::lua_interface::LuaInterface;
+use crate::lua_interface::{LuaInterface, LuaInterfaceRc};
 use crate::maps::overworld::{Overworld, OverworldGenerator, OverworldPos};
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
@@ -45,7 +45,7 @@ pub struct GameState {
     pub overworld_generator: Arc<Mutex<OverworldGenerator>>,
     pub overworld: Overworld,
     pub items: Items,
-    pub lua_interface: LuaInterface
+    pub lua_interface: LuaInterfaceRc
 }
 
 #[derive(PartialEq, Debug)]
@@ -102,21 +102,29 @@ fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<
 }
 
 pub async fn run() {
-    let mut lua_interface = LuaInterface::new();
-    lua_interface.init().unwrap();
+    let lua_interface = LuaInterface::new();
     
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld_generator: OverworldGenerator::new(&mut lua_interface).await,
+        overworld_generator: OverworldGenerator::new(&lua_interface).await,
         overworld: Overworld::new(),
         items: Items::new(),
         lua_interface: lua_interface
     };
 
-    game.items.load_holdable_items(&mut game.lua_interface).await;
+    game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
+        // let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
+        //     self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
+        //     // Wrap the monster in Rc and push to creatures
+        //     self.monsters.push(monster);
+    }));
+
+    let _ = LuaInterface::register_api(&game.lua_interface);
+
+    game.items.load_holdable_items(&game.lua_interface).await;
 
     let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
     let mut current_downstair_teleport_pos: Option<Position>;
@@ -268,7 +276,7 @@ pub async fn run() {
                     ui.toggle_character_sheet();
                 }
                 else {
-                    map.update(&mut game.player, &mut game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
+                    map.update(&mut game.player, &game.lua_interface, input.keyboard_action, input.direction, input.spell, goal_position);
                     let player_pos = game.player.position;
 
                     if player_event == Some(PlayerEvent::OpenChest) {

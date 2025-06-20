@@ -22,7 +22,7 @@
 
 use std::{cell::RefCell, collections::HashMap, sync::{Arc, RwLock, Weak}};
 
-use crate::{items::{base_item::Item, holdable::{HoldableGroup, HoldableGroupKind}}, lua_interface::LuaInterface};
+use crate::{items::{base_item::Item, holdable::{HoldableGroup, HoldableGroupKind}}, lua_interface::LuaInterfaceRc};
 
 pub struct Items {
     pub items: Vec<Item>,
@@ -36,7 +36,8 @@ impl Items {
             //holdable_items: HashMap::new(),
         }
     }
-    pub async fn load_holdable_items(&mut self, lua_interface: &mut LuaInterface) {
+    pub async fn load_holdable_items(&mut self, lua_interface_rc: &LuaInterfaceRc) {
+        let mut lua_interface = lua_interface_rc.borrow_mut();
         let json_str = std::fs::read_to_string("assets/items.json").unwrap();
         let groups: Vec<HoldableGroup> = serde_json::from_str(&json_str).unwrap();
 

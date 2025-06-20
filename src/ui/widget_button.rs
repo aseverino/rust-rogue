@@ -31,24 +31,28 @@ use std::{cell::RefCell, rc::{Weak, Rc}};
 
 pub struct WidgetButton {
     pub base: WidgetText,
-    pub click_callback: Option<Box<dyn FnMut(&mut Ui, PointF)>>
+    pub click_callback: Option<Box<dyn FnMut(&mut Ui, PointF)>>,
+    pub hovered: bool,
+    pub hovered_color: Color,
 }
 
 impl WidgetButton {
     pub fn draw(&self, _ui: &Ui) {
         let quad_opt = self.base.base.computed_quad;
 
-        // if let Some(drawing_coords) = quad_opt {
-        //     if self.base.color != BLANK {
-        //         draw_rectangle(
-        //             drawing_coords.x,
-        //             drawing_coords.y,
-        //             drawing_coords.w,
-        //             drawing_coords.h,
-        //             self.base.color,
-        //         );
-        //     }
-        // }
+        if self.hovered {
+            if let Some(drawing_coords) = quad_opt {
+                if self.hovered_color != BLANK {
+                    draw_rectangle(
+                        drawing_coords.x,
+                        drawing_coords.y,
+                        drawing_coords.w,
+                        drawing_coords.h,
+                        self.hovered_color,
+                    );
+                }
+            }
+        }
 
         if let Some(drawing_coords) = self.base.base.computed_quad {
             draw_text(&self.base.text, drawing_coords.x, drawing_coords.y + self.base.text_size.h, 30.0, self.base.base.color);
@@ -76,9 +80,11 @@ impl WidgetBasicConstructor for WidgetButton {
             base: WidgetText {
                 base: WidgetBase::new(id, parent),
                 text: "".to_string(),
-                text_size: SizeF::new(0.0, 0.0),
+                text_size: SizeF::new(0.0, 0.0)
             },
-            click_callback: None
+            click_callback: None,
+            hovered: false,
+            hovered_color: Color::new(0.5, 0.5, 0.5, 1.0),
         };
 
         w.base.base.color = WHITE;
@@ -92,6 +98,10 @@ impl WidgetBasicConstructor for WidgetButton {
 
 impl Widget for WidgetButton {
     impl_widget_fns!(WidgetButton, base.base);
+
+    fn on_mouse_position_update(&mut self, ui: &mut Ui, pos: PointF) {
+        self.hovered = self.contains_point(ui, pos);
+    }
 
     fn on_click(&mut self, ui: &mut Ui, pos: PointF) {
         if self.contains_point(ui, pos) {

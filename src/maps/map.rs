@@ -142,7 +142,11 @@ impl GeneratedMap {
                 .clone();
 
             let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
-            self.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
+            if let Ok(monster_guard) = monster.read() {
+                self.tiles[pos].creature = monster_guard.id;
+            } else {
+                println!("Failed to read monster data due to poisoning.");
+            }
             // Wrap the monster in Rc and push to creatures
             self.monsters.push(monster);
         }
@@ -156,7 +160,7 @@ pub struct Map {
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
     pub available_walkable_cache: Vec<Position>,
-    pub monsters: Vec<Monster>,
+    pub monsters: HashMap<u32, Monster>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
     pub last_player_event: Option<PlayerEvent>,
@@ -172,7 +176,7 @@ impl Map {
             tiles,
             walkable_cache,
             available_walkable_cache,
-            monsters: Vec::new(),
+            monsters: HashMap::new(),
             hovered_tile: None,
             hovered_tile_changed: false,
             last_player_event: None,
@@ -188,7 +192,7 @@ impl Map {
         }
     }
 
-    fn convert_monsters(monsters: Vec<MonsterArc>) -> Vec<Monster> 
+    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, Monster> 
     where
         Monster: Clone,
     {
@@ -196,7 +200,7 @@ impl Map {
             .into_iter()
             .map(|arc_mutex| {
                 let monster = arc_mutex.read().unwrap();
-                monster.clone()
+                (monster.id, monster.clone())
             })
             .collect()
     }
@@ -372,7 +376,7 @@ impl Map {
             }
         }
 
-        for monster in &self.monsters {
+        for (_, monster) in &self.monsters {
             monster.draw(offset);
         }
 

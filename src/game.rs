@@ -126,20 +126,6 @@ pub async fn run() {
         last_player_event: PlayerEvent::None,
     };
 
-    game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
-        // let kind = monster_types.lock().unwrap().iter()
-        //     .find(|mt| mt.id == kind_id)
-        //     .expect("Monster type not found");
-
-        // // Create a new monster and wrap it in Rc
-        // let monster = Monster::new(pos.clone(), *kind);
-        // map.tiles[pos].creature = self.monsters.len() as i32; // Set the creature ID in the tile
-        // // Wrap the monster in Rc and push to creatures
-        // self.monsters.push(monster);
-    }));
-
-    let _ = LuaInterface::register_api(&game.lua_interface);
-
     game.items.load_holdable_items(&game.lua_interface).await;
 
     let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
@@ -157,9 +143,27 @@ pub async fn run() {
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
-    let mut chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
+    let chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
     let mut map_update = PlayerOverworldEvent::None;
     let mut ui = Ui::new();
+
+    game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
+        let binding = monster_types.lock().unwrap();
+        let kind = binding.iter()
+            .find(|mt| mt.id == kind_id)
+            .expect("Monster type not found");
+
+        // Create a new monster and wrap it in Rc
+        let monster = Monster::new(pos.clone(), kind.clone());
+        
+        let binding = shared_map_ptr.borrow_mut();
+        let mut map = binding.borrow_mut();
+        map.tiles[pos].creature = map.monsters.len() as u32; // Set the creature ID in the tile
+        // Wrap the monster in Rc and push to creatures
+        map.monsters.insert(monster.id, monster);
+    }));
+
+    let _ = LuaInterface::register_api(&game.lua_interface);
 
     loop {
         if map_update != PlayerOverworldEvent::None {
@@ -536,7 +540,7 @@ pub fn update(
         let walkable_tiles = map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
         let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
 
-        for (i, monster) in map.monsters.iter_mut().enumerate() {
+        for (id, monster) in &mut map.monsters {
             if monster.hp <= 0 {
                 continue; // Skip dead monsters
             }
@@ -561,7 +565,7 @@ pub fn update(
                         continue;
                     }
 
-                    monster_moves.push((monster_pos, next_step, i));
+                    monster_moves.push((monster_pos, next_step, *id as usize));
                     monster.set_pos(next_step);
                 }
             }
@@ -569,7 +573,7 @@ pub fn update(
 
         for (monster_pos, next_step, i) in monster_moves {
             map.tiles[monster_pos].creature = NO_CREATURE;
-            map.tiles[next_step].creature = i as i32;
+            map.tiles[next_step].creature = i as u32;
         }
     }
 }

@@ -24,8 +24,8 @@ use macroquad::prelude::*;
 
 use crate::{items::{base_item::ItemKind, orb::Orb, teleport::Teleport}, maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE}, position::Position, ui::point_f::PointF};
 
-pub const NO_CREATURE: i32 = -1;
-pub const PLAYER_CREATURE_ID: i32 = i32::MAX; // or any large unique value
+pub const NO_CREATURE: u32 = 0;
+pub const PLAYER_CREATURE_ID: u32 = u32::MAX; // or any large unique value
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum TileKind {
@@ -37,7 +37,7 @@ pub enum TileKind {
 #[derive(Clone, Debug)]
 pub struct Tile {
     pub kind: TileKind,
-    pub creature: i32, // Index of creatures on this tile
+    pub creature: u32,
     pub items: Vec<ItemKind>
 }
 

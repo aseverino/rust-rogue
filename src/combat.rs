@@ -29,7 +29,7 @@ fn do_damage(player: &mut Player, map_ref: &MapRef, target_id: u32, damage: i32,
     let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
         player as &mut dyn Creature
     } else {
-        map.monsters.get_mut(target_id as usize)
+        map.monsters.get_mut(&target_id)
             .expect("Target creature not found") as &mut dyn Creature
     };
 
@@ -52,14 +52,14 @@ fn do_damage(player: &mut Player, map_ref: &MapRef, target_id: u32, damage: i32,
     // Now safe to lock again
     if target_id != PLAYER_CREATURE_ID as u32 {
         {
-            let mut monster = map.monsters[target_id as usize].clone();
+            let mut monster = map.monsters.get_mut(&target_id).unwrap_or_else(|| { panic!("No monster.")}).clone();
             drop(map);
             if monster.kind.is_scripted() {
                 let r = lua_interface.borrow_mut().on_death(&mut monster);
                 // Re-lock the map to remove the monster
                 let mut map = map_ref.borrow_mut();
                 // update the monster in the map from Lua code
-                map.monsters[target_id as usize] = monster;
+                *map.monsters.get_mut(&target_id).expect("Target creature not found") = monster;
                 if let Err(e) = r {
                     eprintln!("Error calling Lua on_death: {}", e);
                 }
@@ -68,7 +68,7 @@ fn do_damage(player: &mut Player, map_ref: &MapRef, target_id: u32, damage: i32,
 
         {
             let mut map = map_ref.borrow_mut();
-            map.monsters.remove(target_id as usize);
+            map.monsters.remove(&target_id);
         }
     }
 }
@@ -84,8 +84,8 @@ pub(crate) fn do_melee_combat(player: &mut Player, map_ref: &mut MapRef, _attack
             let (target_id, mut monster) =
             {
                 let map = map_ref.borrow_mut();
-                let target_id = map.tiles[target_pos].creature as usize;
-                (target_id, map.monsters[target_id].clone())
+                let target_id = map.tiles[target_pos].creature;
+                (target_id, map.monsters.get(&target_id).unwrap_or_else(|| { panic!("No monster.")}).clone())
             };
 
             if weapon.is_scripted() {
@@ -95,7 +95,7 @@ pub(crate) fn do_melee_combat(player: &mut Player, map_ref: &mut MapRef, _attack
                     &mut monster);
 
                 // update the monster in the map from Lua code
-                map_ref.borrow_mut().monsters[target_id as usize] = monster;
+                *map_ref.borrow_mut().monsters.get_mut(&target_id).expect("Target creature not found") = monster;
         
                 match lua_result {
                     Ok(lua_damage) => {

@@ -30,18 +30,19 @@ use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, 
 use std::{cell::RefCell, rc::{Weak, Rc}};
 
 pub struct WidgetButton {
-    pub base: WidgetText,
+    pub base: WidgetBase,
+    pub text: Option<Weak<RefCell<WidgetText>>>,
     pub click_callback: Option<Box<dyn FnMut(&mut Ui, PointF)>>,
     pub hovered: bool,
     pub hovered_color: Color,
 }
 
 impl WidgetButton {
-    pub fn draw(&self, _ui: &Ui) {
-        let quad_opt = self.base.base.computed_quad;
+    pub fn draw(&self, ui: &Ui) {
+        let quad_opt = self.base.computed_quad;
 
-        if self.hovered {
-            if let Some(drawing_coords) = quad_opt {
+        if let Some(drawing_coords) = quad_opt {
+            if self.hovered {
                 if self.hovered_color != BLANK {
                     draw_rectangle(
                         drawing_coords.x,
@@ -52,19 +53,21 @@ impl WidgetButton {
                     );
                 }
             }
-        }
 
-        if let Some(drawing_coords) = self.base.base.computed_quad {
-            draw_text(&self.base.text, drawing_coords.x, drawing_coords.y + self.base.text_size.h, 30.0, self.base.base.color);
+            for child in &self.base.children {
+                if let Some(child_widget) = child.upgrade() {
+                    child_widget.borrow().draw(ui);
+                }
+            }
         }
     }
 
     pub fn set_text(&mut self, text: &String) {
-        self.base.text = text.to_string();
-        let dim = measure_text(&text, None, 30, 1.0);
-        self.base.text_size = SizeF::new(dim.width, dim.height);
-        self.base.base.size = self.base.text_size;
-        self.base.base.dirty = true;
+        if let Some(text_weak) = &self.text {
+            if let Some(text_rc) = text_weak.upgrade() {
+                text_rc.borrow_mut().set_text(text);
+            }
+        }
     }
 }
 
@@ -77,27 +80,43 @@ impl fmt::Debug for WidgetButton {
 impl WidgetBasicConstructor for WidgetButton {
     fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self {
         let mut w = WidgetButton {
-            base: WidgetText {
-                base: WidgetBase::new(id, parent),
-                text: "".to_string(),
-                text_size: SizeF::new(0.0, 0.0)
-            },
+            base: WidgetBase::new(id, parent),
             click_callback: None,
             hovered: false,
             hovered_color: Color::new(0.5, 0.5, 0.5, 1.0),
+            text: None
         };
 
-        w.base.base.color = WHITE;
-        //w.base.size = SizeF::new(0.0, 0.0);
-        //bar.background.set_parent(Some());
-        //bar.background.set_color(Color::from_rgba(1, 0, 0, 1));
-        //bar.background.fill_parent();
+        w.base.size = SizeF::new(100.0, 30.0);
         w
     }
 }
 
 impl Widget for WidgetButton {
-    impl_widget_fns!(WidgetButton, base.base);
+    impl_widget_fns!(WidgetButton, base);
+
+    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+        let w = Self::new_default(id, parent);
+        ui.add_widget(w.clone());
+        
+        let text = &mut ui.create_widget::<WidgetText>(
+            Some(Rc::downgrade(&ui.widgets[id as usize])));
+        w.borrow_mut().text = Some(Rc::downgrade(text));
+
+        if let Some(text_weak) = &w.borrow().text {
+            if let Some(text) = text_weak.upgrade() {
+                //bg_rc.borrow_mut().set_color(Color::from_rgba(255, 0, 0, 255));
+                {
+                    let mut t = text.borrow_mut();
+                    t.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
+                    t.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
+                    t.base.color = WHITE;
+                }
+            }
+        }
+
+        w
+    }
 
     fn on_mouse_position_update(&mut self, ui: &mut Ui, pos: PointF) {
         self.hovered = self.contains_point(ui, pos);
@@ -116,5 +135,3 @@ impl Widget for WidgetButton {
         self.click_callback = Some(f);
     }
 }
-
-//impl_widget!(WidgetButton, base.base);

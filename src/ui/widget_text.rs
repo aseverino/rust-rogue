@@ -33,26 +33,14 @@ pub struct WidgetText {
     pub base: WidgetBase,
     pub text: String,
     pub text_size: SizeF,
+    pub offset_y: f32,
 }
 
 impl WidgetText {
     pub fn draw(&self, _ui: &Ui) {
-        let quad_opt = self.base.computed_quad;
-
-        // if let Some(drawing_coords) = quad_opt {
-        //     if self.base.color != BLANK {
-        //         draw_rectangle(
-        //             drawing_coords.x,
-        //             drawing_coords.y,
-        //             drawing_coords.w,
-        //             drawing_coords.h,
-        //             self.base.color,
-        //         );
-        //     }
-        // }
-
         if let Some(drawing_coords) = self.base.computed_quad {
-            draw_text(&self.text, drawing_coords.x, drawing_coords.y + self.text_size.h, 30.0, self.base.color);
+            let top = drawing_coords.y + self.base.size.h;
+            draw_text(&self.text, drawing_coords.x, top, 30.0, self.base.color);
         }
     }
 
@@ -60,6 +48,8 @@ impl WidgetText {
         self.text = text.to_string();
         let dim = measure_text(&text, None, 30, 1.0);
         self.text_size = SizeF::new(dim.width, dim.height);
+        self.offset_y = dim.offset_y;
+        self.set_margin_top((self.offset_y - self.text_size.h) / 2.0);
         self.base.size = self.text_size;
         self.base.dirty = true;
     }
@@ -77,13 +67,10 @@ impl WidgetBasicConstructor for WidgetText {
             base: WidgetBase::new(id, parent),
             text: "".to_string(),
             text_size: SizeF::new(0.0, 0.0),
+            offset_y: 0.0,
         };
 
         w.base.color = WHITE;
-        //w.base.size = SizeF::new(0.0, 0.0);
-        //bar.background.set_parent(Some());
-        //bar.background.set_color(Color::from_rgba(1, 0, 0, 1));
-        //bar.background.fill_parent();
         w
     }
 }

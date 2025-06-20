@@ -54,26 +54,6 @@ use std::rc::Rc;
 use crate::tile_map::TileMap;
 use crate::monster_type::load_monster_types;
 
-// use fov::FovAlgorithm;
-// use fov::Map as FovMap;
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum PlayerEvent {
-    None,
-    Move,
-    AutoMove,
-    AutoMoveEnd,
-    Wait,
-    Cancel,
-    MeleeAttack,
-    SpellSelect,
-    SpellCast,
-    OpenChest,
-    Death,
-    ReachBorder,
-    ClimbDown,
-}
-
 #[derive(Debug)]
 pub struct SpellFovCache {
     pub radius: u32,
@@ -163,7 +143,6 @@ pub struct Map {
     pub monsters: HashMap<u32, Monster>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
-    pub last_player_event: Option<PlayerEvent>,
     pub spell_fov_cache: SpellFovCache,
     pub should_draw_spell_fov: bool,
     pub border_positions: [Vec<Position>; 4],
@@ -179,7 +158,6 @@ impl Map {
             monsters: HashMap::new(),
             hovered_tile: None,
             hovered_tile_changed: false,
-            last_player_event: None,
             spell_fov_cache: SpellFovCache::new(),
             should_draw_spell_fov: false,
             border_positions: [

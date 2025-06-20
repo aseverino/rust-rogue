@@ -29,7 +29,7 @@ use crate::maps::map::MapRef;
 use crate::maps::navigator::Navigator;
 use crate::maps::overworld::{Overworld, OverworldGenerator, OverworldPos};
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
-use crate::maps::{map::Map, TILE_SIZE, map::PlayerEvent};
+use crate::maps::{map::Map, TILE_SIZE};
 use crate::monster::Monster;
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
@@ -46,6 +46,23 @@ use std::cmp::max;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum PlayerEvent {
+    None,
+    Move,
+    AutoMove,
+    AutoMoveEnd,
+    Wait,
+    Cancel,
+    MeleeAttack,
+    SpellSelect,
+    SpellCast,
+    OpenChest,
+    Death,
+    ReachBorder,
+    ClimbDown,
+}
 
 pub struct GameState {
     pub player: Player,
@@ -145,26 +162,8 @@ pub async fn run() {
     let move_interval = 0.15; // seconds between auto steps
     let mut goal_position: Option<Position> = None;
     let game_interface_offset = PointF::new(410.0, 10.0);
-    let chest_action: Rc<RefCell<Option<u32>>> = Rc::new(RefCell::new(None));
     let mut map_update = PlayerOverworldEvent::None;
     let mut ui = Ui::new();
-
-    // let ui_events: Rc<RefCell<Vec<UiEvent>>> = Rc::new(RefCell::new(Vec::new()));
-    
-    // let ui_events_clone = Rc::clone(&ui_events);
-    // ui.set_on_click_attr_button("str", Box::new(move |ui, _| {
-    //     ui_events_clone.borrow_mut().push(UiEvent::IncStrength);
-    // }));
-    
-    // let ui_events_clone = Rc::clone(&ui_events);
-    // ui.set_on_click_attr_button("dex", Box::new(move |ui, _| {
-    //     ui_events_clone.borrow_mut().push(UiEvent::IncDexterity);
-    // }));
-    
-    // let ui_events_clone = Rc::clone(&ui_events);
-    // ui.set_on_click_attr_button("int", Box::new(move |ui, _| {
-    //     ui_events_clone.borrow_mut().push(UiEvent::IncIntelligence);
-    // }));
 
     game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
         let binding = monster_types.lock().unwrap();
@@ -187,15 +186,35 @@ pub async fn run() {
     loop {
         while ui.events.len() > 0 {
             let event = ui.events.pop_front().unwrap();
-            if game.player.sp > 0 {
-                match event {
-                    UiEvent::IncStrength => game.player.strength += 1,
-                    UiEvent::IncDexterity => game.player.dexterity += 1,
-                    UiEvent::IncIntelligence => game.player.intelligence += 1,
-                    _ => {}
-                }
-
-                game.player.sp -= 1;
+            match event {
+                UiEvent::IncStrength => {
+                    if game.player.sp > 0 {
+                        game.player.strength += 1;
+                        game.player.sp -= 1;
+                    }
+                },
+                UiEvent::IncDexterity => {
+                    if game.player.sp > 0 {
+                        game.player.dexterity += 1;
+                        game.player.sp -= 1;
+                    }
+                },
+                UiEvent::IncIntelligence => {
+                    if game.player.sp > 0 {
+                        game.player.intelligence += 1;
+                        game.player.sp -= 1;
+                    }
+                },
+                UiEvent::ChestAction(item_id) => {
+                    let item = game.items.items[item_id as usize].clone();
+                    game.player.add_item(item);
+                    {
+                        let mut map = current_map_rc.borrow_mut();
+                        map.remove_chest(game.player.position);
+                    }
+                    ui.hide();
+                },
+                _ => {}
             }
         }
         if map_update != PlayerOverworldEvent::None {
@@ -265,15 +284,6 @@ pub async fn run() {
                     overworld_pos = new_opos;
             }
             map_update = PlayerOverworldEvent::None;
-        }
-        else if let Some(item_id) = chest_action.take() {
-            let item = game.items.items[item_id as usize].clone();
-            game.player.add_item(item);
-            {
-                let mut map = current_map_rc.borrow_mut();
-                map.remove_chest(game.player.position);
-            }
-            ui.hide();
         }
 
         let now = get_time();
@@ -346,10 +356,7 @@ pub async fn run() {
                             })
                             .collect();
 
-                        let chest_action_clone = chest_action.clone();
-                        ui.show_chest_view(&actual_items, Box::new(move |item_id| {
-                            *chest_action_clone.borrow_mut() = Some(item_id);
-                        }));
+                        ui.show_chest_view(&actual_items);
                     }
                 }
                 else if player_event == PlayerEvent::ReachBorder {
@@ -363,7 +370,7 @@ pub async fn run() {
 
         {
             let mut map = current_map_rc.borrow_mut();
-            if map.last_player_event == Some(PlayerEvent::AutoMove) {
+            if game.last_player_event == PlayerEvent::AutoMove {
                 last_move_time = now; // Update last move time for auto step
             } else {
                 goal_position = None;

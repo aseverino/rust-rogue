@@ -35,6 +35,7 @@ pub enum UiEvent {
     IncStrength,
     IncDexterity,
     IncIntelligence,
+    ChestAction(u32)
 }
 
 #[derive(Debug)]
@@ -212,7 +213,7 @@ impl Ui {
         }
     }
 
-    pub fn set_chest_items(&mut self, items: &Vec<(u32, String)>, choice_cb: Box<dyn FnMut(u32)>) {
+    pub fn set_chest_items(&mut self, items: &Vec<(u32, String)>) {
         use std::cell::RefCell;
         use std::rc::Rc;
 
@@ -231,7 +232,7 @@ impl Ui {
             }
         };
 
-        let choice_cb = Rc::new(RefCell::new(choice_cb));
+        //let choice_cb = Rc::new(RefCell::new(choice_cb));
 
         if panel_children_len - 1 < items.len() {
             for &(item_id, ref item_name) in items.iter().skip(panel_children_len - 1) {
@@ -244,11 +245,11 @@ impl Ui {
                     item_text.set_margin_top(10.0);
                     item_text.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
                     item_text.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Left);
-                    let choice_cb = Rc::clone(&choice_cb);
-                    item_text.set_on_click(Box::new(move |_ui, _| {
-                        // Handle item click
-                        //println!("Clicked on item: {}", item_id);
-                        (choice_cb.borrow_mut())(item_id);
+                    
+                    let ui_weak = Rc::downgrade(&self.widgets[ROOT_ID as usize]);
+                    let item_id = item_id;
+                    item_text.set_on_click(Box::new(move |ui, _| {
+                        ui.events.push_back(UiEvent::ChestAction(item_id));
                     }));
                 }
             }
@@ -277,8 +278,8 @@ impl Ui {
         self.is_focused = !is_visible;
     }
 
-    pub fn show_chest_view(&mut self, items: &Vec<(u32, String)>, choice_cb: Box<dyn FnMut(u32)>) {
-        self.set_chest_items(items, choice_cb);
+    pub fn show_chest_view(&mut self, items: &Vec<(u32, String)>) {
+        self.set_chest_items(items);
         self.widgets[self.chest_view_id as usize].borrow_mut().set_visible(true);
         self.is_focused = true;
         

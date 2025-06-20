@@ -2,7 +2,7 @@
     {
         "weapons": [
             {
-                "id": 0,
+                "id": 1,
                 "name": "Rusty Short Sword",
                 "description": "",
                 "class": "Sword",
@@ -15,7 +15,7 @@
                 "script": "assets/rusty_short_sword.lua"
             },
             {
-                "id": 0,
+                "id": 2,
                 "name": "Small Old Axe",
                 "description": "",
                 "class": "Axe",
@@ -27,7 +27,7 @@
                 "two-handed": false
             },
             {
-                "id": 0,
+                "id": 3,
                 "name": "Small Carpenter Hammer",
                 "description": "",
                 "class": "Hammer",
@@ -39,7 +39,7 @@
                 "two-handed": false
             },
             {
-                "id": 1,
+                "id": 4,
                 "name": "Rotten Wood Bow",
                 "description": "",
                 "class": "Bow",
@@ -51,7 +51,7 @@
                 "two-handed": true
             },
             {
-                "id": 2,
+                "id": 5,
                 "name": "Branch Staff",
                 "description": "",
                 "class": "Staff",
@@ -67,7 +67,7 @@
     {
         "armor": [
             {
-                "id": 3,
+                "id": 6,
                 "name": "Leather Armor",
                 "description": "",
                 "class": "Armor",
@@ -78,7 +78,7 @@
                 "slot": "body"
             },
             {
-                "id": 4,
+                "id": 7,
                 "name": "Chainmail",
                 "description": "",
                 "class": "Armor",

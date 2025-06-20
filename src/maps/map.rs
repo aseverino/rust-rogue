@@ -282,9 +282,9 @@ impl Map {
 
         if let Some(pos) = chest_pos {
             let mut container = Container::new();
-            container.add_item(0); // Add some items to the container
-            container.add_item(1);
-            container.add_item(2);
+            for i in 1..6 {
+                container.add_item(i);
+            }
             self.tiles[pos].items.push(ItemKind::Container(container));
             self.available_walkable_cache.retain(|&p| p != pos); // Remove chest position from available walkable cache
         } else {

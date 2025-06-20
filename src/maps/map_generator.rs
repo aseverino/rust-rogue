@@ -36,7 +36,7 @@ use rand::{thread_rng, Rng};
 use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{map::GeneratedMap, GRID_WIDTH, GRID_HEIGHT};
-use crate::monster_type::{load_monster_types, MonsterType};
+use crate::monster_type::{load_monster_types, MonsterType, MonsterTypes};
 use crate::tile::{Tile, TileKind};
 use crate::position::Position;
 use rand::seq::SliceRandom;
@@ -146,9 +146,6 @@ pub struct MapAssignment {
     pub map: Arc<Mutex<GeneratedMap>>,
 }
 
-type MonsterCollection = Vec<Arc<MonsterType>>;
-type MonsterTypes = Arc<Mutex<MonsterCollection>>;
-
 pub struct MapGenerator {
     command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
@@ -157,11 +154,11 @@ pub struct MapGenerator {
 }
 
 impl MapGenerator {
-    pub async fn new(lua_interface: &LuaInterfaceRc) -> Self {
+    pub async fn new(lua_interface: &LuaInterfaceRc, monster_types: &MonsterTypes) -> Self {
         Self {
             command_tx: None,
             thread_handle: None,
-            monster_types: Arc::new(Mutex::new(load_monster_types(lua_interface).await)),
+            monster_types: monster_types.clone(),
             map_statuses: Arc::new(Mutex::new(HashMap::new())),
         }
     }

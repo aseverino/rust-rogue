@@ -23,7 +23,7 @@
 use macroquad::prelude::*;
 use rlua::{UserData, UserDataMethods};
 use serde::Deserialize;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use serde_json::from_str;
 
 use crate::lua_interface::{LuaInterfaceRc, LuaScripted};
@@ -93,3 +93,6 @@ impl UserData for MonsterType {
         });
     }
 }
+
+pub type MonsterCollection = Vec<Arc<MonsterType>>;
+pub type MonsterTypes = Arc<Mutex<MonsterCollection>>;

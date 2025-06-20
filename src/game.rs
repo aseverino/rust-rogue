@@ -33,7 +33,7 @@ use crate::player::Player;
 use crate::input::{Input, KeyboardAction};
 use crate::position::Position;
 
-use crate::{spell_type};
+use crate::{monster_type, spell_type};
 use macroquad::time::get_time;
 
 use std::rc::Rc;
@@ -107,9 +107,11 @@ pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
+    let monster_types = Arc::new(Mutex::new(monster_type::load_monster_types(&lua_interface).await));
+
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld_generator: OverworldGenerator::new(&lua_interface).await,
+        overworld_generator: OverworldGenerator::new(&lua_interface, &monster_types).await,
         overworld: Overworld::new(),
         items: Items::new(),
         lua_interface: lua_interface

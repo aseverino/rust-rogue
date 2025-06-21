@@ -21,9 +21,50 @@
 // SOFTWARE.
 
 mod map_generator;
+pub mod generated_map;
 pub mod map;
 pub mod navigator;
 pub mod overworld;
+
+use bitflags::bitflags;
+
+#[derive(Debug, Clone)]
+pub enum MapTheme {
+    Any,
+    Chasm,
+    Wall,
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct BorderFlags: u32 {
+        const NONE   = 0;
+        const TOP    = 0b0001;
+        const BOTTOM = 0b0010;
+        const LEFT   = 0b0100;
+        const RIGHT  = 0b1000;
+        const DOWN   = 0b0001_0000;
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Border {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+impl Border {
+    pub fn opposite(self) -> Border {
+        match self {
+            Border::Top    => Border::Bottom,
+            Border::Bottom => Border::Top,
+            Border::Left   => Border::Right,
+            Border::Right  => Border::Left,
+        }
+    }
+}
 
 pub const TILE_SIZE: f32 = 32.0;
 pub const GRID_WIDTH: usize = 33;

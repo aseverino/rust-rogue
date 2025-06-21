@@ -20,64 +20,22 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::cmp::min;
 use std::collections::HashMap;
-use std::ops::BitOr;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
-use bitflags::bitflags;
 
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng};
 
 use crate::lua_interface::LuaInterfaceRc;
+use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
-use crate::maps::{map::GeneratedMap, GRID_WIDTH, GRID_HEIGHT};
-use crate::monster_type::{load_monster_types, MonsterType, MonsterTypes};
+use crate::maps::{BorderFlags, MapTheme, GRID_HEIGHT, GRID_WIDTH};
+use crate::monster_type::MonsterTypes;
 use crate::tile::{Tile, TileKind};
 use crate::position::Position;
 use rand::seq::SliceRandom;
-
-#[derive(Debug, Clone)]
-pub enum MapTheme {
-    Any,
-    Chasm,
-    Wall,
-}
-
-bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct BorderFlags: u32 {
-        const NONE   = 0;
-        const TOP    = 0b0001;
-        const BOTTOM = 0b0010;
-        const LEFT   = 0b0100;
-        const RIGHT  = 0b1000;
-        const DOWN   = 0b0001_0000;
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Border {
-    Top,
-    Right,
-    Bottom,
-    Left,
-}
-
-impl Border {
-    pub fn opposite(self) -> Border {
-        match self {
-            Border::Top    => Border::Bottom,
-            Border::Bottom => Border::Top,
-            Border::Left   => Border::Right,
-            Border::Right  => Border::Left,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum MapStatus {
@@ -154,7 +112,7 @@ pub struct MapGenerator {
 }
 
 impl MapGenerator {
-    pub async fn new(lua_interface: &LuaInterfaceRc, monster_types: &MonsterTypes) -> Self {
+    pub async fn new(_lua_interface: &LuaInterfaceRc, monster_types: &MonsterTypes) -> Self {
         Self {
             command_tx: None,
             thread_handle: None,

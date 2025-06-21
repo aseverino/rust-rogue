@@ -21,11 +21,16 @@
 // SOFTWARE.
 
 use core::panic;
-use std::{cell::RefCell, rc::Rc, sync::{mpsc, Arc, Mutex}};
+use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
-use macroquad::miniquad::ElapsedQuery;
+use crate::{lua_interface::LuaInterfaceRc, maps::{generated_map::GeneratedMap, map::Map, map_generator::{GenerationParams, MapAssignment, MapGenerator, MapStatus}, Border, BorderFlags, MapTheme, GRID_HEIGHT, GRID_WIDTH}, monster_type::MonsterTypes, position::Position};
 
-use crate::{lua_interface::LuaInterfaceRc, maps::{map::{GeneratedMap, Map}, map_generator::{Border, BorderFlags, GenerationParams, MapAssignment, MapGenerator, MapStatus, MapTheme}, GRID_HEIGHT, GRID_WIDTH}, monster_type::MonsterTypes, position::Position};
+#[derive(Debug, PartialEq)]
+pub enum VisitedState {
+    NotVisited,
+    Peeked,
+    Visited
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OverworldPos {
@@ -241,7 +246,7 @@ impl OverworldGenerator {
         }
 
         match &*status {
-            MapStatus::Ready(map_arc) => {
+            MapStatus::Ready(_map_arc) => {
                 let maps_guard = self.generated_maps.lock().ok()?;
                 if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
                     maps_guard[opos.floor][opos.x][opos.y].as_ref().map(Arc::clone)

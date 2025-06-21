@@ -23,49 +23,33 @@
 use macroquad::prelude::*;
 extern crate rand as external_rand;
 
-use external_rand::Rng;
 use external_rand::thread_rng;
 
 use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{ HashMap, HashSet };
-use std::sync::Arc;
-use std::sync::RwLock;
 use crate::creature::Creature;
 use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
-use crate::lua_interface;
-use crate::lua_interface::LuaInterfaceRc;
-use crate::lua_interface::LuaScripted;
+use crate::maps::generated_map::GeneratedMap;
+use crate::maps::overworld::VisitedState;
 use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
 use crate::monster::Monster;
 use crate::monster::MonsterArc;
-use crate::monster::MonsterRef;
-use crate::monster_type::MonsterType;
-use crate::player;
 use crate::position::POSITION_INVALID;
-use crate::position::{ Position, Direction };
-use crate::input::KeyboardAction;
+use crate::position::Position;
 use crate::player::Player;
-use crate::tile::{Tile, NO_CREATURE, PLAYER_CREATURE_ID};
+use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
 use crate::tile_map::TileMap;
-use crate::monster_type::load_monster_types;
 
 #[derive(Debug)]
 pub struct SpellFovCache {
     pub radius: u32,
     pub origin: Position,
     pub area: HashSet<Position>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum VisitedState {
-    NotVisited,
-    Peeked,
-    Visited
 }
 
 impl SpellFovCache {
@@ -75,70 +59,6 @@ impl SpellFovCache {
             origin: POSITION_INVALID,
             area: HashSet::new(),
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct GeneratedMap {
-    pub tiles: TileMap,
-    pub walkable_cache: Vec<Position>,
-    pub available_walkable_cache: Vec<Position>,
-    pub monsters: Vec<MonsterArc>,
-    pub border_positions: [Vec<Position>; 4],
-    pub downstair_teleport: Option<Position>,
-}
-
-impl GeneratedMap {
-    pub fn new(tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
-        Self {
-            tiles: TileMap::new(tiles),
-            walkable_cache,
-            available_walkable_cache,
-            monsters: Vec::new(),
-            border_positions: [
-                Vec::new(), // Up border
-                Vec::new(), // Right border
-                Vec::new(), // Down border
-                Vec::new(), // Left border
-            ],
-            downstair_teleport: None,
-        }
-    }
-
-    pub(crate) fn add_random_monsters(
-        &mut self,
-        monster_types: &Vec<Arc<MonsterType>>,
-        count: usize,
-    ) {
-        let mut rng = thread_rng();
-
-        // let mut positions = self.walkable_cache.clone(); // clone so we can shuffle safely
-        // 2. Shuffle the positions randomly
-        // positions.shuffle(&mut rng);
-
-        // 3. Pick up to `count` positions
-        let len = self.available_walkable_cache.len();
-        let positions: Vec<Position> = self.available_walkable_cache
-            .drain(len.saturating_sub(count)..)
-            .collect();
-
-        for pos in positions {
-            let kind = monster_types
-                .choose(&mut rng)
-                .expect("Monster type list is empty")
-                .clone();
-
-            let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
-            if let Ok(monster_guard) = monster.read() {
-                self.tiles[pos].creature = monster_guard.id;
-            } else {
-                println!("Failed to read monster data due to poisoning.");
-            }
-            // Wrap the monster in Rc and push to creatures
-            self.monsters.push(monster);
-        }
-
-        self.walkable_cache.shuffle(&mut rng);
     }
 }
 
@@ -203,34 +123,6 @@ impl Map {
         map.downstair_teleport = generated_map.downstair_teleport;
         map
     }
-
-    //pub async fn init(&mut self, _player: &mut Player) {
-    //    let monster_types = load_monster_types().await;
-    //    self.add_random_monsters(&monster_types, 20);
-    //    
-    //    let len = self.available_walkable_cache.len();
-    //    let positions: Vec<Position> = self.available_walkable_cache
-    //        .drain(len.saturating_sub(2)..)
-    //        .collect();
-//
-    //    for pos in positions {
-    //        self.tiles[pos].add_orb();
-    //    }
-
-        
-
-        // let chest_pos = self.available_walkable_cache.pop();
-
-        // if let Some(pos) = chest_pos {
-        //     let mut container = Container::new();
-        //     container.add_item(0);
-        //     container.add_item(1);
-        //     container.add_item(2);
-        //     self.tiles[pos].items.push_back(ItemKind::Container(container));
-        // } else {
-        //     println!("No available position for chest.");
-        // }
-    //}
 
     pub fn remove_creature<T: Creature>(&mut self, creature: &mut T) {
         let pos = creature.pos();
@@ -403,20 +295,3 @@ impl Map {
 }
 
 pub type MapRef = Rc<RefCell<Map>>;
-
-// impl FovMap for Map {
-//     fn is_opaque(&self, x: i32, y: i32) -> bool {
-//         if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
-//             return true;
-//         }
-//         matches!(self.tiles[x as usize][y as usize].kind, TileKind::Wall)
-//     }
-// }
-
-// pub fn compute_visible_positions(map: &Map, origin: Position, radius: i32) -> Vec<Position> {
-//     let mut visible = Vec::new();
-//     fov::compute_fov(origin.x as i32, origin.y as i32, radius, &*map, |x, y| {
-//         visible.push(Position { x: x as usize, y: y as usize });
-//     });
-//     visible
-// }

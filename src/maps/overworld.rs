@@ -63,7 +63,7 @@ impl Overworld {
         }
         
         if maps_guard[opos.floor][opos.x][opos.y].is_none() {
-            let map = Rc::new(RefCell::new(Map::from_generated_map(generated_map.lock().unwrap().clone())));
+            let map = Rc::new(RefCell::new(Map::new(generated_map.lock().unwrap().clone())));
             maps_guard[opos.floor][opos.x][opos.y] = Some(Rc::clone(&map));
             map
         } else {

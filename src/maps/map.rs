@@ -43,7 +43,6 @@ use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
 use std::rc::Rc;
-use crate::tile_map::TileMap;
 
 #[derive(Debug)]
 pub struct SpellFovCache {
@@ -64,39 +63,30 @@ impl SpellFovCache {
 
 #[derive(Debug)]
 pub struct Map {
-    pub tiles: TileMap,
-    pub walkable_cache: Vec<Position>,
-    pub available_walkable_cache: Vec<Position>,
+    pub generated_map: GeneratedMap,
     pub monsters: HashMap<u32, Monster>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
     pub spell_fov_cache: SpellFovCache,
     pub should_draw_spell_fov: bool,
-    pub border_positions: [Vec<Position>; 4],
-    pub downstair_teleport: Option<Position>,
     pub visited_state: VisitedState,
 }
 
 impl Map {
-    pub fn new(tiles: TileMap, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
-        Self {
-            tiles,
-            walkable_cache,
-            available_walkable_cache,
+    pub fn new(generated_map: GeneratedMap) -> Self {
+        let mut m = Self {
+            generated_map,
             monsters: HashMap::new(),
             hovered_tile: None,
             hovered_tile_changed: false,
             spell_fov_cache: SpellFovCache::new(),
             should_draw_spell_fov: false,
-            border_positions: [
-                Vec::new(), // Up border
-                Vec::new(), // Right border
-                Vec::new(), // Down border
-                Vec::new(), // Left border
-            ],
-            downstair_teleport: None,
             visited_state: VisitedState::NotVisited,
-        }
+        };
+
+        m.monsters = Self::convert_monsters(m.generated_map.monsters.clone());
+
+        m
     }
 
     fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, Monster> 
@@ -112,22 +102,10 @@ impl Map {
             .collect()
     }
 
-    pub fn from_generated_map(generated_map: GeneratedMap) -> Self {
-        let mut map = Self::new(
-            generated_map.tiles,
-            generated_map.walkable_cache,
-            generated_map.available_walkable_cache,
-        );
-        map.monsters = Self::convert_monsters(generated_map.monsters);
-        map.border_positions = generated_map.border_positions;
-        map.downstair_teleport = generated_map.downstair_teleport;
-        map
-    }
-
     pub fn remove_creature<T: Creature>(&mut self, creature: &mut T) {
         let pos = creature.pos();
         if pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT {
-            self.tiles[pos].creature = NO_CREATURE; // Remove creature from tile
+            self.generated_map.tiles[pos].creature = NO_CREATURE; // Remove creature from tile
             creature.set_pos(POSITION_INVALID); // Set creature position to invalid
         } else {
             println!("Creature position out of bounds, cannot remove.");
@@ -140,14 +118,14 @@ impl Map {
             return;
         }
 
-        self.tiles[pos].creature = PLAYER_CREATURE_ID;
+        self.generated_map.tiles[pos].creature = PLAYER_CREATURE_ID;
         player.set_pos(pos);
 
         self.compute_player_fov(player, max(GRID_WIDTH, GRID_HEIGHT));
     }
 
     pub fn add_player_first_map(&mut self, player: &mut Player) {
-        let pos = self.available_walkable_cache.pop()
+        let pos = self.generated_map.available_walkable_cache.pop()
             .unwrap_or_else(|| Position::new(1, 1)); // Default to (1, 1) if no walkable positions
 
         self.add_player(player, pos);
@@ -164,8 +142,8 @@ impl Map {
             for i in 1..6 {
                 container.add_item(i);
             }
-            self.tiles[pos].items.push(ItemKind::Container(container));
-            self.available_walkable_cache.retain(|&p| p != pos); // Remove chest position from available walkable cache
+            self.generated_map.tiles[pos].items.push(ItemKind::Container(container));
+            self.generated_map.available_walkable_cache.retain(|&p| p != pos); // Remove chest position from available walkable cache
         } else {
             println!("No available position for chest.");
         }
@@ -175,7 +153,7 @@ impl Map {
         let pos = {
             player.pos()
         };
-        let visible = Navigator::compute_fov(&self.tiles, pos, radius);
+        let visible = Navigator::compute_fov(&self.generated_map.tiles, pos, radius);
         player.line_of_sight = visible;
     }
 
@@ -201,7 +179,7 @@ impl Map {
         if spell_fov_needs_update {
             self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
             self.spell_fov_cache.origin = self.hovered_tile.unwrap_or(POSITION_INVALID);
-            self.spell_fov_cache.area = Navigator::compute_fov(&self.tiles, self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
+            self.spell_fov_cache.area = Navigator::compute_fov(&self.generated_map.tiles, self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
         }
     }
 
@@ -210,7 +188,7 @@ impl Map {
 
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
-                let tile = &self.tiles[Position::new(x, y)];
+                let tile = &self.generated_map.tiles[Position::new(x, y)];
                 tile.draw(Position::new(x, y), offset, !self.monsters.is_empty());
 
                 if self.should_draw_spell_fov {
@@ -265,16 +243,16 @@ impl Map {
     }
 
     pub fn is_tile_enemy_occupied(&self, pos: Position) -> bool {
-        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].has_enemy()
+        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.generated_map.tiles[pos].has_enemy()
     }
 
     pub fn is_tile_walkable(&self, pos: Position) -> bool {
-        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.tiles[pos].is_walkable()
+        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.generated_map.tiles[pos].is_walkable()
     }
 
     pub fn get_chest_items(&self, position: &Position) -> Option<&Vec<u32>> {
         if position.x < GRID_WIDTH && position.y < GRID_HEIGHT {
-            let tile = &self.tiles[*position];
+            let tile = &self.generated_map.tiles[*position];
             if let Some(item) = tile.get_top_item() {
                 if let ItemKind::Container(container) = item {
                     return Some(&container.items);
@@ -285,9 +263,9 @@ impl Map {
     }
 
     pub fn remove_chest(&mut self, position: Position) {
-        for (idx, item) in self.tiles[position].items.iter().enumerate() {
+        for (idx, item) in self.generated_map.tiles[position].items.iter().enumerate() {
             if let ItemKind::Container(_) = item {
-                self.tiles[position].items.remove(idx);
+                self.generated_map.tiles[position].items.remove(idx);
                 return; // Exit after removing the first container
             }
         }

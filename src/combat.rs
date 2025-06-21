@@ -41,7 +41,7 @@ fn do_damage(player: &mut Player, map_ref: &MapRef, target_id: u32, damage: i32,
         if target.get_health().0 <= 0 {
             let target_pos = target.pos();
             let target_name = target.name().to_string();
-            map.tiles[target_pos].creature = NO_CREATURE;
+            map.generated_map.tiles[target_pos].creature = NO_CREATURE;
             println!("{} has been defeated!", target_name);
         } else {
             println!("{} has {} HP left.", target.name(), target.get_health().0);
@@ -84,7 +84,7 @@ pub(crate) fn do_melee_combat(player: &mut Player, map_ref: &mut MapRef, _attack
             let (target_id, mut monster) =
             {
                 let map = map_ref.borrow_mut();
-                let target_id = map.tiles[target_pos].creature;
+                let target_id = map.generated_map.tiles[target_pos].creature;
                 (target_id, map.monsters.get(&target_id).unwrap_or_else(|| { panic!("Error on do_melee_combat: no monster.")}).clone())
             };
 
@@ -124,7 +124,7 @@ pub(crate) fn do_melee_combat(player: &mut Player, map_ref: &mut MapRef, _attack
         }
     };
 
-    let creature_id = map_ref.borrow().tiles[target_pos].creature;
+    let creature_id = map_ref.borrow().generated_map.tiles[target_pos].creature;
     if creature_id >= 0 {
         do_damage(player, map_ref, creature_id as u32, damage as i32, lua_interface);
     }
@@ -147,7 +147,7 @@ pub(crate) fn do_spell_combat(player: &mut Player, map_ref: &MapRef, _attacker_p
 
     map.spell_fov_cache.area.iter().for_each(|&pos| {
         target_positions.push(pos);
-        let creature_id = map.tiles[pos].creature;
+        let creature_id = map.generated_map.tiles[pos].creature;
         if creature_id >= 0 {
             target_creatures.push(creature_id as u32);
         }

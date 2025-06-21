@@ -193,7 +193,7 @@ fn check_for_map_update(
                     map.visited_state = VisitedState::Peeked;
                     *current_downstair_teleport_pos = {
                         let current_map = current_map_rc.borrow();
-                        current_map.downstair_teleport.clone()
+                        current_map.generated_map.downstair_teleport.clone()
                     };
                     // Setting up the map adjacencies has to be done before locking it
                     {
@@ -306,7 +306,7 @@ pub async fn run() {
         
         let binding = shared_map_ptr_clone.borrow_mut();
         let mut map = binding.borrow_mut();
-        map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
+        map.generated_map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
         // Wrap the monster in Rc and push to creatures
         map.monsters.insert(monster.id, monster);
     }));
@@ -595,7 +595,7 @@ pub fn update(
                 drop(map);
                 combat::do_melee_combat(&mut game.player, map_ref, player_pos, pos, &game.lua_interface);
             }
-            else if map.tiles[pos].is_border(&pos) && !map.monsters.is_empty() {
+            else if map.generated_map.tiles[pos].is_border(&pos) && !map.monsters.is_empty() {
                 game.last_player_event = PlayerEvent::Cancel;
             }
             else {
@@ -619,8 +619,8 @@ pub fn update(
 
     if let Some(pos) = new_player_pos {
         let mut map = map_ref.borrow_mut();
-        map.tiles[player_pos].creature = NO_CREATURE;
-        map.tiles[pos].creature = PLAYER_CREATURE_ID;
+        map.generated_map.tiles[player_pos].creature = NO_CREATURE;
+        map.generated_map.tiles[pos].creature = PLAYER_CREATURE_ID;
 
         game.player.set_pos(pos);
         
@@ -633,7 +633,7 @@ pub fn update(
 
         let mut to_remove: Vec<usize> = Vec::new();
         
-        for (idx, item) in map.tiles[pos].items.iter().rev().enumerate() {
+        for (idx, item) in map.generated_map.tiles[pos].items.iter().rev().enumerate() {
             match item {
                 ItemKind::Orb(_) => {
                     println!("Player picked up an orb at index {idx}!");
@@ -658,17 +658,17 @@ pub fn update(
         }
 
         for idx in to_remove {
-            map.tiles[pos].remove_item(idx);
+            map.generated_map.tiles[pos].remove_item(idx);
         }
 
-        if map.tiles[pos].is_border(&pos) {
+        if map.generated_map.tiles[pos].is_border(&pos) {
             game.last_player_event = PlayerEvent::ReachBorder;
         }
     }
 
     if update_monsters {
         let mut map = map_ref.borrow_mut();
-        let walkable_tiles = map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
+        let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
         let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
 
         for (id, monster) in &mut map.monsters {
@@ -703,8 +703,8 @@ pub fn update(
         }
 
         for (monster_pos, next_step, i) in monster_moves {
-            map.tiles[monster_pos].creature = NO_CREATURE;
-            map.tiles[next_step].creature = i as u32;
+            map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
+            map.generated_map.tiles[next_step].creature = i as u32;
         }
     }
 }

@@ -52,6 +52,7 @@ pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<Mo
 #[derive(Debug, Deserialize)]
 pub struct MonsterType {
     pub id: u32,
+    pub tier: u32,
     pub name: String,
     pub glyph: char,
     pub color: [u8; 3], // RGB, will convert to macroquad::Color

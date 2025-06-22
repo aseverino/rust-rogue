@@ -33,6 +33,7 @@ use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{BorderFlags, MapTheme, GRID_HEIGHT, GRID_WIDTH};
+use crate::{monster, monster_type};
 use crate::monster_type::MonsterTypes;
 use crate::tile::{Tile, TileKind};
 use crate::position::Position;
@@ -90,7 +91,7 @@ impl GenerationParams {
             ],
             predefined_start_pos: None,
             force_regen: false,
-            tier: 0,
+            tier: 1,
         }
     }
 }
@@ -109,17 +110,29 @@ pub struct MapGenerator {
     command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
     monster_types: MonsterTypes,
+    monster_types_by_tier: Vec<Vec<u32>>,
     pub map_statuses: Arc<Mutex<HashMap<OverworldPos, SharedMapStatus>>>,
 }
 
 impl MapGenerator {
     pub async fn new(_lua_interface: &LuaInterfaceRc, monster_types: &MonsterTypes) -> Self {
-        Self {
+        let mut mg = Self {
             command_tx: None,
             thread_handle: None,
             monster_types: monster_types.clone(),
+            monster_types_by_tier: Vec::new(),
             map_statuses: Arc::new(Mutex::new(HashMap::new())),
+        };
+
+        // Initialize monster types by tier
+        let monster_types_guard = monster_types.lock().unwrap();
+        for mt in monster_types_guard.iter() {
+            if mg.monster_types_by_tier.len() <= mt.tier as usize {
+                mg.monster_types_by_tier.resize(mt.tier as usize + 1, Vec::new());
+            }
+            mg.monster_types_by_tier[mt.tier as usize].push(mt.id);
         }
+        mg
     }
 
     pub fn get_map_status(&self, opos: &OverworldPos) -> MapStatus {
@@ -135,13 +148,14 @@ impl MapGenerator {
         let (command_tx, command_rx) = mpsc::channel::<Command>();
         self.command_tx = Some(command_tx);
         let monster_types = Arc::clone(&self.monster_types);
+        let monster_types_by_tier = self.monster_types_by_tier.clone();
         let statuses = Arc::clone(&self.map_statuses);
         self.thread_handle = Some(thread::spawn(move || {
             for command in command_rx {
                 match command {
                     Command::Generate(pos, params) => {
                         let mut map = Self::generate_map(&params);
-                        Self::populate_map(&mut map, &params, &monster_types);
+                        Self::populate_map(&mut map, &params, &monster_types, &monster_types_by_tier);
                         let map_arc = Arc::new(Mutex::new(map));
                         {
                             let mut statuses = statuses.lock().unwrap();
@@ -528,9 +542,9 @@ impl MapGenerator {
         map
     }
 
-    fn populate_map(map: &mut GeneratedMap, params: &GenerationParams, monster_types: &MonsterTypes) {
+    fn populate_map(map: &mut GeneratedMap, params: &GenerationParams, monster_types: &MonsterTypes, monster_types_by_tier: &Vec<Vec<u32>>) {
         let monster_types_guard = monster_types.lock().unwrap();
-        map.add_random_monsters(&*monster_types_guard, 1);
+        map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();
         let mut positions: Vec<Position> = map.available_walkable_cache

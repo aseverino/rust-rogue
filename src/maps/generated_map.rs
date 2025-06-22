@@ -60,23 +60,38 @@ impl GeneratedMap {
     pub(crate) fn add_random_monsters(
         &mut self,
         monster_types: &Vec<Arc<MonsterType>>,
-        count: usize,
+        monster_types_by_tier: &Vec<Vec<u32>>,
+        tier: u32,
     ) {
         let mut rng = thread_rng();
 
-        // 3. Pick up to `count` positions
+        let mut monster_types_in_this_tier = if tier as usize >= monster_types_by_tier.len() {
+            monster_types
+                .iter()
+                .filter(|mt| mt.tier == tier)
+                .collect::<Vec<_>>()
+        } else {
+            monster_types_by_tier[tier as usize]
+                .iter()
+                .filter_map(|&id| monster_types.iter().find(|mt| mt.id == id))
+                .collect::<Vec<_>>()
+        };
+
+        monster_types_in_this_tier.shuffle(&mut rng);
+        monster_types_in_this_tier.truncate(2);
+
         let len = self.available_walkable_cache.len();
         let positions: Vec<Position> = self.available_walkable_cache
-            .drain(len.saturating_sub(count)..)
+            .drain(len.saturating_sub(10)..)
             .collect();
 
         for pos in positions {
-            let kind = monster_types
+            let kind = (*monster_types_in_this_tier
                 .choose(&mut rng)
-                .expect("Monster type list is empty")
+                .expect("Monster type list is empty"))
                 .clone();
 
-            let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind)));
+            let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind.clone())));
             if let Ok(monster_guard) = monster.read() {
                 self.tiles[pos].creature = monster_guard.id;
             } else {
@@ -86,6 +101,6 @@ impl GeneratedMap {
             self.monsters.push(monster);
         }
 
-        self.walkable_cache.shuffle(&mut rng);
+        // self.walkable_cache.shuffle(&mut rng);
     }
 }

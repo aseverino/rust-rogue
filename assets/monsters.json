@@ -1,39 +1,68 @@
 [
   {
     "id": 0,
-    "name": "Goblin",
+    "name": "Spawner",
     "tier": 0,
-    "glyph": "g",
-    "color": [0, 200, 0],
+    "glyph": "S",
+    "color": [100, 100, 100],
     "max_hp": 10,
-    "melee_damage": 1
+    "speed": 100,
+    "melee_damage": 0,
+    "script": "assets/spawner.lua"
   },
   {
     "id": 1,
-    "name": "Slime",
-    "tier": 0,
-    "glyph": "s",
-    "color": [0, 200, 0],
+    "name": "Bat",
+    "tier": 1,
+    "glyph": "b",
+    "color": [0, 0, 100],
     "max_hp": 10,
+    "speed": 100,
     "melee_damage": 1,
     "script": "assets/slime.lua"
   },
   {
     "id": 2,
-    "name": "Orc",
-    "tier": 0,
-    "glyph": "o",
-    "color": [0, 100, 0],
+    "name": "Gremlin",
+    "tier": 1,
+    "glyph": "g",
+    "color": [0, 200, 0],
     "max_hp": 20,
-    "melee_damage": 1
+    "speed": 100,
+    "melee_damage": 1,
+    "script": "assets/slime.lua"
   },
   {
     "id": 3,
+    "name": "Orc",
+    "tier": 2,
+    "glyph": "o",
+    "color": [0, 100, 0],
+    "max_hp": 20,
+    "speed": 100,
+    "melee_damage": 1,
+    "script": "assets/slime.lua"
+  },
+  {
+    "id": 4,
+    "name": "Slime",
+    "tier": 2,
+    "glyph": "s",
+    "color": [0, 200, 0],
+    "max_hp": 10,
+    "speed": 100,
+    "melee_damage": 1,
+    "script": "assets/slime.lua"
+  },
+  {
+    "id": 5,
     "name": "Demon",
-    "tier": 0,
+    "tier": 3,
     "glyph": "D",
     "color": [200, 0, 0],
     "max_hp": 50,
-    "melee_damage": 1
+    "speed": 100,
+    "melee_damage": 1,
+    "script": "assets/slime.lua"
   }
 ]

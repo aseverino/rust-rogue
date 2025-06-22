@@ -445,12 +445,19 @@ pub async fn run() {
                     }
                 },
                 UiEvent::ChestAction(item_id) => {
-                    let item = game.items.items[item_id as usize].clone();
-                    game.player.add_item(item);
-                    {
-                        let mut map = current_map_rc.borrow_mut();
-                        map.remove_chest(game.player.position);
+                    let item = game.items.items.get(&item_id);
+
+                    if let Some(item) = item {
+                        game.player.add_item(item.clone());
+                        {
+                            let mut map = current_map_rc.borrow_mut();
+                            map.remove_chest(game.player.position);
+                        }
+                    } else {
+                        println!("Item with ID {} not found.", item_id);
+                        continue;
                     }
+                    
                     ui.hide();
                 },
                 _ => {}
@@ -549,11 +556,9 @@ pub async fn run() {
                         
                         let actual_items: Vec<(u32, String)> = items_vec.iter()
                             .filter_map(|item_id| {
-                                game.items.items.iter()
-                                    .find(|item| item.id() == *item_id)
-                                    .map(|item| {
-                                        (item.id(), item.name().to_string())
-                                    })
+                                game.items.items.get(item_id).map(|item| {
+                                    (*item_id, item.name().to_string())
+                                })
                             })
                             .collect();
 

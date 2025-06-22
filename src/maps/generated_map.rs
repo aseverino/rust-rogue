@@ -24,7 +24,7 @@ use std::sync::{Arc, RwLock};
 
 use rand::{seq::SliceRandom, thread_rng};
 
-use crate::{monster::{Monster, MonsterArc}, monster_type::MonsterType, position::Position, tile::Tile, tile_map::TileMap};
+use crate::{maps::overworld::VisitedState, monster::{Monster, MonsterArc}, monster_type::MonsterType, position::Position, tile::Tile, tile_map::TileMap};
 
 #[derive(Clone, Debug)]
 pub struct GeneratedMap {
@@ -34,6 +34,7 @@ pub struct GeneratedMap {
     pub monsters: Vec<MonsterArc>,
     pub border_positions: [Vec<Position>; 4],
     pub downstair_teleport: Option<Position>,
+    pub visited_state: VisitedState,
 }
 
 impl GeneratedMap {
@@ -50,6 +51,7 @@ impl GeneratedMap {
                 Vec::new(), // Left border
             ],
             downstair_teleport: None,
+            visited_state: VisitedState::Unvisited,
         }
     }
 

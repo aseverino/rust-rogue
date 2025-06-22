@@ -22,7 +22,7 @@
 
 use crate::items::base_item::Item;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Teleport {
     //
 }

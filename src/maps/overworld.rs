@@ -23,11 +23,11 @@
 use core::panic;
 use std::{cell::RefCell, rc::Rc, sync::{Arc, Mutex}};
 
-use crate::{lua_interface::LuaInterfaceRc, maps::{generated_map::GeneratedMap, map::Map, map_generator::{GenerationParams, MapAssignment, MapGenerator, MapStatus}, Border, BorderFlags, MapTheme, GRID_HEIGHT, GRID_WIDTH}, monster_type::MonsterTypes, position::Position};
+use crate::{lua_interface::LuaInterfaceRc, maps::{generated_map::GeneratedMap, map::Map, map_generator::{GenerationParams, MapAssignment, MapGenerator, MapStatus}, overworld, Border, BorderFlags, MapTheme, GRID_HEIGHT, GRID_WIDTH}, monster_type::MonsterTypes, position::Position};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VisitedState {
-    NotVisited,
+    Unvisited,
     Peeked,
     Visited
 }
@@ -37,6 +37,12 @@ pub struct OverworldPos {
     pub floor: usize,
     pub x: usize,
     pub y: usize,
+}
+
+impl OverworldPos {
+    pub fn new(floor: usize, x: usize, y: usize) -> Self {
+        Self { floor, x, y }
+    }
 }
 
 pub struct Overworld {
@@ -51,6 +57,39 @@ impl Overworld {
             ]));
         Self {
             maps: maps,
+        }
+    }
+
+    pub fn clear_unvisited(&mut self, opos: OverworldPos) {
+        let to_clear = {
+            let maps = self.maps.borrow();
+            let mut result = Vec::new();
+            for (row_idx, row) in maps[opos.floor].iter().enumerate() {
+                for (col_idx, map_opt) in row.iter().enumerate() {
+                    if (row_idx, col_idx) == (opos.x, opos.y) {
+                        continue; // Skip the current position
+                    }
+                    if let Some(map) = map_opt {
+                        if map.borrow().generated_map.visited_state != VisitedState::Visited {
+                            result.push((row_idx, col_idx));
+                        }
+                    }
+                }
+            }
+            result
+        };
+
+        {
+            let mut maps = self.maps.borrow_mut();
+            for (row_idx, col_idx) in to_clear {
+                println!("Overworld: Clearing unvisited map at position: ({}, {}) on floor {}", row_idx, col_idx, opos.floor);
+                maps[opos.floor][row_idx][col_idx] = None;
+            }
+
+            if maps.len() > opos.floor + 1 {
+                // Clear the map below if it exists
+                maps[opos.floor + 1][2][2] = None;
+            }
         }
     }
 
@@ -144,13 +183,14 @@ impl OverworldGenerator {
 
         let overworld = Arc::new(Mutex::new(Self {
             generated_maps: Arc::clone(&generated_maps),
-            //maps: Arc::clone(&maps),
             map_generator,
         }));
 
         let overworld_weak = Arc::downgrade(&overworld);
         let generated_maps_clone = Arc::clone(&generated_maps);
+        let first_map_generation = Arc::new(std::sync::atomic::AtomicBool::new(true));
 
+        let first_map_generation_clone = Arc::clone(&first_map_generation);
         let callback = Box::new(move |assignment: MapAssignment| {
             let mut generated_maps = generated_maps_clone.lock().unwrap();
             let OverworldPos { floor, x, y } = assignment.opos;
@@ -161,10 +201,11 @@ impl OverworldGenerator {
                 });
             }
 
+            println!("Generated map at position: {:?}, floor: {}, x: {}, y: {}", assignment.opos, floor, x, y);
             generated_maps[floor][x][y] = Some(assignment.map);
             drop(generated_maps);
 
-            if x == 2 && y == 2 && floor == 0 {
+            if x == 2 && y == 2 && floor == 0 && first_map_generation_clone.swap(false, std::sync::atomic::Ordering::Relaxed) {
                 let stairs_pos = generated_maps_clone.lock().unwrap()
                     .get(0).and_then(|floor| floor[2][2].as_ref())
                     .and_then(|map| map.lock().unwrap().downstair_teleport);
@@ -172,7 +213,7 @@ impl OverworldGenerator {
                 // This is the center map, setup adjacent maps
                 if let Some(overworld_strong) = overworld_weak.upgrade() {
                     let mut o = overworld_strong.lock().unwrap();
-                    o.setup_adjacent_maps(floor, x, y, stairs_pos.unwrap_or_else(|| panic!()));
+                    o.setup_adjacent_maps(floor, x, y, stairs_pos);
                 }
             }
         });
@@ -190,7 +231,24 @@ impl OverworldGenerator {
         overworld
     }
 
-    pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize, stairs_pos: Position) {
+    pub fn clear_unvisited(&mut self, overworld_pos: OverworldPos) {
+        let mut generated_maps = self.generated_maps.lock().unwrap();
+        for (row_idx, row) in generated_maps[overworld_pos.floor].iter_mut().enumerate() {
+            for (col_idx, map_opt) in row.iter_mut().enumerate() {
+                if let Some(map) = map_opt {
+                    if map.lock().unwrap().visited_state != VisitedState::Visited {
+                        *map_opt = None; // Clear unvisited maps
+                        self.map_generator.map_statuses.lock().unwrap().remove(&OverworldPos { floor: overworld_pos.floor, x: row_idx, y: col_idx });
+                        println!("OverworldGenerator: Clearing unvisited map at position: ({}, {}) on floor {}", row_idx, col_idx, overworld_pos.floor);
+                    }
+                }
+            }
+        }
+
+        self.map_generator.map_statuses.lock().unwrap().remove(&OverworldPos { floor: overworld_pos.floor + 1, x: overworld_pos.x, y: overworld_pos.y });
+    }
+
+    pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize, stairs_pos: Option<Position>) {
         for dx in -1i32..=1 {
             for dy in -1i32..=1 {
                 // Skip diagonals
@@ -200,8 +258,8 @@ impl OverworldGenerator {
                 if new_x >= 0 && new_x < 5 && new_y >= 0 && new_y < 5 {
                     let opos = OverworldPos { floor, x: new_x as usize, y: new_y as usize };
                     // Check if this adjacent map is already generated
-                    if self.get_generated_map_ptr(opos).is_none() {
-                        // If not, setup the GenerationParams with appropriate borders (they should not have borders at the edges of the 5x5 grid)
+                    let existing_map = self.get_generated_map_ptr(opos);
+                    if existing_map.is_none() {
                         let mut gen_params = GenerationParams::default();
                         if new_x != 0 {
                             gen_params.borders |= BorderFlags::LEFT;
@@ -224,13 +282,15 @@ impl OverworldGenerator {
                 }
             }
         }
-        let opos = OverworldPos { floor: floor + 1, x: 2usize, y: 2usize };
-        let mut gen_params = GenerationParams::default();
-        gen_params.borders = BorderFlags::TOP | BorderFlags::BOTTOM | BorderFlags::LEFT | BorderFlags::RIGHT | BorderFlags::DOWN;
-        gen_params.theme = MapTheme::Chasm;
-        gen_params.force_regen = true;
-        gen_params.predefined_start_pos = Some(stairs_pos);
-        self.map_generator.request_generation(opos, gen_params);
+        if let Some(downstairs_pos) = stairs_pos {
+            let opos = OverworldPos { floor: floor + 1, x: 2, y: 2 };
+            let mut gen_params = GenerationParams::default();
+            gen_params.borders = BorderFlags::TOP | BorderFlags::BOTTOM | BorderFlags::LEFT | BorderFlags::RIGHT | BorderFlags::DOWN;
+            gen_params.theme = MapTheme::Chasm;
+            gen_params.force_regen = true;
+            gen_params.predefined_start_pos = Some(downstairs_pos);
+            self.map_generator.request_generation(opos, gen_params);
+        }
     }
 
     pub fn get_generated_map_ptr(&self, opos: OverworldPos) -> Option<Arc<Mutex<GeneratedMap>>> {

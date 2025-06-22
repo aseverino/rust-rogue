@@ -22,7 +22,7 @@
 
 use crate::items::base_item::{BaseItemData, Item};
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct Container {
     pub base_item: BaseItemData,
     pub items: Vec<u32>

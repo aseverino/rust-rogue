@@ -39,14 +39,14 @@ use crate::items::{container::Container, holdable::{Armor, BaseHoldableItemData,
 //     }
 // }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(PartialEq, Clone, Deserialize, Debug)]
 pub struct BaseItemData {
     pub id: u32,
     pub name: String,
     pub description: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum ItemKind {
     Orb(Orb),
     Teleport(Teleport),

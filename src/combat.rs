@@ -131,7 +131,7 @@ pub(crate) fn do_melee_combat(player: &mut Player, map_ref: &mut MapRef, _attack
 }
 
 pub(crate) fn do_spell_combat(player: &mut Player, map_ref: &MapRef, _attacker_pos: Position, target_pos: Position, spell_index: usize, lua_interface: &LuaInterfaceRc) {
-    let mut map = map_ref.borrow_mut();
+    let map = map_ref.borrow_mut();
     if !map.is_tile_walkable(target_pos) {
         println!("Target position is not walkable for spell casting.");
         return;

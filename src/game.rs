@@ -44,7 +44,7 @@ use macroquad::time::get_time;
 
 use std::cmp::max;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::sync::{Arc, Mutex};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -152,7 +152,7 @@ fn get_new_opos(player_pos: &Position, player_opos: &OverworldPos, map_update: &
         }
     }
     else {
-        new_opos.floor += 1; // Climbing down
+        new_opos = OverworldPos::new(player_opos.floor + 1, 2, 2); // Climbing down
     }
 
     new_opos
@@ -175,7 +175,7 @@ fn check_for_map_update(
         
         if let MapTravelEvent::Peek(_) = map_update {
             let mut map = new_map_rc.borrow_mut();
-            if map.visited_state == VisitedState::Visited {
+            if map.generated_map.visited_state == VisitedState::Visited {
                 if *map_update == MapTravelEvent::Peek(MapTravelKind::ClimbDown) {
                     *map_update = MapTravelEvent::Visit(MapTravelKind::ClimbDown);
                 }
@@ -187,22 +187,29 @@ fn check_for_map_update(
                 // If the map is not visited, we need to set it up
                 *peek_map_rc = Some(new_map_rc.clone());
                 println!("Peeked at new map: {:?}", new_opos);
+
+                *last_map_travel_kind = match map_update {
+                    MapTravelEvent::Peek(kind) => kind.clone(),
+                    MapTravelEvent::Visit(kind) => kind.clone(),
+                    MapTravelEvent::None => MapTravelKind::BorderCross, // Default case
+                };
                 *map_update = MapTravelEvent::None; // Reset map update to None
 
-                if map.visited_state == VisitedState::NotVisited {
-                    map.visited_state = VisitedState::Peeked;
+                if map.generated_map.visited_state == VisitedState::Unvisited {
+                    update_map_visited_state(
+                        game,
+                        &mut map,
+                        new_opos,
+                        VisitedState::Peeked
+                    );
                     *current_downstair_teleport_pos = {
                         let current_map = current_map_rc.borrow();
                         current_map.generated_map.downstair_teleport.clone()
                     };
-                    // Setting up the map adjacencies has to be done before locking it
-                    {
-                        println!("peeking for the first time");
-                        let mut overworld_generator = game.overworld_generator.lock().unwrap();
-                        overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.unwrap());
-                    }
+                    println!("peeking for the first time");
                 }
-                //*overworld_pos = new_opos;
+                drop(map);
+                print_overworld(game);
                 return;
             }
         }
@@ -214,6 +221,7 @@ fn check_for_map_update(
                 {
                     let mut map = current_map_rc.borrow_mut();
                     map.remove_creature(&mut game.player);
+                    map.remove_downstairs_teleport();
                 }
 
                 *current_map_rc = new_map_rc;
@@ -235,13 +243,27 @@ fn check_for_map_update(
                     }
                 }
                 
-                map.visited_state = VisitedState::Visited;
+                update_map_visited_state(
+                    game,
+                    &mut map,
+                    new_opos,
+                    VisitedState::Visited
+                );
+
                 map.add_player(&mut game.player, player_pos);
                 peek_map_rc.take();
                 println!("Player moved to new map at position: {:?}", new_opos);
-                
-                *overworld_pos = new_opos;
             }
+
+            {
+                let mut overworld_generator = game.overworld_generator.lock().unwrap();
+                game.overworld.clear_unvisited(overworld_pos.clone());
+                overworld_generator.clear_unvisited(overworld_pos.clone());
+                overworld_generator.setup_adjacent_maps(overworld_pos.floor, overworld_pos.x, overworld_pos.y, None);
+                overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.clone());                
+            }
+            
+            *overworld_pos = new_opos;
         }
         
         *last_map_travel_kind = match map_update {
@@ -250,7 +272,84 @@ fn check_for_map_update(
             MapTravelEvent::None => MapTravelKind::BorderCross, // Default case
         };
         *map_update = MapTravelEvent::None;
+
+        print_overworld(game);
     }
+}
+
+pub fn update_map_visited_state(
+    game: &mut GameState,
+    map: &mut RefMut<'_, Map>,
+    overworld_pos: OverworldPos,
+    visited_state: VisitedState) {
+    map.generated_map.visited_state = visited_state.clone();
+
+    if let Some(generated_map_arc) = game.overworld_generator.lock().unwrap().get_generated_map_ptr(overworld_pos) {
+        let mut generated_map = generated_map_arc.lock().unwrap();
+        generated_map.visited_state = visited_state;
+    }
+}
+
+pub fn print_overworld(game: &mut GameState) {
+    //  Overworld          OverworldGenerator
+    // [ 0, 0, 0, 0, 0] | [ 0, 0, 0, 0, 0]
+    // [ 0, 0, n, 0, 0] | [ 0, 0, n, 0, 0]
+    // [ 0, n, v, n, 0] | [ 0, n, v, n, 0]
+    // [ 0, 0, p, 0, 0] | [ 0, 0, p, 0, 0]
+    // [ 0, 0, 0, 0, 0] | [ 0, 0, 0, 0, 0]
+    // n = unvisited, v = visited, p = peeked
+
+    // Overworld: maps[y][x] (row-major)
+    let states = |overworld: &Overworld| {
+        let mut grid = vec![vec!['0'; 5]; 5];
+        for y in 0..5 {
+            for x in 0..5 {
+                let pos = OverworldPos { floor: 0, x, y };
+                if let Some(map_rc) = overworld.get_map_ptr(pos) {
+                    let map = map_rc.borrow();
+                    grid[y][x] = match map.generated_map.visited_state {
+                        VisitedState::Unvisited => 'n',
+                        VisitedState::Visited => 'v',
+                        VisitedState::Peeked => 'p',
+                    };
+                }
+            }
+        }
+        grid
+    };
+
+    // OverworldGenerator: generated_maps[floor][x][y] (column-major, to match Overworld)
+    let states_generated = |generated_maps: &Vec<[[Option<Arc<Mutex<crate::maps::generated_map::GeneratedMap>>>; 5]; 5]>| {
+        let mut grid = vec![vec!['0'; 5]; 5];
+        if let Some(floor_maps) = generated_maps.get(0) {
+            for y in 0..5 {
+                for x in 0..5 {
+                    if let Some(gmap_arc) = &floor_maps[x][y] {
+                        let gmap = gmap_arc.lock().unwrap();
+                        grid[y][x] = match gmap.visited_state {
+                            VisitedState::Unvisited => 'n',
+                            VisitedState::Visited => 'v',
+                            VisitedState::Peeked => 'p',
+                        };
+                    }
+                }
+            }
+        }
+        grid
+    };
+
+    let left = states(&game.overworld);
+
+    let overworld_generator = game.overworld_generator.lock().unwrap();
+    let right = states_generated(&*overworld_generator.generated_maps.lock().unwrap());
+
+    println!("//  Overworld          OverworldGenerator");
+    for y in 0..5 {
+        let left_row: String = left[y].iter().map(|c| format!("{}, ", c)).collect();
+        let right_row: String = right[y].iter().map(|c| format!("{}, ", c)).collect();
+        println!("[ {}] | [ {}]", &left_row[..left_row.len()-2], &right_row[..right_row.len()-2]);
+    }
+    println!("// n = unvisited, v = visited, p = peeked");
 }
 
 pub async fn run() {
@@ -283,7 +382,12 @@ pub async fn run() {
     {
         let mut map = current_map_rc.borrow_mut();
         map.add_player_first_map(&mut game.player);
-        map.visited_state = VisitedState::Visited;
+        update_map_visited_state(
+            &mut game,
+            &mut map,
+            overworld_pos,
+            VisitedState::Visited
+        );
     }
 
     let mut last_move_time = 0.0;

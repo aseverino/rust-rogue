@@ -69,7 +69,6 @@ pub struct Map {
     pub hovered_tile_changed: bool,
     pub spell_fov_cache: SpellFovCache,
     pub should_draw_spell_fov: bool,
-    pub visited_state: VisitedState,
 }
 
 impl Map {
@@ -81,7 +80,6 @@ impl Map {
             hovered_tile_changed: false,
             spell_fov_cache: SpellFovCache::new(),
             should_draw_spell_fov: false,
-            visited_state: VisitedState::NotVisited,
         };
 
         m.monsters = Self::convert_monsters(m.generated_map.monsters.clone());
@@ -110,6 +108,24 @@ impl Map {
         } else {
             println!("Creature position out of bounds, cannot remove.");
         }
+    }
+
+    pub fn remove_downstairs_teleport(&mut self) {
+        //self.generated_map.tiles[self.generated_map.downstair_teleport].remove;
+        if let Some(teleport_pos) = self.generated_map.downstair_teleport {
+            let items_to_remove: Vec<_> = self.generated_map.tiles[teleport_pos].items.iter()
+                .filter(|item| matches!(item, ItemKind::Teleport(_)))
+                .cloned()
+                .collect();
+
+            for item in items_to_remove {
+                self.generated_map.tiles[teleport_pos].items.retain(|i| *i != item);
+            }
+        } else {
+            println!("Downstairs teleport position is not set.");
+        }
+
+        self.generated_map.downstair_teleport = None; // Clear the teleport position
     }
 
     pub fn add_player(&mut self, player: &mut Player, pos: Position) {
@@ -237,7 +253,7 @@ impl Map {
             monster.draw(offset);
         }
 
-        if self.visited_state == VisitedState::Visited {
+        if self.generated_map.visited_state == VisitedState::Visited {
             player.draw(offset);
         }
     }

@@ -506,7 +506,7 @@ impl MapGenerator {
 
         let mut available_walkable_cache = walkable_cache.clone();
         available_walkable_cache.shuffle(&mut rng);
-        let mut map = GeneratedMap::new(tiles, walkable_cache, available_walkable_cache);
+        let mut map = GeneratedMap::new(params.tier, tiles, walkable_cache, available_walkable_cache);
 
         for x in 0..GRID_WIDTH {
             if map.tiles[Position::new(x, 0)].kind == TileKind::Floor {

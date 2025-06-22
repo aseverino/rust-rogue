@@ -117,7 +117,7 @@ impl OverworldGenerator {
                 // This is the center map, setup adjacent maps
                 if let Some(overworld_strong) = overworld_weak.upgrade() {
                     let mut o = overworld_strong.lock().unwrap();
-                    o.setup_adjacent_maps(floor, x, y, stairs_pos);
+                    o.setup_adjacent_maps(0, floor, x, y, stairs_pos);
                 }
             }
         });
@@ -152,7 +152,7 @@ impl OverworldGenerator {
         self.map_generator.map_statuses.lock().unwrap().remove(&OverworldPos { floor: overworld_pos.floor + 1, x: overworld_pos.x, y: overworld_pos.y });
     }
 
-    pub fn setup_adjacent_maps(&mut self, floor: usize, x: usize, y: usize, stairs_pos: Option<Position>) {
+    pub fn setup_adjacent_maps(&mut self, tier: u32, floor: usize, x: usize, y: usize, stairs_pos: Option<Position>) {
         for dx in -1i32..=1 {
             for dy in -1i32..=1 {
                 // Skip diagonals
@@ -165,6 +165,7 @@ impl OverworldGenerator {
                     let existing_map = self.get_generated_map_ptr(opos);
                     if existing_map.is_none() {
                         let mut gen_params = GenerationParams::default();
+                        gen_params.tier = tier;
                         if new_x != 0 {
                             gen_params.borders |= BorderFlags::LEFT;
                         }
@@ -189,6 +190,7 @@ impl OverworldGenerator {
         if let Some(downstairs_pos) = stairs_pos {
             let opos = OverworldPos { floor: floor + 1, x: 2, y: 2 };
             let mut gen_params = GenerationParams::default();
+            gen_params.tier = tier + 2; // Increment tier by 2 for the downstairs map
             gen_params.borders = BorderFlags::TOP | BorderFlags::BOTTOM | BorderFlags::LEFT | BorderFlags::RIGHT | BorderFlags::DOWN;
             gen_params.theme = MapTheme::Chasm;
             gen_params.force_regen = true;

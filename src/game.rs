@@ -216,11 +216,13 @@ fn check_for_map_update(
         }
 
         if let MapTravelEvent::Visit(_) = map_update {
+            let mut current_tier = 0u32;
             {
                 let new_map_rc = get_map_ptr(game, new_opos);
 
                 {
                     let mut map = current_map_rc.borrow_mut();
+                    current_tier = map.generated_map.tier;
                     map.remove_creature(&mut game.player);
                     map.remove_downstairs_teleport();
                 }
@@ -260,8 +262,8 @@ fn check_for_map_update(
                 let mut overworld_generator = game.overworld_generator.lock().unwrap();
                 game.overworld.clear_unvisited(overworld_pos.clone());
                 overworld_generator.clear_unvisited(overworld_pos.clone());
-                overworld_generator.setup_adjacent_maps(overworld_pos.floor, overworld_pos.x, overworld_pos.y, None);
-                overworld_generator.setup_adjacent_maps(new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.clone());                
+                overworld_generator.setup_adjacent_maps(current_tier + 1, overworld_pos.floor, overworld_pos.x, overworld_pos.y, None);
+                overworld_generator.setup_adjacent_maps(current_tier + 1, new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.clone());                
             }
             
             *overworld_pos = new_opos;

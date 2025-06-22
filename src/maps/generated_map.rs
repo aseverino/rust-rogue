@@ -28,6 +28,7 @@ use crate::{maps::overworld::VisitedState, monster::{Monster, MonsterArc}, monst
 
 #[derive(Clone, Debug)]
 pub struct GeneratedMap {
+    pub tier: u32,
     pub tiles: TileMap,
     pub walkable_cache: Vec<Position>,
     pub available_walkable_cache: Vec<Position>,
@@ -38,8 +39,9 @@ pub struct GeneratedMap {
 }
 
 impl GeneratedMap {
-    pub fn new(tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
+    pub fn new(tier: u32, tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
         Self {
+            tier: tier,
             tiles: TileMap::new(tiles),
             walkable_cache,
             available_walkable_cache,

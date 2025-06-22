@@ -56,6 +56,7 @@ pub struct MonsterType {
     pub glyph: char,
     pub color: [u8; 3], // RGB, will convert to macroquad::Color
     pub max_hp: u32,
+    pub speed: u32,
     pub melee_damage: i32,
     pub script: Option<String>,
     #[serde(default)]

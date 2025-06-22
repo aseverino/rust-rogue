@@ -67,6 +67,7 @@ pub enum PlayerEvent {
 }
 
 pub struct GameState {
+    pub turn: u32,
     pub player: Player,
     pub overworld_generator: Arc<Mutex<OverworldGenerator>>,
     pub overworld: Overworld,
@@ -370,6 +371,7 @@ pub async fn run() {
         items: Items::new(),
         lua_interface: lua_interface,
         last_player_event: PlayerEvent::None,
+        turn: 1,
     };
 
     game.items.load_holdable_items(&game.lua_interface).await;
@@ -594,7 +596,7 @@ pub fn update(
     let player_pos = game.player.position;
 
     let mut new_player_pos: Option<Position> = None;
-    let mut update_monsters = false;
+    let mut update_turn = false;
 
     if let Some(player_goal) = player_goal_position {
         let spell_index = game.player.selected_spell;
@@ -626,7 +628,7 @@ pub fn update(
             
             if should_cast {
                 combat::do_spell_combat(&mut game.player, map_ref, player_pos, player_goal, index, &game.lua_interface);
-                update_monsters = true;
+                update_turn = true;
             }
 
             game.player.selected_spell = None;
@@ -698,7 +700,7 @@ pub fn update(
             let map = map_ref.borrow();
             if map.is_tile_enemy_occupied(pos) {
                 game.last_player_event = PlayerEvent::MeleeAttack;
-                update_monsters = true; // Update monsters if player attacks
+                update_turn = true; // Update monsters if player attacks
                 drop(map);
                 combat::do_melee_combat(&mut game.player, map_ref, player_pos, pos, &game.lua_interface);
             }
@@ -708,7 +710,7 @@ pub fn update(
             else {
                 if map.is_tile_walkable(pos) {
                     new_player_pos = Some(pos);
-                    update_monsters = true; // Update monsters if player moves
+                    update_turn = true; // Update monsters if player moves
                 }
 
                 game.last_player_event = PlayerEvent::Move;
@@ -736,7 +738,7 @@ pub fn update(
         }
 
         map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
-        update_monsters = true;
+        update_turn = true;
 
         let mut to_remove: Vec<usize> = Vec::new();
         
@@ -773,45 +775,75 @@ pub fn update(
         }
     }
 
-    if update_monsters {
-        let mut map = map_ref.borrow_mut();
-        let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
-        let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
+    if update_turn {
+        if game.player.accumulated_speed >= 200 {
+            game.player.accumulated_speed -= 100;            
+            return;
+        }
 
-        for (id, monster) in &mut map.monsters {
-            if monster.hp <= 0 {
-                continue; // Skip dead monsters
-            }
-            let monster_pos = monster.pos();
+        while game.player.accumulated_speed < 100 {
 
-            let path = Navigator::find_path(monster_pos, game.player.position, |pos| {
-                pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && walkable_tiles[pos].is_walkable()
-            });
+            // let player_movements = game.player.accumulated_speed as f32 / 100.0;
 
-            if let Some(path) = path {
-                if path.len() > 1 {
-                    let next_step = path[1];
+            // if player_movements > 1.0 {
+            //     game.player.accumulated_speed += ((player_movements - 1.0) * 100.0) as u32;
+            // }
+            // else if player_movements < 1.0 {
+            //     game.player.accumulated_speed += (player_movements * 100.0) as u32;
+            // }
 
-                    if next_step == game.player.position {
-                        println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
-                        game.player.add_health(-monster.kind.melee_damage);
-                        if game.player.hp <= 0 {
-                            println!("Player has been defeated!");
-                            game.last_player_event = PlayerEvent::Death;
-                            return;
-                        }
-                        continue;
-                    }
+            let mut map = map_ref.borrow_mut();
+            let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
+            let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
 
-                    monster_moves.push((monster_pos, next_step, *id as usize));
-                    monster.set_pos(next_step);
+            for (id, monster) in &mut map.monsters {
+                if monster.hp <= 0 {
+                    continue; // Skip dead monsters
                 }
-            }
-        }
 
-        for (monster_pos, next_step, i) in monster_moves {
-            map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
-            map.generated_map.tiles[next_step].creature = i as u32;
+                let mut monster_speed = monster.kind.speed + monster.accumulated_speed;
+
+                while monster_speed >= 100 {
+                    monster_speed -= 100;
+
+                    let monster_pos = monster.pos();
+
+                    let path = Navigator::find_path(monster_pos, game.player.position, |pos| {
+                        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && walkable_tiles[pos].is_walkable()
+                    });
+
+                    if let Some(path) = path {
+                        if path.len() > 1 {
+                            let next_step = path[1];
+
+                            if next_step == game.player.position {
+                                println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
+                                game.player.add_health(-monster.kind.melee_damage);
+                                if game.player.hp <= 0 {
+                                    println!("Player has been defeated!");
+                                    game.last_player_event = PlayerEvent::Death;
+                                    return;
+                                }
+                                continue;
+                            }
+
+                            monster_moves.push((monster_pos, next_step, *id as usize));
+                            monster.set_pos(next_step);
+                        }
+                    }
+                }
+
+                monster.accumulated_speed = monster_speed as u32;
+            }
+
+            for (monster_pos, next_step, i) in monster_moves {
+                map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
+                map.generated_map.tiles[next_step].creature = i as u32;
+            }
+
+            game.turn += 1;
+            game.player.accumulated_speed += game.player.get_speed();
         }
+        game.player.accumulated_speed -= 100;
     }
 }

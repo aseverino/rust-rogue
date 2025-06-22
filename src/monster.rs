@@ -40,6 +40,7 @@ pub struct Monster {
     pub kind: Arc<MonsterType>,
     pub position: Position,
     pub id: u32,
+    pub accumulated_speed: u32,
 }
 
 pub type MonsterRef = Rc<RefCell<Monster>>;
@@ -55,6 +56,7 @@ impl Monster {
             hp: kind.max_hp,
             kind,
             id,
+            accumulated_speed: 0,
         }
     }
 }

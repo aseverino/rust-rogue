@@ -58,6 +58,8 @@ pub struct Player {
 
     pub sp: u32,
 
+    pub accumulated_speed: u32,
+
     pub position: Position,
     pub goal_position: Option<Position>,
     pub spells: Vec<PlayerSpell>,
@@ -91,6 +93,7 @@ impl Player {
             dexterity: 10,
             intelligence: 10,
             sp: 1,
+            accumulated_speed: 0,
             position: pos,
             goal_position: None,
             spells: spells,
@@ -116,6 +119,10 @@ impl Player {
 
     fn get_soul_points(&self) -> u32 {
         self.sp
+    }
+
+    pub fn get_speed(&self) -> u32 {
+        self.dexterity * 10
     }
 
     pub fn add_item(&mut self, item: Item) {

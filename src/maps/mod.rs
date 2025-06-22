@@ -25,6 +25,7 @@ pub mod generated_map;
 pub mod map;
 pub mod navigator;
 pub mod overworld;
+pub mod overworld_generator;
 
 use bitflags::bitflags;
 

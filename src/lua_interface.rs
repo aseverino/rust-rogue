@@ -41,6 +41,7 @@ pub trait LuaScripted {
 /// Holds the registry key for each Lua function we care about.
 struct ScriptedFunctions {
     on_get_attack_damage: Option<RegistryKey>,
+    on_spawn: Option<RegistryKey>,
     on_update: Option<RegistryKey>,
     on_death: Option<RegistryKey>,
 }
@@ -112,32 +113,34 @@ impl LuaInterface {
         self.lua.load(&script).set_environment(env.clone()).exec()?;
 
         // 4) For each func name your trait advertises, extract & stash it
+        let mut holder = ScriptedFunctions {
+            on_get_attack_damage: None,
+            on_spawn:             None,
+            on_update:            None,
+            on_death:             None,
+        };
+        
         for name in entity.functions() {
             // skip missing entries
             if !env.contains_key(name.clone())? {
                 continue;
             }
 
-            let mut holder = ScriptedFunctions {
-                on_get_attack_damage: None,
-                on_update:            None,
-                on_death:             None,
-            };
-
             let f: Function       = env.get(name.clone())?;
             let key: RegistryKey  = self.lua.create_registry_value(f)?;
             match name.as_str() {
                 "on_get_attack_damage" => holder.on_get_attack_damage = Some(key),
+                "on_spawn"             => holder.on_spawn             = Some(key),
                 "on_update"            => holder.on_update            = Some(key),
                 "on_death"             => holder.on_death             = Some(key),
                 _                      => {}  // ignore anything else
             }
-
-            self.script_cache.insert(
-                entity.script_id(),
-                holder,
-            );
         }
+
+        self.script_cache.insert(
+            entity.script_id(),
+            holder,
+        );
 
         Ok(true)
     }
@@ -172,6 +175,35 @@ impl LuaInterface {
         *monster = lua_monster.borrow().clone();
 
         result
+    }
+    
+    pub fn on_spawn(&self, monster: &mut Monster) -> Result<bool> {
+        let funcs = self
+            .script_cache
+            .get(&monster.kind.id)
+            .ok_or_else(|| {
+                Error::external(format!(
+                    "No Lua script loaded for monster type `{}`",
+                    monster.kind.id
+                ))
+            })?;
+
+        // Retrieve the Function from the registry
+        if let Some(func_key) = &funcs.on_spawn {
+            let func: Function = self.lua.registry_value(func_key)?;
+
+            let lua_monster = Rc::new(RefCell::new(monster.clone()));
+            let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
+
+            // Invoke and return result
+            let result = func.call(lua_monster_ud);
+
+            *monster = lua_monster.borrow().clone();
+
+            result
+        } else {
+            Ok(false)
+        }
     }
 
     pub fn on_death(&self, monster: &mut Monster) -> Result<bool> {

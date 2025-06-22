@@ -40,6 +40,7 @@ pub struct Monster {
     pub kind: Arc<MonsterType>,
     pub position: Position,
     pub id: u32,
+    pub initialized: bool,
     pub accumulated_speed: u32,
 }
 
@@ -56,6 +57,7 @@ impl Monster {
             hp: kind.max_hp,
             kind,
             id,
+            initialized: false,
             accumulated_speed: 0,
         }
     }

@@ -24,7 +24,7 @@ use macroquad::prelude::*;
 use crate::creature::Creature;
 use crate::items::base_item::ItemKind;
 use crate::items::collection::Items;
-use crate::lua_interface::{LuaInterface, LuaInterfaceRc};
+use crate::lua_interface::{self, LuaInterface, LuaInterfaceRc, LuaScripted};
 use crate::maps::map::MapRef;
 use crate::maps::navigator::Navigator;
 use crate::maps::overworld::{Overworld, OverworldPos, VisitedState};
@@ -423,6 +423,21 @@ pub async fn run() {
     let _ = LuaInterface::register_api(&game.lua_interface);
 
     loop {
+        {
+            let mut map = current_map_rc.borrow_mut();
+            for monster in map.monsters.values_mut() {
+                if !monster.initialized {
+                    monster.initialized = true;
+                    if monster.kind.is_scripted() {
+                        let r = game.lua_interface.borrow_mut().on_spawn(monster);
+                        if let Err(e) = r {
+                            eprintln!("Error calling Lua on_spawn: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+        
         while ui.events.len() > 0 {
             let event = ui.events.pop_front().unwrap();
             match event {

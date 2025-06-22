@@ -530,7 +530,7 @@ impl MapGenerator {
 
     fn populate_map(map: &mut GeneratedMap, params: &GenerationParams, monster_types: &MonsterTypes) {
         let monster_types_guard = monster_types.lock().unwrap();
-        //map.add_random_monsters(&*monster_types_guard, 1);
+        map.add_random_monsters(&*monster_types_guard, 1);
 
         let mut len = map.available_walkable_cache.len();
         let mut positions: Vec<Position> = map.available_walkable_cache

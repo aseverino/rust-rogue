@@ -83,7 +83,7 @@ impl LuaScripted for MonsterType {
     }
 
     fn functions(&self) -> Vec<String> {
-        vec!["on_update".to_string(), "on_death".to_string()]
+        vec!["on_spawn".to_string(), "on_update".to_string(), "on_death".to_string()]
     }
 }
 

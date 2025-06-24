@@ -546,6 +546,14 @@ impl MapGenerator {
         }
 
         let mut available_walkable_cache = walkable_cache.clone();
+
+        // Exclude borders from available walkable positions
+        for (pos, neighbor) in &anchor_pairs {
+            if tiles[pos.x][pos.y].kind == TileKind::Floor {
+                available_walkable_cache.retain(|&p| p != *pos && p != *neighbor);
+            }
+        }
+
         available_walkable_cache.shuffle(&mut rng);
         let mut map =
             GeneratedMap::new(params.tier, tiles, walkable_cache, available_walkable_cache);

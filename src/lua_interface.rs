@@ -106,6 +106,11 @@ impl LuaInterface {
         let env: Table = self.lua.create_table()?;
         let globals = self.lua.globals();             // Table<'_>
         let mt: Table = self.lua.create_table()?;
+
+        if let Ok(global_data) = globals.get::<_, Table>("GlobalData") {
+            env.set("GlobalData", global_data)?;
+        }
+
         mt.set("__index", globals)?;
         env.set_metatable(Some(mt));
 

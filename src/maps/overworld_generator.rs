@@ -142,7 +142,7 @@ impl OverworldGenerator {
                 // This is the center map, setup adjacent maps
                 if let Some(overworld_strong) = overworld_weak.upgrade() {
                     let mut o = overworld_strong.lock().unwrap();
-                    o.setup_adjacent_maps(0, floor, x, y, stairs_pos);
+                    o.setup_adjacent_maps(1, floor, x, y, stairs_pos);
                 }
             }
         });

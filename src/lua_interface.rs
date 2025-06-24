@@ -29,10 +29,12 @@ use std::fs;
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 
+use crate::maps::map::Map;
 use crate::{items::holdable::Weapon, monster::Monster, player::Player, position::Position};
 
 pub trait LuaScripted {
-    fn script_id(&self) -> u32;
+    fn set_script_id(&mut self, id: u32);
+    fn get_script_id(&self) -> u32;
     fn script_path(&self) -> Option<String>;
     fn is_scripted(&self) -> bool;
     fn functions(&self) -> Vec<String>;
@@ -40,6 +42,7 @@ pub trait LuaScripted {
 
 /// Holds the registry key for each Lua function we care about.
 struct ScriptedFunctions {
+    on_map_peeked: Option<RegistryKey>,
     on_get_attack_damage: Option<RegistryKey>,
     on_spawn: Option<RegistryKey>,
     on_update: Option<RegistryKey>,
@@ -50,8 +53,8 @@ struct ScriptedFunctions {
 pub struct LuaInterface {
     lua: Lua,
     script_cache: HashMap<u32, ScriptedFunctions>,
-
     pub add_monster_callback: Option<Rc<dyn Fn(u32, Position)>>,
+    pub script_id_counter: u32,
 }
 
 pub type LuaInterfaceRc = Rc<RefCell<LuaInterface>>;
@@ -59,11 +62,18 @@ pub type LuaInterfaceRc = Rc<RefCell<LuaInterface>>;
 impl LuaInterface {
     /// Create a fresh Lua VM.
     pub fn new() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+        let i = Rc::new(RefCell::new(Self {
             lua: Lua::new(),
             script_cache: HashMap::new(),
             add_monster_callback: None,
-        }))
+            script_id_counter: 1,
+        }));
+
+        i.borrow_mut()
+            .load_global_script()
+            .expect("Failed to load global Lua script");
+
+        i
     }
 
     pub fn register_api(lua_if: &LuaInterfaceRc) -> Result<()> {
@@ -118,11 +128,50 @@ impl LuaInterface {
         Ok(())
     }
 
-    pub fn load_script<T: LuaScripted>(&mut self, entity: &T) -> Result<bool> {
+    pub fn load_global_script(&mut self) -> Result<bool> {
+        // 1) Read the script file
+        let path = "assets/global.lua";
+        let script = fs::read_to_string(path)
+            .map_err(|e| Error::external(format!("Failed to read {}: {}", path, e)))?;
+
+        // 2) Create a new isolated environment
+        let env: Table = self.lua.create_table()?;
+        let globals = self.lua.globals(); // Table<'_>
+        let mt: Table = self.lua.create_table()?;
+
+        if let Ok(global_data) = globals.get::<_, Table>("GlobalData") {
+            env.set("GlobalData", global_data)?;
+        }
+
+        mt.set("__index", globals)?;
+        env.set_metatable(Some(mt));
+
+        // 3) Load and execute the script in that environment
+        self.lua.load(&script).set_environment(env.clone()).exec()?;
+
+        let f: Function = env.get("on_map_peeked")?;
+        let key: RegistryKey = self.lua.create_registry_value(f)?;
+        let holder = ScriptedFunctions {
+            on_map_peeked: Some(key),
+            on_get_attack_damage: None,
+            on_spawn: None,
+            on_update: None,
+            on_death: None,
+        };
+
+        self.script_cache.insert(0, holder);
+
+        Ok(true)
+    }
+
+    pub fn load_script<T: LuaScripted>(&mut self, entity: &mut T) -> Result<bool> {
         let path = match entity.script_path() {
             Some(p) => p,
             None => return Ok(false),
         };
+
+        entity.set_script_id(self.script_id_counter);
+        self.script_id_counter += 1;
 
         let script = fs::read_to_string(path.clone())
             .map_err(|e| Error::external(format!("Failed to read {}: {}", path, e)))?;
@@ -144,6 +193,7 @@ impl LuaInterface {
 
         // 4) For each func name your trait advertises, extract & stash it
         let mut holder = ScriptedFunctions {
+            on_map_peeked: None,
             on_get_attack_damage: None,
             on_spawn: None,
             on_update: None,
@@ -167,7 +217,7 @@ impl LuaInterface {
             }
         }
 
-        self.script_cache.insert(entity.script_id(), holder);
+        self.script_cache.insert(entity.get_script_id(), holder);
 
         Ok(true)
     }
@@ -180,11 +230,11 @@ impl LuaInterface {
     ) -> Result<f32> {
         let funcs = self
             .script_cache
-            .get(&weapon.base_holdable.base_item.id)
+            .get(&weapon.get_script_id())
             .ok_or_else(|| {
                 Error::external(format!(
                     "No Lua script loaded for weapon `{}`",
-                    weapon.base_holdable.base_item.id
+                    weapon.get_script_id()
                 ))
             })?;
 
@@ -215,7 +265,7 @@ impl LuaInterface {
         let funcs = self.script_cache.get(&monster.kind.id).ok_or_else(|| {
             Error::external(format!(
                 "No Lua script loaded for monster type `{}`",
-                monster.kind.id
+                monster.kind.get_script_id()
             ))
         })?;
 
@@ -241,7 +291,7 @@ impl LuaInterface {
         let funcs = self.script_cache.get(&monster.kind.id).ok_or_else(|| {
             Error::external(format!(
                 "No Lua script loaded for monster type `{}`",
-                monster.kind.id
+                monster.kind.get_script_id()
             ))
         })?;
 
@@ -260,6 +310,26 @@ impl LuaInterface {
             result
         } else {
             Ok(false)
+        }
+    }
+
+    pub fn on_map_peeked(&self, map: &mut Map) -> Result<bool> {
+        let funcs = self
+            .script_cache
+            .get(&0)
+            .ok_or_else(|| Error::external(format!("No Lua script loaded for on_map_peeked")))?;
+
+        // Retrieve the Function from the registry
+        if let Some(func_key) = &funcs.on_map_peeked {
+            let func: Function = self.lua.registry_value(func_key)?;
+
+            let lua_map = Rc::new(RefCell::new(map.clone()));
+            let lua_map_ud = self.lua.create_userdata(lua_map.clone())?;
+            // Invoke and return result
+            let result: bool = func.call(lua_map_ud)?;
+            Ok(result)
+        } else {
+            return Ok(false);
         }
     }
 }

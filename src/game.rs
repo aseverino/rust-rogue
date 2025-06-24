@@ -210,6 +210,7 @@ fn check_for_map_update(
                         current_map.generated_map.downstair_teleport.clone()
                     };
                     println!("peeking for the first time");
+                    let _ = game.lua_interface.borrow_mut().on_map_peeked(&mut map);
                 }
                 drop(map);
                 print_overworld(game);

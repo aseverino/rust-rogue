@@ -38,6 +38,8 @@ pub struct BaseHoldableItemData {
     pub script: Option<String>,
     #[serde(default)]
     pub scripted: bool,
+    #[serde(skip)]
+    pub script_id: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,8 +65,11 @@ pub enum HoldableGroupKind {
 macro_rules! impl_lua_scripted {
     ($t:ty, [ $($func_name:literal),* $(,)? ]) => {
         impl LuaScripted for $t {
-            fn script_id(&self) -> u32 {
-                self.base_holdable.base_item.id
+            fn set_script_id(&mut self, id: u32) {
+                self.base_holdable.script_id = id;
+            }
+            fn get_script_id(&self) -> u32 {
+                self.base_holdable.script_id
             }
 
             fn script_path(&self) -> Option<String> {

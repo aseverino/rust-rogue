@@ -36,7 +36,7 @@ pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<Mo
     list.into_iter()
         .map(|mut mt| {
             if mt.script.is_some() {
-                let script_result = lua_interface.load_script(&mt);
+                let script_result = lua_interface.load_script(&mut mt);
                 if let Err(e) = script_result {
                     eprintln!("Error loading monster script: {}", e);
                 } else {
@@ -61,6 +61,8 @@ pub struct MonsterType {
     pub script: Option<String>,
     #[serde(default)]
     pub scripted: bool,
+    #[serde(skip)]
+    pub script_id: u32,
 }
 
 impl MonsterType {
@@ -70,8 +72,11 @@ impl MonsterType {
 }
 
 impl LuaScripted for MonsterType {
-    fn script_id(&self) -> u32 {
-        self.id
+    fn set_script_id(&mut self, id: u32) {
+        self.script_id = id;
+    }
+    fn get_script_id(&self) -> u32 {
+        self.script_id
     }
 
     fn script_path(&self) -> Option<String> {

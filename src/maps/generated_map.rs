@@ -44,6 +44,7 @@ pub struct GeneratedMap {
     pub border_positions: [Vec<Position>; 4],
     pub downstair_teleport: Option<Position>,
     pub visited_state: VisitedState,
+    pub monster_types: Vec<u32>,
 }
 
 impl GeneratedMap {
@@ -67,6 +68,7 @@ impl GeneratedMap {
             ],
             downstair_teleport: None,
             visited_state: VisitedState::Unvisited,
+            monster_types: Vec::new(),
         }
     }
 
@@ -114,6 +116,11 @@ impl GeneratedMap {
             // Wrap the monster in Rc and push to creatures
             self.monsters.push(monster);
         }
+
+        self.monster_types = monster_types_in_this_tier
+            .into_iter()
+            .map(|mt| mt.id)
+            .collect::<Vec<u32>>();
 
         //setup_spawners_table
     }

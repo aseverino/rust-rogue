@@ -24,6 +24,7 @@ use macroquad::prelude::*;
 extern crate rand as external_rand;
 
 use external_rand::thread_rng;
+use rlua::{UserData, UserDataMethods};
 
 use crate::creature::Creature;
 use crate::items::base_item::ItemKind;
@@ -44,7 +45,7 @@ use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SpellFovCache {
     pub radius: u32,
     pub origin: Position,
@@ -61,7 +62,7 @@ impl SpellFovCache {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Map {
     pub generated_map: GeneratedMap,
     pub monsters: HashMap<u32, Monster>,
@@ -313,6 +314,14 @@ impl Map {
                 return; // Exit after removing the first container
             }
         }
+    }
+}
+
+impl UserData for Map {
+    fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("get_monster_types", |_, this, ()| {
+            Ok(this.generated_map.monster_types.clone())
+        });
     }
 }
 

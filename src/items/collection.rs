@@ -58,7 +58,7 @@ impl Items {
                     for mut weapon in weapons {
                         if weapon.base_holdable.script.is_some() {
                             // Load the Lua script for the weapon
-                            let script_result = lua_interface.load_script(&weapon);
+                            let script_result = lua_interface.load_script(&mut weapon);
                             if let Err(e) = script_result {
                                 eprintln!("Error loading weapon script: {}", e);
                             } else {
@@ -74,7 +74,7 @@ impl Items {
                     for mut armor_item in armor {
                         if armor_item.base_holdable.script.is_some() {
                             // Load the Lua script for the armor
-                            let script_result = lua_interface.load_script(&armor_item);
+                            let script_result = lua_interface.load_script(&mut armor_item);
                             if let Err(e) = script_result {
                                 eprintln!("Error loading armor script: {}", e);
                             } else {
@@ -93,7 +93,7 @@ impl Items {
                     for mut helmet_item in helmets {
                         if helmet_item.base_holdable.script.is_some() {
                             // Load the Lua script for the helmet
-                            let script_result = lua_interface.load_script(&helmet_item);
+                            let script_result = lua_interface.load_script(&mut helmet_item);
                             if let Err(e) = script_result {
                                 eprintln!("Error loading helmet script: {}", e);
                             } else {
@@ -111,7 +111,7 @@ impl Items {
                     for mut boots_item in boots {
                         if boots_item.base_holdable.script.is_some() {
                             // Load the Lua script for the boots
-                            let script_result = lua_interface.load_script(&boots_item);
+                            let script_result = lua_interface.load_script(&mut boots_item);
                             if let Err(e) = script_result {
                                 eprintln!("Error loading boots script: {}", e);
                             } else {
@@ -129,7 +129,7 @@ impl Items {
                     for mut shield_item in shields {
                         if shield_item.base_holdable.script.is_some() {
                             // Load the Lua script for the shield
-                            let script_result = lua_interface.load_script(&shield_item);
+                            let script_result = lua_interface.load_script(&mut shield_item);
                             if let Err(e) = script_result {
                                 eprintln!("Error loading shield script: {}", e);
                             } else {

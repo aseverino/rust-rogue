@@ -25,23 +25,23 @@ extern crate rand as external_rand;
 
 use external_rand::thread_rng;
 
-use std::cell::RefCell;
-use std::cmp::max;
-use std::collections::{ HashMap, HashSet };
 use crate::creature::Creature;
-use crate::items::container::Container;
 use crate::items::base_item::ItemKind;
+use crate::items::container::Container;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::VisitedState;
-use crate::maps::{ GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator };
+use crate::maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator};
 use crate::monster::Monster;
 use crate::monster::MonsterArc;
+use crate::player::Player;
 use crate::position::POSITION_INVALID;
 use crate::position::Position;
-use crate::player::Player;
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
+use std::cell::RefCell;
+use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -87,7 +87,7 @@ impl Map {
         m
     }
 
-    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, Monster> 
+    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, Monster>
     where
         Monster: Clone,
     {
@@ -113,13 +113,17 @@ impl Map {
     pub fn remove_downstairs_teleport(&mut self) {
         //self.generated_map.tiles[self.generated_map.downstair_teleport].remove;
         if let Some(teleport_pos) = self.generated_map.downstair_teleport {
-            let items_to_remove: Vec<_> = self.generated_map.tiles[teleport_pos].items.iter()
+            let items_to_remove: Vec<_> = self.generated_map.tiles[teleport_pos]
+                .items
+                .iter()
                 .filter(|item| matches!(item, ItemKind::Teleport(_)))
                 .cloned()
                 .collect();
 
             for item in items_to_remove {
-                self.generated_map.tiles[teleport_pos].items.retain(|i| *i != item);
+                self.generated_map.tiles[teleport_pos]
+                    .items
+                    .retain(|i| *i != item);
             }
         } else {
             println!("Downstairs teleport position is not set.");
@@ -141,7 +145,10 @@ impl Map {
     }
 
     pub fn add_player_first_map(&mut self, player: &mut Player) {
-        let pos = self.generated_map.available_walkable_cache.pop()
+        let pos = self
+            .generated_map
+            .available_walkable_cache
+            .pop()
             .unwrap_or_else(|| Position::new(1, 1)); // Default to (1, 1) if no walkable positions
 
         self.add_player(player, pos);
@@ -158,17 +165,19 @@ impl Map {
             for i in 1..6 {
                 container.add_item(i);
             }
-            self.generated_map.tiles[pos].items.push(ItemKind::Container(container));
-            self.generated_map.available_walkable_cache.retain(|&p| p != pos); // Remove chest position from available walkable cache
+            self.generated_map.tiles[pos]
+                .items
+                .push(ItemKind::Container(container));
+            self.generated_map
+                .available_walkable_cache
+                .retain(|&p| p != pos); // Remove chest position from available walkable cache
         } else {
             println!("No available position for chest.");
         }
     }
 
     pub fn compute_player_fov(&mut self, player: &mut Player, radius: usize) {
-        let pos = {
-            player.pos()
-        };
+        let pos = { player.pos() };
         let visible = Navigator::compute_fov(&self.generated_map.tiles, pos, radius);
         player.line_of_sight = visible;
     }
@@ -183,8 +192,7 @@ impl Map {
                     let radius = self.spell_fov_cache.radius;
                     if spell_type.area_radius != Some(radius) {
                         spell_fov_needs_update = true;
-                    }
-                    else if hovered != self.spell_fov_cache.origin {
+                    } else if hovered != self.spell_fov_cache.origin {
                         spell_fov_needs_update = true;
                     }
                     self.should_draw_spell_fov = true;
@@ -193,9 +201,16 @@ impl Map {
         }
 
         if spell_fov_needs_update {
-            self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()].spell_type.area_radius.unwrap_or(0);
+            self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()]
+                .spell_type
+                .area_radius
+                .unwrap_or(0);
             self.spell_fov_cache.origin = self.hovered_tile.unwrap_or(POSITION_INVALID);
-            self.spell_fov_cache.area = Navigator::compute_fov(&self.generated_map.tiles, self.spell_fov_cache.origin, self.spell_fov_cache.radius as usize);
+            self.spell_fov_cache.area = Navigator::compute_fov(
+                &self.generated_map.tiles,
+                self.spell_fov_cache.origin,
+                self.spell_fov_cache.radius as usize,
+            );
         }
     }
 
@@ -211,14 +226,21 @@ impl Map {
                     let player_pos = player.pos();
                     let tile_pos = Position { x, y };
                     if let Some(spell) = player.spells.get(player.selected_spell.unwrap()) {
-                        if spell.spell_type.range > 0 && player_pos.in_range(&tile_pos, spell.spell_type.range as usize) &&
-                        player.line_of_sight.contains(&tile_pos) {
+                        if spell.spell_type.range > 0
+                            && player_pos.in_range(&tile_pos, spell.spell_type.range as usize)
+                            && player.line_of_sight.contains(&tile_pos)
+                        {
                             draw_rectangle(
                                 offset.x + x as f32 * TILE_SIZE,
                                 offset.y + y as f32 * TILE_SIZE,
                                 TILE_SIZE - 1.0,
                                 TILE_SIZE - 1.0,
-                                Color { r: 0.0, g: 1.0, b: 0.0, a: 0.2 },
+                                Color {
+                                    r: 0.0,
+                                    g: 1.0,
+                                    b: 0.0,
+                                    a: 0.2,
+                                },
                             );
                         }
                     }
@@ -229,10 +251,16 @@ impl Map {
                             offset.y + y as f32 * TILE_SIZE,
                             TILE_SIZE - 1.0,
                             TILE_SIZE - 1.0,
-                            Color { r: 0.0, g: 0.0, b: 1.0, a: 0.5 });
+                            Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 1.0,
+                                a: 0.5,
+                            },
+                        );
                     }
                 }
-                
+
                 // if self.player.selected_spell.is_some() {
                 //     self.in_spell_area(Position { x, y });
                 //     if let Some(pos) = self.hovered {

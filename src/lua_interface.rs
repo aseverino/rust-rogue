@@ -24,10 +24,10 @@
 // [dependencies]
 // rlua = "0.20.1"
 
+use rlua::{Context, Error, Function, Lua, RegistryKey, Result, Table, Value};
+use std::fs;
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
-use std::fs;
-use rlua::{Context, Error, Function, Lua, RegistryKey, Result, Table};
 
 use crate::{items::holdable::Weapon, monster::Monster, player::Player, position::Position};
 
@@ -93,6 +93,31 @@ impl LuaInterface {
         Ok(lua_pos)
     }
 
+    fn setup_spawners_table(lua: &Lua, spawners_ids: &Vec<u32>) -> Result<()> {
+        let globals = lua.globals();
+
+        let global_data: Table = match globals.get::<_, Value>("GlobalData")? {
+            Value::Table(t) => t,
+            _ => {
+                let new_table = lua.create_table()?;
+                globals.set("GlobalData", new_table.clone())?;
+                new_table
+            }
+        };
+
+        // Create your subtable
+        let my_table = lua.create_table()?;
+        for (i, id) in spawners_ids.iter().enumerate() {
+            // Set each ID as a key with a dummy value
+            my_table.set(i + 1, *id)?;
+        }
+
+        // Store it inside GlobalData
+        global_data.set("spawners", my_table)?;
+
+        Ok(())
+    }
+
     pub fn load_script<T: LuaScripted>(&mut self, entity: &T) -> Result<bool> {
         let path = match entity.script_path() {
             Some(p) => p,
@@ -104,7 +129,7 @@ impl LuaInterface {
 
         // new, isolated env
         let env: Table = self.lua.create_table()?;
-        let globals = self.lua.globals();             // Table<'_>
+        let globals = self.lua.globals(); // Table<'_>
         let mt: Table = self.lua.create_table()?;
 
         if let Ok(global_data) = globals.get::<_, Table>("GlobalData") {
@@ -120,37 +145,39 @@ impl LuaInterface {
         // 4) For each func name your trait advertises, extract & stash it
         let mut holder = ScriptedFunctions {
             on_get_attack_damage: None,
-            on_spawn:             None,
-            on_update:            None,
-            on_death:             None,
+            on_spawn: None,
+            on_update: None,
+            on_death: None,
         };
-        
+
         for name in entity.functions() {
             // skip missing entries
             if !env.contains_key(name.clone())? {
                 continue;
             }
 
-            let f: Function       = env.get(name.clone())?;
-            let key: RegistryKey  = self.lua.create_registry_value(f)?;
+            let f: Function = env.get(name.clone())?;
+            let key: RegistryKey = self.lua.create_registry_value(f)?;
             match name.as_str() {
                 "on_get_attack_damage" => holder.on_get_attack_damage = Some(key),
-                "on_spawn"             => holder.on_spawn             = Some(key),
-                "on_update"            => holder.on_update            = Some(key),
-                "on_death"             => holder.on_death             = Some(key),
-                _                      => {}  // ignore anything else
+                "on_spawn" => holder.on_spawn = Some(key),
+                "on_update" => holder.on_update = Some(key),
+                "on_death" => holder.on_death = Some(key),
+                _ => {} // ignore anything else
             }
         }
 
-        self.script_cache.insert(
-            entity.script_id(),
-            holder,
-        );
+        self.script_cache.insert(entity.script_id(), holder);
 
         Ok(true)
     }
 
-    pub fn on_get_attack_damage(&self, weapon: &mut Weapon, player: &mut Player, monster: &mut Monster) -> Result<f32> {
+    pub fn on_get_attack_damage(
+        &self,
+        weapon: &mut Weapon,
+        player: &mut Player,
+        monster: &mut Monster,
+    ) -> Result<f32> {
         let funcs = self
             .script_cache
             .get(&weapon.base_holdable.base_item.id)
@@ -162,7 +189,9 @@ impl LuaInterface {
             })?;
 
         // Retrieve the Function from the registry
-        let func: Function = self.lua.registry_value(&funcs.on_get_attack_damage.as_ref().unwrap())?;
+        let func: Function = self
+            .lua
+            .registry_value(&funcs.on_get_attack_damage.as_ref().unwrap())?;
 
         let lua_weapon = Rc::new(RefCell::new(weapon.clone()));
         let lua_player = Rc::new(RefCell::new(player.clone()));
@@ -181,17 +210,14 @@ impl LuaInterface {
 
         result
     }
-    
+
     pub fn on_spawn(&self, monster: &mut Monster) -> Result<bool> {
-        let funcs = self
-            .script_cache
-            .get(&monster.kind.id)
-            .ok_or_else(|| {
-                Error::external(format!(
-                    "No Lua script loaded for monster type `{}`",
-                    monster.kind.id
-                ))
-            })?;
+        let funcs = self.script_cache.get(&monster.kind.id).ok_or_else(|| {
+            Error::external(format!(
+                "No Lua script loaded for monster type `{}`",
+                monster.kind.id
+            ))
+        })?;
 
         // Retrieve the Function from the registry
         if let Some(func_key) = &funcs.on_spawn {
@@ -212,15 +238,12 @@ impl LuaInterface {
     }
 
     pub fn on_death(&self, monster: &mut Monster) -> Result<bool> {
-        let funcs = self
-            .script_cache
-            .get(&monster.kind.id)
-            .ok_or_else(|| {
-                Error::external(format!(
-                    "No Lua script loaded for monster type `{}`",
-                    monster.kind.id
-                ))
-            })?;
+        let funcs = self.script_cache.get(&monster.kind.id).ok_or_else(|| {
+            Error::external(format!(
+                "No Lua script loaded for monster type `{}`",
+                monster.kind.id
+            ))
+        })?;
 
         // Retrieve the Function from the registry
         if let Some(func_key) = &funcs.on_death {
@@ -252,7 +275,7 @@ pub trait LuaBinder {
 impl LuaBinder for LuaInterfaceRc {
     fn add_lua_fn<F>(&self, name: &'static str, f: F) -> Result<()>
     where
-        F: Fn(u32, Table<'_>) -> Result<()> + 'static
+        F: Fn(u32, Table<'_>) -> Result<()> + 'static,
     {
         // grab the Lua handle
         let lua = &self.borrow().lua;
@@ -261,12 +284,13 @@ impl LuaBinder for LuaInterfaceRc {
         // build the Lua‐callable function
         // we clone the Rc so that the closure can refer back to our interface
         let this_rc = self.clone();
-        let func: Function = lua.create_function(move |_ctx: Context<'_>, (id, pos): (u32, Table<'_>)| {
-            // now *inside* here you can do:
-            //    let this = this_rc.borrow();
-            // or directly call your callback.
-            f(id, pos)
-        })?;
+        let func: Function =
+            lua.create_function(move |_ctx: Context<'_>, (id, pos): (u32, Table<'_>)| {
+                // now *inside* here you can do:
+                //    let this = this_rc.borrow();
+                // or directly call your callback.
+                f(id, pos)
+            })?;
 
         // register in Lua globals
         globals.set(name, func)?;

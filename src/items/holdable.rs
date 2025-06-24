@@ -105,7 +105,7 @@ impl UserData for Weapon {
     }
 }
 
-impl_lua_scripted!(Weapon, [ "on_get_attack_damage" ]);
+impl_lua_scripted!(Weapon, ["on_get_attack_damage"]);
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Armor {

@@ -20,11 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{cell::RefCell, rc::Rc, sync::{Arc, RwLock}};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
 use serde::Deserialize;
 
-use crate::items::{container::Container, holdable::{Armor, BaseHoldableItemData, Boots, Helmet, HoldableGroupKind, Shield, Weapon}, orb::Orb, teleport::Teleport};
+use crate::items::{
+    container::Container,
+    holdable::{Armor, BaseHoldableItemData, Boots, Helmet, HoldableGroupKind, Shield, Weapon},
+    orb::Orb,
+    teleport::Teleport,
+};
 
 // pub fn downcast_arc_item<T: 'static>(arc: &Arc<RwLock<dyn Item>>) -> Option<Arc<RwLock<T>>> {
 //     if arc.write().unwrap().as_any().is::<T>() {
@@ -169,10 +178,8 @@ impl Item {
 //     items
 // }
 
-
-
 // pub trait Item {
-//    fn pickup(&self); 
+//    fn pickup(&self);
 // }
 
 // impl Item for ItemKind {
@@ -212,7 +219,6 @@ impl Item {
 //     }
 // }
 
-
 // pub trait Holdable: Item {
 // }
 
@@ -236,7 +242,7 @@ impl Item {
 // }
 
 // impl Holdable for Weapon {
-    
+
 // }
 
 // #[derive(Clone, Debug, Deserialize)]
@@ -251,7 +257,7 @@ impl Item {
 // }
 
 // impl Holdable for Shield {
-    
+
 // }
 
 // #[derive(Clone, Debug, Deserialize)]
@@ -266,7 +272,7 @@ impl Item {
 // }
 
 // impl Holdable for Helmet {
-    
+
 // }
 
 // #[derive(Clone, Debug, Deserialize)]
@@ -281,7 +287,7 @@ impl Item {
 // }
 
 // impl Holdable for Armor {
-    
+
 // }
 
 // #[derive(Clone, Debug, Deserialize)]
@@ -296,5 +302,5 @@ impl Item {
 // }
 
 // impl Holdable for Boots {
-    
+
 // }

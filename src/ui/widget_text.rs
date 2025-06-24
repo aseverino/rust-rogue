@@ -25,9 +25,18 @@ use std::fmt;
 
 use macroquad::prelude::*;
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, manager::Ui};
+use crate::ui::{
+    manager::Ui,
+    point_f::PointF,
+    quad_f::QuadF,
+    size_f::SizeF,
+    widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor},
+};
 
-use std::{cell::RefCell, rc::{Weak, Rc}};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 pub struct WidgetText {
     pub base: WidgetBase,
@@ -39,7 +48,8 @@ pub struct WidgetText {
 impl WidgetText {
     pub fn draw(&self, _ui: &Ui) {
         if let Some(drawing_coords) = self.base.computed_quad {
-            let top = drawing_coords.y + self.base.size.h + (self.offset_y - self.base.size.h) / 2.0;
+            let top =
+                drawing_coords.y + self.base.size.h + (self.offset_y - self.base.size.h) / 2.0;
             draw_text(&self.text, drawing_coords.x, top, 30.0, self.base.color);
         }
     }
@@ -75,4 +85,3 @@ impl WidgetBasicConstructor for WidgetText {
 }
 
 impl_widget!(WidgetText, base);
-

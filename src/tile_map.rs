@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::tile::Tile;
 use crate::position::Position;
+use crate::tile::Tile;
 use std::ops::{Index, IndexMut};
 
 #[derive(Clone, Debug)]

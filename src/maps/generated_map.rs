@@ -24,7 +24,15 @@ use std::sync::{Arc, RwLock};
 
 use rand::{seq::SliceRandom, thread_rng};
 
-use crate::{maps::overworld::VisitedState, monster::{Monster, MonsterArc}, monster_type::MonsterType, position::Position, tile::Tile, tile_map::TileMap};
+use crate::{
+    lua_interface::LuaInterfaceRc,
+    maps::overworld::VisitedState,
+    monster::{Monster, MonsterArc},
+    monster_type::MonsterType,
+    position::Position,
+    tile::Tile,
+    tile_map::TileMap,
+};
 
 #[derive(Clone, Debug)]
 pub struct GeneratedMap {
@@ -39,7 +47,12 @@ pub struct GeneratedMap {
 }
 
 impl GeneratedMap {
-    pub fn new(tier: u32, tiles: Vec<Vec<Tile>>, walkable_cache: Vec<Position>, available_walkable_cache: Vec<Position>) -> Self {
+    pub fn new(
+        tier: u32,
+        tiles: Vec<Vec<Tile>>,
+        walkable_cache: Vec<Position>,
+        available_walkable_cache: Vec<Position>,
+    ) -> Self {
         Self {
             tier: tier,
             tiles: TileMap::new(tiles),
@@ -81,7 +94,8 @@ impl GeneratedMap {
         monster_types_in_this_tier.truncate(2);
 
         let len = self.available_walkable_cache.len();
-        let positions: Vec<Position> = self.available_walkable_cache
+        let positions: Vec<Position> = self
+            .available_walkable_cache
             .drain(len.saturating_sub(10)..)
             .collect();
 
@@ -89,7 +103,7 @@ impl GeneratedMap {
             let kind = (*monster_types_in_this_tier
                 .choose(&mut rng)
                 .expect("Monster type list is empty"))
-                .clone();
+            .clone();
 
             let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind.clone())));
             if let Ok(monster_guard) = monster.read() {
@@ -101,6 +115,6 @@ impl GeneratedMap {
             self.monsters.push(monster);
         }
 
-        // self.walkable_cache.shuffle(&mut rng);
+        //setup_spawners_table
     }
 }

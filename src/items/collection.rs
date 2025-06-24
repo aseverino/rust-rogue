@@ -20,9 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{any::Any, cell::RefCell, collections::HashMap, sync::{Arc, RwLock, Weak}};
+use std::{
+    any::Any,
+    cell::RefCell,
+    collections::HashMap,
+    sync::{Arc, RwLock, Weak},
+};
 
-use crate::{items::{base_item::Item, holdable::{HoldableGroup, HoldableGroupKind}}, lua_interface::LuaInterfaceRc};
+use crate::{
+    items::{
+        base_item::Item,
+        holdable::{HoldableGroup, HoldableGroupKind},
+    },
+    lua_interface::LuaInterfaceRc,
+};
 
 pub struct Items {
     pub items: HashMap<u32, Item>,
@@ -55,7 +66,8 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(weapon.base_holdable.base_item.id, Item::Weapon(weapon));
+                        self.items
+                            .insert(weapon.base_holdable.base_item.id, Item::Weapon(weapon));
                     }
                 }
                 HoldableGroup::Armor { armor } => {
@@ -70,7 +82,10 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(armor_item.base_holdable.base_item.id, Item::Armor(armor_item));
+                        self.items.insert(
+                            armor_item.base_holdable.base_item.id,
+                            Item::Armor(armor_item),
+                        );
                     }
                 }
 
@@ -86,7 +101,10 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(helmet_item.base_holdable.base_item.id, Item::Helmet(helmet_item));
+                        self.items.insert(
+                            helmet_item.base_holdable.base_item.id,
+                            Item::Helmet(helmet_item),
+                        );
                     }
                 }
                 HoldableGroup::Boots { boots } => {
@@ -101,7 +119,10 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(boots_item.base_holdable.base_item.id, Item::Boots(boots_item));
+                        self.items.insert(
+                            boots_item.base_holdable.base_item.id,
+                            Item::Boots(boots_item),
+                        );
                     }
                 }
                 HoldableGroup::Shields { shields } => {
@@ -116,10 +137,13 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(shield_item.base_holdable.base_item.id, Item::Shield(shield_item));
+                        self.items.insert(
+                            shield_item.base_holdable.base_item.id,
+                            Item::Shield(shield_item),
+                        );
                     }
                 }
             }
-        };
+        }
     }
 }

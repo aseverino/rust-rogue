@@ -25,9 +25,19 @@ use std::fmt;
 
 use macroquad::prelude::*;
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, widget_text::WidgetText, manager::Ui};
+use crate::ui::{
+    manager::Ui,
+    point_f::PointF,
+    quad_f::QuadF,
+    size_f::SizeF,
+    widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor},
+    widget_text::WidgetText,
+};
 
-use std::{cell::RefCell, rc::{Weak, Rc}};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 pub struct WidgetButton {
     pub base: WidgetBase,
@@ -54,8 +64,7 @@ impl WidgetButton {
                         self.hovered_color,
                     );
                 }
-            }
-            else if self.toggled {
+            } else if self.toggled {
                 if self.toggled_color != BLANK {
                     draw_rectangle(
                         drawing_coords.x,
@@ -124,13 +133,16 @@ impl WidgetBasicConstructor for WidgetButton {
 impl Widget for WidgetButton {
     impl_widget_fns!(WidgetButton, base);
 
-    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>>
+    where
+        Self: Sized,
+    {
         let w = Self::new_default(id, parent);
         let w_dyn: Rc<RefCell<dyn Widget>> = w.clone();
-        
+
         ui.widgets.push(w.clone());
         w.borrow_mut().set_manually_added();
-        
+
         let text = &mut ui.create_widget::<WidgetText>(Some(Rc::downgrade(&w_dyn)));
         w.borrow_mut().text = Some(Rc::downgrade(text));
 
@@ -160,8 +172,7 @@ impl Widget for WidgetButton {
         }
     }
 
-    fn set_on_click(&mut self, f: Box<dyn FnMut(&mut Ui, PointF)>)
-    {
+    fn set_on_click(&mut self, f: Box<dyn FnMut(&mut Ui, PointF)>) {
         self.click_callback = Some(f);
     }
 }

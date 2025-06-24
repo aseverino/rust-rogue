@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::spell_type::SpellType;
-use crate::player_spell::PlayerSpell;
 use crate::creature::Creature;
+use crate::player_spell::PlayerSpell;
 use crate::position::Position;
+use crate::spell_type::SpellType;
 
 pub struct SpellExecution<'a> {
     pub spell: PlayerSpell,

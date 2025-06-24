@@ -20,7 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{cell::RefCell, rc::Rc, sync::{Arc, RwLock}};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
 use crate::{position::Position, ui::point_f::PointF};
 
@@ -34,8 +38,12 @@ pub trait Creature {
 
     fn get_health(&self) -> (u32, u32);
 
-    fn is_player(&self) -> bool { false }
-    fn is_monster(&self) -> bool { false }
+    fn is_player(&self) -> bool {
+        false
+    }
+    fn is_monster(&self) -> bool {
+        false
+    }
     fn as_any(&self) -> &dyn std::any::Any;
 }
 

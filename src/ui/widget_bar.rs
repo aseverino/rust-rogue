@@ -21,11 +21,20 @@
 // SOFTWARE.
 
 use std::any::Any;
-use std::{cell::RefCell, fmt, rc::{Rc, Weak}};
+use std::{
+    cell::RefCell,
+    fmt,
+    rc::{Rc, Weak},
+};
 
 use macroquad::color::Color;
 
-use crate::ui::{widget::{AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, widget_panel::WidgetPanel, widget_text::WidgetText, manager::Ui};
+use crate::ui::{
+    manager::Ui,
+    widget::{AnchorKind, Widget, WidgetBase, WidgetBasicConstructor},
+    widget_panel::WidgetPanel,
+    widget_text::WidgetText,
+};
 
 pub struct WidgetBar {
     pub base: WidgetBase,
@@ -71,7 +80,10 @@ impl WidgetBar {
                 let mut fg = fg_rc.borrow_mut();
                 let width = if let Some(bg_weak) = &self.background {
                     if let Some(bg_rc) = bg_weak.upgrade() {
-                        bg_rc.borrow().base.computed_quad
+                        bg_rc
+                            .borrow()
+                            .base
+                            .computed_quad
                             .as_ref()
                             .map_or(0.0, |quad| quad.w * percentage)
                     } else {
@@ -112,19 +124,21 @@ impl WidgetBasicConstructor for WidgetBar {
             background: None,
             foreground: None,
             text: None,
-            
         }
     }
 }
 
 impl Widget for WidgetBar {
     impl_widget_fns!(WidgetBar, base);
-    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>>
+    where
+        Self: Sized,
+    {
         let w = Self::new_default(id, parent);
         let w_dyn: Rc<RefCell<dyn Widget>> = w.clone();
         ui.widgets.push(w.clone());
         w.borrow_mut().set_manually_added();
-        
+
         let background = &mut ui.create_widget::<WidgetPanel>(Some(Rc::downgrade(&w_dyn)));
         w.borrow_mut().background = Some(Rc::downgrade(background));
 
@@ -141,7 +155,7 @@ impl Widget for WidgetBar {
         if let Some(fg_weak) = &w.borrow().foreground {
             if let Some(fg_rc) = fg_weak.upgrade() {
                 //bg_rc.borrow_mut().set_color(Color::from_rgba(255, 0, 0, 255));
-                
+
                 {
                     let mut fg = fg_rc.borrow_mut();
                     fg.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
@@ -157,11 +171,17 @@ impl Widget for WidgetBar {
         if let Some(text_weak) = &w.borrow().text {
             if let Some(text_rc) = text_weak.upgrade() {
                 //bg_rc.borrow_mut().set_color(Color::from_rgba(255, 0, 0, 255));
-                
+
                 {
                     let mut text = text_rc.borrow_mut();
-                    text.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
-                    text.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
+                    text.add_anchor_to_parent(
+                        AnchorKind::VerticalCenter,
+                        AnchorKind::VerticalCenter,
+                    );
+                    text.add_anchor_to_parent(
+                        AnchorKind::HorizontalCenter,
+                        AnchorKind::HorizontalCenter,
+                    );
                 };
             }
         }

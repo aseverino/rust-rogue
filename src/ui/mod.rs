@@ -21,14 +21,14 @@
 // SOFTWARE.
 
 pub mod point_f;
-pub mod size_f;
 mod quad_f;
+pub mod size_f;
 
 #[macro_use]
 mod widget;
 
 pub mod manager;
+pub mod widget_bar;
+pub mod widget_button;
 pub mod widget_panel;
 pub mod widget_text;
-pub mod widget_button;
-pub mod widget_bar;

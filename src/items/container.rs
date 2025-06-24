@@ -25,7 +25,7 @@ use crate::items::base_item::{BaseItemData, Item};
 #[derive(PartialEq, Clone, Debug)]
 pub struct Container {
     pub base_item: BaseItemData,
-    pub items: Vec<u32>
+    pub items: Vec<u32>,
 }
 
 impl Container {
@@ -34,7 +34,7 @@ impl Container {
             base_item: BaseItemData {
                 id: 0,
                 name: String::from("Generic Container"),
-                description: String::from("A container to hold items.")
+                description: String::from("A container to hold items."),
             },
             items: Vec::new(),
         }

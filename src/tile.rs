@@ -22,7 +22,12 @@
 
 use macroquad::prelude::*;
 
-use crate::{items::{base_item::ItemKind, orb::Orb, teleport::Teleport}, maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE}, position::Position, ui::point_f::PointF};
+use crate::{
+    items::{base_item::ItemKind, orb::Orb, teleport::Teleport},
+    maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE},
+    position::Position,
+    ui::point_f::PointF,
+};
 
 pub const NO_CREATURE: u32 = 0;
 pub const PLAYER_CREATURE_ID: u32 = u32::MAX; // or any large unique value
@@ -38,12 +43,16 @@ pub enum TileKind {
 pub struct Tile {
     pub kind: TileKind,
     pub creature: u32,
-    pub items: Vec<ItemKind>
+    pub items: Vec<ItemKind>,
 }
 
 impl Tile {
     pub fn new(kind: TileKind) -> Self {
-        Self { kind, creature: NO_CREATURE, items: Vec::new() }
+        Self {
+            kind,
+            creature: NO_CREATURE,
+            items: Vec::new(),
+        }
     }
 
     pub fn has_enemy(&self) -> bool {
@@ -51,11 +60,14 @@ impl Tile {
     }
 
     pub fn is_walkable(&self) -> bool {
-        self.kind == TileKind::Floor && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
+        self.kind == TileKind::Floor
+            && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
     }
 
     pub fn has_container(&self) -> bool {
-        self.items.iter().any(|item| matches!(item, ItemKind::Container(_)))
+        self.items
+            .iter()
+            .any(|item| matches!(item, ItemKind::Container(_)))
     }
 
     pub fn get_top_item(&self) -> Option<&ItemKind> {
@@ -81,14 +93,30 @@ impl Tile {
     }
 
     pub fn is_border(&self, pos: &Position) -> bool {
-        self.kind == TileKind::Floor && (pos.x == 0 || pos.y == 0 || pos.x == GRID_WIDTH - 1 || pos.y == GRID_HEIGHT - 1)
+        self.kind == TileKind::Floor
+            && (pos.x == 0 || pos.y == 0 || pos.x == GRID_WIDTH - 1 || pos.y == GRID_HEIGHT - 1)
     }
 
     pub fn draw(&self, pos: Position, offset: PointF, borders_locked: bool) {
         let color = match self.kind {
-            TileKind::Floor => Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
-            TileKind::Wall => Color { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
-            TileKind::Chasm => Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+            TileKind::Floor => Color {
+                r: 0.5,
+                g: 0.5,
+                b: 0.5,
+                a: 1.0,
+            },
+            TileKind::Wall => Color {
+                r: 0.3,
+                g: 0.3,
+                b: 0.3,
+                a: 1.0,
+            },
+            TileKind::Chasm => Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
         };
 
         draw_rectangle(
@@ -102,16 +130,26 @@ impl Tile {
         if self.is_border(&pos) {
             // Draw border
             let border_color = if borders_locked {
-                Color { r: 0.8, g: 0.2, b: 0.2, a: 1.0 } // Red for locked borders
+                Color {
+                    r: 0.8,
+                    g: 0.2,
+                    b: 0.2,
+                    a: 1.0,
+                } // Red for locked borders
             } else {
-                Color { r: 0.2, g: 0.8, b: 0.2, a: 1.0 } // Green for unlocked borders
+                Color {
+                    r: 0.2,
+                    g: 0.8,
+                    b: 0.2,
+                    a: 1.0,
+                } // Green for unlocked borders
             };
             draw_rectangle(
                 offset.x + pos.x as f32 * TILE_SIZE,
                 offset.y + pos.y as f32 * TILE_SIZE,
                 TILE_SIZE - 1.0,
                 TILE_SIZE - 1.0,
-                border_color
+                border_color,
             );
         }
 
@@ -122,14 +160,29 @@ impl Tile {
                         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
                         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
                         TILE_SIZE / 4.0,
-                        Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
+                        Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 1.0,
+                            a: 1.0,
+                        },
                     );
                 }
                 ItemKind::Teleport(_) => {
                     let teleport_color = if borders_locked {
-                        Color { r: 0.8, g: 0.2, b: 0.2, a: 1.0 } // Red for locked
+                        Color {
+                            r: 0.8,
+                            g: 0.2,
+                            b: 0.2,
+                            a: 1.0,
+                        } // Red for locked
                     } else {
-                        Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 } // Black for open
+                        Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        } // Black for open
                     };
                     draw_circle(
                         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
@@ -144,7 +197,12 @@ impl Tile {
                         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
                         TILE_SIZE / 2.0,
                         TILE_SIZE / 2.0,
-                        Color { r: 1.0, g: 1.0, b: 0.0, a: 1.0 },
+                        Color {
+                            r: 1.0,
+                            g: 1.0,
+                            b: 0.0,
+                            a: 1.0,
+                        },
                     );
                 }
                 // ItemKind::Portal(_) => {

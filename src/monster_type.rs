@@ -23,8 +23,8 @@
 use macroquad::prelude::*;
 use rlua::{UserData, UserDataMethods};
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
 use serde_json::from_str;
+use std::sync::{Arc, Mutex};
 
 use crate::lua_interface::{LuaInterfaceRc, LuaScripted};
 
@@ -33,8 +33,7 @@ pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<Mo
     let file: String = load_string("assets/monsters.json").await.unwrap();
     let list: Vec<MonsterType> = from_str(&file).unwrap();
 
-    list
-        .into_iter()
+    list.into_iter()
         .map(|mut mt| {
             if mt.script.is_some() {
                 let script_result = lua_interface.load_script(&mt);
@@ -61,7 +60,7 @@ pub struct MonsterType {
     pub melee_damage: i32,
     pub script: Option<String>,
     #[serde(default)]
-    pub scripted: bool
+    pub scripted: bool,
 }
 
 impl MonsterType {
@@ -84,15 +83,17 @@ impl LuaScripted for MonsterType {
     }
 
     fn functions(&self) -> Vec<String> {
-        vec!["on_spawn".to_string(), "on_update".to_string(), "on_death".to_string()]
+        vec![
+            "on_spawn".to_string(),
+            "on_update".to_string(),
+            "on_death".to_string(),
+        ]
     }
 }
 
 impl UserData for MonsterType {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("get_id", |_, this, ()| {
-            Ok(this.id)
-        });
+        methods.add_method("get_id", |_, this, ()| Ok(this.id));
     }
 }
 

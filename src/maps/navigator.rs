@@ -20,16 +20,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::collections::HashSet;
 use pathfinding::prelude::astar;
+use std::collections::HashSet;
 
-use crate::{maps::{GRID_HEIGHT, GRID_WIDTH}, position::Position, tile::TileKind, tile_map::TileMap};
+use crate::{
+    maps::{GRID_HEIGHT, GRID_WIDTH},
+    position::Position,
+    tile::TileKind,
+    tile_map::TileMap,
+};
 
 pub struct Navigator {}
 
 impl Navigator {
-    pub fn find_path(start_pos: Position, goal_pos: Position, is_walkable: impl Fn(Position) -> bool) -> Option<Vec<Position>>
-    {
+    pub fn find_path(
+        start_pos: Position,
+        goal_pos: Position,
+        is_walkable: impl Fn(Position) -> bool,
+    ) -> Option<Vec<Position>> {
         let start = (start_pos.x, start_pos.y);
         let goal = (goal_pos.x, goal_pos.y);
         let path = astar(
@@ -37,8 +45,14 @@ impl Navigator {
             |&(x, y)| {
                 let mut neighbors = Vec::new();
                 let directions = [
-                    (0isize, -1), (1, 0), (0, 1), (-1, 0), // cardinal
-                    (-1, -1), (1, -1), (1, 1), (-1, 1),    // diagonals
+                    (0isize, -1),
+                    (1, 0),
+                    (0, 1),
+                    (-1, 0), // cardinal
+                    (-1, -1),
+                    (1, -1),
+                    (1, 1),
+                    (-1, 1), // diagonals
                 ];
 
                 for (dx, dy) in directions {
@@ -72,7 +86,10 @@ impl Navigator {
         if x < 0 || y < 0 || x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT {
             true // treat out-of-bounds as walls
         } else {
-            matches!(tiles[Position::new(x as usize, y as usize)].kind, TileKind::Wall)
+            matches!(
+                tiles[Position::new(x as usize, y as usize)].kind,
+                TileKind::Wall
+            )
         }
     }
 
@@ -123,7 +140,7 @@ impl Navigator {
                 let distance = dx * dx + dy * dy;
                 if nx >= 0 && ny >= 0 && nx < GRID_WIDTH as isize && ny < GRID_HEIGHT as isize {
                     let is_blocking = Self::is_opaque(tiles, nx, ny);
-                    
+
                     // Only insert tiles that are not opaque
                     if !is_blocking && distance <= radius * radius {
                         visible.insert(Position {
@@ -145,7 +162,17 @@ impl Navigator {
                 } else {
                     if Self::is_opaque(tiles, nx, ny) {
                         blocked = true;
-                        Self::cast_light(tiles, visible, cx, cy, i + 1, next_start_slope, l_slope, radius, octant);
+                        Self::cast_light(
+                            tiles,
+                            visible,
+                            cx,
+                            cy,
+                            i + 1,
+                            next_start_slope,
+                            l_slope,
+                            radius,
+                            octant,
+                        );
                         next_start_slope = r_slope;
                     }
                 }
@@ -181,9 +208,11 @@ impl Navigator {
     }
 }
 
-
-
-pub fn find_path<F>(start_pos: Position, goal_pos: Position, is_walkable: F) -> Option<Vec<Position>>
+pub fn find_path<F>(
+    start_pos: Position,
+    goal_pos: Position,
+    is_walkable: F,
+) -> Option<Vec<Position>>
 where
     F: Fn(Position) -> bool,
 {
@@ -194,8 +223,14 @@ where
         |&(x, y)| {
             let mut neighbors = Vec::new();
             let directions = [
-                (0isize, -1), (1, 0), (0, 1), (-1, 0), // cardinal
-                (-1, -1), (1, -1), (1, 1), (-1, 1),    // diagonals
+                (0isize, -1),
+                (1, 0),
+                (0, 1),
+                (-1, 0), // cardinal
+                (-1, -1),
+                (1, -1),
+                (1, 1),
+                (-1, 1), // diagonals
             ];
 
             for (dx, dy) in directions {

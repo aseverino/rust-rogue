@@ -20,23 +20,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod input;
-mod ui;
+mod combat;
+mod creature;
 mod game;
-mod lua_interface;
+mod input;
 mod items;
+mod lua_interface;
 mod maps;
+mod monster;
+mod monster_type;
+mod player;
+mod player_spell;
 mod position;
+mod spell_execution;
+mod spell_type;
 mod tile;
 mod tile_map;
-mod creature;
-mod monster_type;
-mod monster;
-mod spell_type;
-mod player_spell;
-mod spell_execution;
-mod player;
-mod combat;
+mod ui;
 
 use macroquad::prelude::*;
 

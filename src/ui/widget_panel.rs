@@ -25,9 +25,18 @@ use std::fmt;
 
 use macroquad::prelude::*;
 
-use std::{cell::RefCell, rc::{Weak, Rc}};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
-use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF, widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor}, manager::Ui};
+use crate::ui::{
+    manager::Ui,
+    point_f::PointF,
+    quad_f::QuadF,
+    size_f::SizeF,
+    widget::{Anchor, AnchorKind, Widget, WidgetBase, WidgetBasicConstructor},
+};
 
 pub struct WidgetPanel {
     pub base: WidgetBase,
@@ -65,8 +74,7 @@ impl WidgetPanel {
                         border_color,
                     );
                 }
-            }
-            else if self.base.color != BLANK {
+            } else if self.base.color != BLANK {
                 draw_rectangle(
                     drawing_coords.x,
                     drawing_coords.y,
@@ -76,7 +84,7 @@ impl WidgetPanel {
                 );
             }
         }
-        
+
         for child in &self.base.children {
             if let Some(child_widget) = child.upgrade() {
                 child_widget.borrow().draw(ui);

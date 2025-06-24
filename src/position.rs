@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::hash::{Hash};
+use std::hash::Hash;
 
 #[derive(Clone)]
 pub enum Direction {
@@ -65,44 +65,68 @@ impl Position {
         if self.y == 0 {
             None
         } else {
-            Some(Self { x: self.x, y: self.y - 1 })
+            Some(Self {
+                x: self.x,
+                y: self.y - 1,
+            })
         }
     }
     pub fn east(&self) -> Self {
-        Self { x: self.x + 1, y: self.y }
+        Self {
+            x: self.x + 1,
+            y: self.y,
+        }
     }
     pub fn south(&self) -> Self {
-        Self { x: self.x, y: self.y + 1 }
+        Self {
+            x: self.x,
+            y: self.y + 1,
+        }
     }
     pub fn west(&self) -> Option<Self> {
         if self.x == 0 {
             None
         } else {
-            Some(Self { x: self.x - 1, y: self.y })
+            Some(Self {
+                x: self.x - 1,
+                y: self.y,
+            })
         }
     }
     pub fn north_east(&self) -> Option<Self> {
         if self.x == 0 {
             None
         } else {
-            Some(Self { x: self.x - 1, y: self.y - 1 })
+            Some(Self {
+                x: self.x - 1,
+                y: self.y - 1,
+            })
         }
     }
     pub fn south_east(&self) -> Self {
-        Self { x: self.x + 1, y: self.y + 1 }
+        Self {
+            x: self.x + 1,
+            y: self.y + 1,
+        }
     }
     pub fn south_west(&self) -> Option<Self> {
         if self.y == 0 {
             None
         } else {
-            Some(Self { x: self.x - 1, y: self.y + 1 })
+            Some(Self {
+                x: self.x - 1,
+                y: self.y + 1,
+            })
         }
     }
     pub fn north_west(&self) -> Option<Self> {
         if self.x == 0 || self.y == 0 {
             None
         } else {
-            Some(Self { x: self.x - 1, y: self.y - 1 })
+            Some(Self {
+                x: self.x - 1,
+                y: self.y - 1,
+            })
         }
     }
 
@@ -122,9 +146,9 @@ impl Position {
         if let Some(north_east) = self.north_east() {
             positions.push(north_east);
         }
-        
+
         positions.push(self.south_east());
-        
+
         if let Some(north_west) = self.north_west() {
             positions.push(north_west);
         }
@@ -132,4 +156,7 @@ impl Position {
     }
 }
 
-pub static POSITION_INVALID: Position = Position { x: usize::MAX, y: usize::MAX };
+pub static POSITION_INVALID: Position = Position {
+    x: usize::MAX,
+    y: usize::MAX,
+};

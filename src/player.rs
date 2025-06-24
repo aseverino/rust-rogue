@@ -20,16 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use macroquad::prelude::*;
-use rlua::{UserData, UserDataMethods};
-use crate::items::holdable::*;
-use crate::items::base_item::Item;
-use crate::maps::{TILE_SIZE};
 use crate::creature::Creature;
-use crate::position::{ Position };
+use crate::items::base_item::Item;
+use crate::items::holdable::*;
+use crate::maps::TILE_SIZE;
 use crate::player_spell::PlayerSpell;
+use crate::position::Position;
 use crate::spell_type;
 use crate::ui::point_f::PointF;
+use macroquad::prelude::*;
+use rlua::{UserData, UserDataMethods};
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::HashSet;
@@ -76,12 +76,10 @@ impl Player {
 
         if let Some(spell) = first_spell {
             let max_charges = spell.max_charges;
-            spells = vec![
-                PlayerSpell {
-                    spell_type: spell,
-                    charges: max_charges,
-                }
-            ];
+            spells = vec![PlayerSpell {
+                spell_type: spell,
+                charges: max_charges,
+            }];
         }
 
         Self {
@@ -191,12 +189,8 @@ impl Creature for Player {
 
 impl UserData for Player {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("get_mana", |_, this, ()| {
-            Ok(this.get_mana())
-        });
+        methods.add_method("get_mana", |_, this, ()| Ok(this.get_mana()));
 
-        methods.add_method("get_soul_points", |_, this, ()| {
-            Ok(this.get_soul_points())
-        });
+        methods.add_method("get_soul_points", |_, this, ()| Ok(this.get_soul_points()));
     }
 }

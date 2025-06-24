@@ -21,11 +21,11 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
-use std::collections::HashMap;
-use std::rc::Rc;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde_json::from_str;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -53,9 +53,9 @@ pub struct SpellType {
     pub area_radius: Option<u32>,
     pub description: String,
     pub max_charges: u32, // Number of charges available
-    pub range: u32, // Range in tiles
-    pub basepower: u32, // Base Power of the spell
-    pub cost: u32, // Cost to buy
+    pub range: u32,       // Range in tiles
+    pub basepower: u32,   // Base Power of the spell
+    pub cost: u32,        // Cost to buy
 }
 
 pub async fn load_spell_types() -> Vec<Option<Arc<SpellType>>> {
@@ -80,9 +80,13 @@ pub async fn load_spell_types() -> Vec<Option<Arc<SpellType>>> {
 pub static SPELL_TYPES: OnceCell<Vec<Option<Arc<SpellType>>>> = OnceCell::new();
 
 pub fn set_global_spell_types(vec: Vec<Option<Arc<SpellType>>>) {
-    SPELL_TYPES.set(vec).expect("GLOBAL_SPELL_TYPES already set!");
+    SPELL_TYPES
+        .set(vec)
+        .expect("GLOBAL_SPELL_TYPES already set!");
 }
 
 pub fn get_spell_types() -> &'static Vec<Option<Arc<SpellType>>> {
-    SPELL_TYPES.get().expect("GLOBAL_SPELL_TYPES not initialized")
+    SPELL_TYPES
+        .get()
+        .expect("GLOBAL_SPELL_TYPES not initialized")
 }

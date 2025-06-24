@@ -26,17 +26,17 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 
 use rand::rngs::ThreadRng;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use serde_json::Map;
 
 use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
-use crate::maps::{BorderFlags, MapTheme, GRID_HEIGHT, GRID_WIDTH};
-use crate::{monster, monster_type};
+use crate::maps::{BorderFlags, GRID_HEIGHT, GRID_WIDTH, MapTheme};
 use crate::monster_type::MonsterTypes;
-use crate::tile::{Tile, TileKind};
 use crate::position::Position;
+use crate::tile::{Tile, TileKind};
+use crate::{monster, monster_type};
 use rand::seq::SliceRandom;
 
 #[derive(Debug, Clone)]
@@ -71,7 +71,7 @@ pub struct GenerationParams {
     pub predefined_borders: [Vec<Position>; 4],
     pub predefined_start_pos: Option<Position>,
     pub force_regen: bool,
-    pub tier: u32
+    pub tier: u32,
 }
 
 impl GenerationParams {
@@ -128,7 +128,8 @@ impl MapGenerator {
         let monster_types_guard = monster_types.lock().unwrap();
         for mt in monster_types_guard.iter() {
             if mg.monster_types_by_tier.len() <= mt.tier as usize {
-                mg.monster_types_by_tier.resize(mt.tier as usize + 1, Vec::new());
+                mg.monster_types_by_tier
+                    .resize(mt.tier as usize + 1, Vec::new());
             }
             mg.monster_types_by_tier[mt.tier as usize].push(mt.id);
         }
@@ -155,7 +156,12 @@ impl MapGenerator {
                 match command {
                     Command::Generate(pos, params) => {
                         let mut map = Self::generate_map(&params);
-                        Self::populate_map(&mut map, &params, &monster_types, &monster_types_by_tier);
+                        Self::populate_map(
+                            &mut map,
+                            &params,
+                            &monster_types,
+                            &monster_types_by_tier,
+                        );
                         let map_arc = Arc::new(Mutex::new(map));
                         {
                             let mut statuses = statuses.lock().unwrap();
@@ -172,7 +178,10 @@ impl MapGenerator {
                                 statuses.insert(pos, shared_status);
                             }
                         }
-                        callback(MapAssignment { opos: pos, map: Arc::clone(&map_arc) });
+                        callback(MapAssignment {
+                            opos: pos,
+                            map: Arc::clone(&map_arc),
+                        });
                     }
                     Command::Stop => {
                         println!("[MapGenerator] Stopping...");
@@ -185,9 +194,9 @@ impl MapGenerator {
 
     pub fn request_generation(&mut self, opos: OverworldPos, params: GenerationParams) {
         let mut statuses = self.map_statuses.lock().unwrap();
-        let entry = statuses.entry(opos).or_insert_with(|| {
-            Arc::new((Mutex::new(MapStatus::NotRequested), Condvar::new()))
-        });
+        let entry = statuses
+            .entry(opos)
+            .or_insert_with(|| Arc::new((Mutex::new(MapStatus::NotRequested), Condvar::new())));
 
         let (lock, _) = &**entry;
         let mut state = lock.lock().unwrap();
@@ -219,7 +228,12 @@ impl MapGenerator {
         }
     }
 
-    fn carve_tile(tiles: &mut Vec<Vec<Tile>>, x: usize, y: usize, walkable_cache: &mut Vec<Position>) {
+    fn carve_tile(
+        tiles: &mut Vec<Vec<Tile>>,
+        x: usize,
+        y: usize,
+        walkable_cache: &mut Vec<Position>,
+    ) {
         if x >= GRID_WIDTH || y >= GRID_HEIGHT {
             return;
         }
@@ -269,9 +283,9 @@ impl MapGenerator {
                 Self::carve_tile(tiles, current.x, current.y, walkable_cache);
             } else if radius == 1 {
                 // Exact 2x2 (square)
-                Self::carve_tile(tiles, current.x,     current.y,     walkable_cache);
-                Self::carve_tile(tiles, current.x + 1, current.y,     walkable_cache);
-                Self::carve_tile(tiles, current.x,     current.y + 1, walkable_cache);
+                Self::carve_tile(tiles, current.x, current.y, walkable_cache);
+                Self::carve_tile(tiles, current.x + 1, current.y, walkable_cache);
+                Self::carve_tile(tiles, current.x, current.y + 1, walkable_cache);
                 Self::carve_tile(tiles, current.x + 1, current.y + 1, walkable_cache);
             } else {
                 // Circular area
@@ -279,7 +293,11 @@ impl MapGenerator {
                     for dy in -(radius as isize)..=(radius as isize) {
                         let nx = current.x as isize + dx;
                         let ny = current.y as isize + dy;
-                        if nx >= 0 && ny >= 0 && nx < GRID_WIDTH as isize && ny < GRID_HEIGHT as isize {
+                        if nx >= 0
+                            && ny >= 0
+                            && nx < GRID_WIDTH as isize
+                            && ny < GRID_HEIGHT as isize
+                        {
                             Self::carve_tile(tiles, nx as usize, ny as usize, walkable_cache);
                         }
                     }
@@ -395,7 +413,7 @@ impl MapGenerator {
                 }
             }
         }
-        
+
         anchors
     }
 
@@ -429,7 +447,10 @@ impl MapGenerator {
 
         if let Some(predefined_start_pos) = params.predefined_start_pos {
             start_positions.push(predefined_start_pos);
-            println!("Using predefined start position: {:?}", predefined_start_pos);
+            println!(
+                "Using predefined start position: {:?}",
+                predefined_start_pos
+            );
         }
 
         for &(_, neighbor) in &anchor_pairs {
@@ -463,8 +484,7 @@ impl MapGenerator {
                 }
 
                 start_positions.push(Position { x, y });
-            }
-            else {
+            } else {
                 // Use existing start position
                 x = start_positions[i].x;
                 y = start_positions[i].y;
@@ -515,19 +535,30 @@ impl MapGenerator {
             let current = start_positions[i];
 
             //carve_path_between(&mut tiles, prev, current, &mut walkable_cache);
-            Self::carve_jagged_path(&mut tiles, prev, current, &mut walkable_cache, &mut rng, params.radius);
+            Self::carve_jagged_path(
+                &mut tiles,
+                prev,
+                current,
+                &mut walkable_cache,
+                &mut rng,
+                params.radius,
+            );
         }
 
         let mut available_walkable_cache = walkable_cache.clone();
         available_walkable_cache.shuffle(&mut rng);
-        let mut map = GeneratedMap::new(params.tier, tiles, walkable_cache, available_walkable_cache);
+        let mut map =
+            GeneratedMap::new(params.tier, tiles, walkable_cache, available_walkable_cache);
 
         for x in 0..GRID_WIDTH {
             if map.tiles[Position::new(x, 0)].kind == TileKind::Floor {
                 map.border_positions[0].push(Position { x, y: 0 });
             }
             if map.tiles[Position::new(x, GRID_HEIGHT - 1)].kind == TileKind::Floor {
-                map.border_positions[2].push(Position { x, y: GRID_HEIGHT - 1 });
+                map.border_positions[2].push(Position {
+                    x,
+                    y: GRID_HEIGHT - 1,
+                });
             }
         }
         for y in 0..GRID_HEIGHT {
@@ -535,19 +566,28 @@ impl MapGenerator {
                 map.border_positions[3].push(Position { x: 0, y });
             }
             if map.tiles[Position::new(GRID_WIDTH - 1, y)].kind == TileKind::Floor {
-                map.border_positions[1].push(Position { x: GRID_WIDTH - 1, y });
+                map.border_positions[1].push(Position {
+                    x: GRID_WIDTH - 1,
+                    y,
+                });
             }
-        }    
+        }
 
         map
     }
 
-    fn populate_map(map: &mut GeneratedMap, params: &GenerationParams, monster_types: &MonsterTypes, monster_types_by_tier: &Vec<Vec<u32>>) {
+    fn populate_map(
+        map: &mut GeneratedMap,
+        params: &GenerationParams,
+        monster_types: &MonsterTypes,
+        monster_types_by_tier: &Vec<Vec<u32>>,
+    ) {
         let monster_types_guard = monster_types.lock().unwrap();
         map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();
-        let mut positions: Vec<Position> = map.available_walkable_cache
+        let mut positions: Vec<Position> = map
+            .available_walkable_cache
             .drain(len.saturating_sub(1)..)
             .collect();
 
@@ -555,9 +595,10 @@ impl MapGenerator {
             map.tiles[pos].add_teleport();
             map.downstair_teleport = Some(pos);
         }
-        
+
         len = map.available_walkable_cache.len();
-        positions = map.available_walkable_cache
+        positions = map
+            .available_walkable_cache
             .drain(len.saturating_sub(2)..)
             .collect();
 

@@ -20,8 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use macroquad::prelude::*;
 use crate::creature::Creature;
+use crate::input::{Input, KeyboardAction};
 use crate::items::base_item::ItemKind;
 use crate::items::collection::Items;
 use crate::lua_interface::{self, LuaInterface, LuaInterfaceRc, LuaScripted};
@@ -30,22 +30,22 @@ use crate::maps::navigator::Navigator;
 use crate::maps::overworld::{Overworld, OverworldPos, VisitedState};
 use crate::maps::overworld_generator::OverworldGenerator;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
-use crate::maps::{map::Map, TILE_SIZE};
+use crate::maps::{TILE_SIZE, map::Map};
 use crate::monster::Monster;
+use crate::player::Player;
+use crate::position::{Direction, Position};
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
+use crate::ui::manager::{Ui, UiEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
-use crate::ui::manager::{Ui, UiEvent};
-use crate::player::Player;
-use crate::input::{Input, KeyboardAction};
-use crate::position::{Direction, Position};
+use macroquad::prelude::*;
 
 use crate::{combat, monster_type, spell_type};
 use macroquad::time::get_time;
 
+use std::cell::{RefCell, RefMut};
 use std::cmp::max;
 use std::rc::Rc;
-use std::cell::{RefCell, RefMut};
 use std::sync::{Arc, Mutex};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -99,12 +99,11 @@ impl GameState {
     }
 }
 
-fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset: PointF)
-{
+fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset: PointF) {
     if !ui.is_focused {
         map.draw(&mut game.player, game_interface_offset);
     }
-    
+
     ui.update_geometry(SizeF::new(screen_width(), screen_height()));
 
     let (hp, max_hp) = game.get_player_hp();
@@ -124,36 +123,44 @@ fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<
     let current_map_rc = game.overworld.get_map_ptr(overworld_pos);
 
     if current_map_rc.is_none() {
-        let generated_map_arc = if let Some(generated_map_arc) = game.overworld_generator.lock().unwrap().get_generated_map_ptr(overworld_pos) {
+        let generated_map_arc = if let Some(generated_map_arc) = game
+            .overworld_generator
+            .lock()
+            .unwrap()
+            .get_generated_map_ptr(overworld_pos)
+        {
             generated_map_arc
         } else {
             panic!("Failed to get map pointer from overworld");
         };
 
-        game.overworld.add_map(overworld_pos, generated_map_arc.clone())
-    }
-    else {
+        game.overworld
+            .add_map(overworld_pos, generated_map_arc.clone())
+    } else {
         current_map_rc.unwrap()
     }
 }
 
-fn get_new_opos(player_pos: &Position, player_opos: &OverworldPos, map_update: &MapTravelEvent) -> OverworldPos {
+fn get_new_opos(
+    player_pos: &Position,
+    player_opos: &OverworldPos,
+    map_update: &MapTravelEvent,
+) -> OverworldPos {
     let mut new_opos = *player_opos;
-    if *map_update == MapTravelEvent::Peek(MapTravelKind::BorderCross) || *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross) {
+    if *map_update == MapTravelEvent::Peek(MapTravelKind::BorderCross)
+        || *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross)
+    {
         if player_pos.x == 0 {
             new_opos.x -= 1;
-        }
-        else if player_pos.x == GRID_WIDTH - 1 {
+        } else if player_pos.x == GRID_WIDTH - 1 {
             new_opos.x += 1;
         }
         if player_pos.y == 0 {
             new_opos.y -= 1;
-        }
-        else if player_pos.y == GRID_HEIGHT - 1 {
+        } else if player_pos.y == GRID_HEIGHT - 1 {
             new_opos.y += 1;
         }
-    }
-    else {
+    } else {
         new_opos = OverworldPos::new(player_opos.floor + 1, 2, 2); // Climbing down
     }
 
@@ -167,25 +174,24 @@ fn check_for_map_update(
     peek_map_rc: &mut Option<MapRef>,
     current_map_rc: &mut MapRef,
     current_downstair_teleport_pos: &mut Option<Position>,
-    overworld_pos: &mut OverworldPos) {
+    overworld_pos: &mut OverworldPos,
+) {
     if *map_update != MapTravelEvent::None {
         // Determine player's current border position
         let mut player_pos = game.player.position;
         let new_opos = get_new_opos(&player_pos, overworld_pos, &map_update);
 
         let new_map_rc = get_map_ptr(game, new_opos);
-        
+
         if let MapTravelEvent::Peek(_) = map_update {
             let mut map = new_map_rc.borrow_mut();
             if map.generated_map.visited_state == VisitedState::Visited {
                 if *map_update == MapTravelEvent::Peek(MapTravelKind::ClimbDown) {
                     *map_update = MapTravelEvent::Visit(MapTravelKind::ClimbDown);
-                }
-                else {
+                } else {
                     *map_update = MapTravelEvent::Visit(MapTravelKind::BorderCross);
                 }
-            }
-            else {
+            } else {
                 // If the map is not visited, we need to set it up
                 *peek_map_rc = Some(new_map_rc.clone());
                 println!("Peeked at new map: {:?}", new_opos);
@@ -198,12 +204,7 @@ fn check_for_map_update(
                 *map_update = MapTravelEvent::None; // Reset map update to None
 
                 if map.generated_map.visited_state == VisitedState::Unvisited {
-                    update_map_visited_state(
-                        game,
-                        &mut map,
-                        new_opos,
-                        VisitedState::Peeked
-                    );
+                    update_map_visited_state(game, &mut map, new_opos, VisitedState::Peeked);
                     *current_downstair_teleport_pos = {
                         let current_map = current_map_rc.borrow();
                         current_map.generated_map.downstair_teleport.clone()
@@ -235,24 +236,17 @@ fn check_for_map_update(
                 if *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross) {
                     if player_pos.x == 0 {
                         player_pos.x = GRID_WIDTH - 2;
-                    }
-                    else if player_pos.x == GRID_WIDTH - 1 {
+                    } else if player_pos.x == GRID_WIDTH - 1 {
                         player_pos.x = 1;
                     }
                     if player_pos.y == 0 {
                         player_pos.y = GRID_HEIGHT - 2;
-                    }
-                    else if player_pos.y == GRID_HEIGHT - 1 {
+                    } else if player_pos.y == GRID_HEIGHT - 1 {
                         player_pos.y = 1;
                     }
                 }
-                
-                update_map_visited_state(
-                    game,
-                    &mut map,
-                    new_opos,
-                    VisitedState::Visited
-                );
+
+                update_map_visited_state(game, &mut map, new_opos, VisitedState::Visited);
 
                 map.add_player(&mut game.player, player_pos);
                 peek_map_rc.take();
@@ -263,13 +257,25 @@ fn check_for_map_update(
                 let mut overworld_generator = game.overworld_generator.lock().unwrap();
                 game.overworld.clear_unvisited(overworld_pos.clone());
                 overworld_generator.clear_unvisited(overworld_pos.clone());
-                overworld_generator.setup_adjacent_maps(current_tier + 1, overworld_pos.floor, overworld_pos.x, overworld_pos.y, None);
-                overworld_generator.setup_adjacent_maps(current_tier + 1, new_opos.floor, new_opos.x, new_opos.y, current_downstair_teleport_pos.clone());                
+                overworld_generator.setup_adjacent_maps(
+                    current_tier + 1,
+                    overworld_pos.floor,
+                    overworld_pos.x,
+                    overworld_pos.y,
+                    None,
+                );
+                overworld_generator.setup_adjacent_maps(
+                    current_tier + 1,
+                    new_opos.floor,
+                    new_opos.x,
+                    new_opos.y,
+                    current_downstair_teleport_pos.clone(),
+                );
             }
-            
+
             *overworld_pos = new_opos;
         }
-        
+
         *last_map_travel_kind = match map_update {
             MapTravelEvent::Peek(kind) => kind.clone(),
             MapTravelEvent::Visit(kind) => kind.clone(),
@@ -285,10 +291,16 @@ pub fn update_map_visited_state(
     game: &mut GameState,
     map: &mut RefMut<'_, Map>,
     overworld_pos: OverworldPos,
-    visited_state: VisitedState) {
+    visited_state: VisitedState,
+) {
     map.generated_map.visited_state = visited_state.clone();
 
-    if let Some(generated_map_arc) = game.overworld_generator.lock().unwrap().get_generated_map_ptr(overworld_pos) {
+    if let Some(generated_map_arc) = game
+        .overworld_generator
+        .lock()
+        .unwrap()
+        .get_generated_map_ptr(overworld_pos)
+    {
         let mut generated_map = generated_map_arc.lock().unwrap();
         generated_map.visited_state = visited_state;
     }
@@ -323,7 +335,9 @@ pub fn print_overworld(game: &mut GameState) {
     };
 
     // OverworldGenerator: generated_maps[floor][x][y] (column-major, to match Overworld)
-    let states_generated = |generated_maps: &Vec<[[Option<Arc<Mutex<crate::maps::generated_map::GeneratedMap>>>; 5]; 5]>| {
+    let states_generated = |generated_maps: &Vec<
+        [[Option<Arc<Mutex<crate::maps::generated_map::GeneratedMap>>>; 5]; 5],
+    >| {
         let mut grid = vec![vec!['0'; 5]; 5];
         if let Some(floor_maps) = generated_maps.get(0) {
             for y in 0..5 {
@@ -351,18 +365,24 @@ pub fn print_overworld(game: &mut GameState) {
     for y in 0..5 {
         let left_row: String = left[y].iter().map(|c| format!("{}, ", c)).collect();
         let right_row: String = right[y].iter().map(|c| format!("{}, ", c)).collect();
-        println!("[ {}] | [ {}]", &left_row[..left_row.len()-2], &right_row[..right_row.len()-2]);
+        println!(
+            "[ {}] | [ {}]",
+            &left_row[..left_row.len() - 2],
+            &right_row[..right_row.len() - 2]
+        );
     }
     println!("// n = unvisited, v = visited, p = peeked");
 }
 
 pub async fn run() {
     let lua_interface = LuaInterface::new();
-    
+
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
-    let monster_types = Arc::new(Mutex::new(monster_type::load_monster_types(&lua_interface).await));
+    let monster_types = Arc::new(Mutex::new(
+        monster_type::load_monster_types(&lua_interface).await,
+    ));
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
@@ -376,23 +396,23 @@ pub async fn run() {
 
     game.items.load_holdable_items(&game.lua_interface).await;
 
-    let mut overworld_pos = OverworldPos { floor: 0, x: 2, y: 2 };
+    let mut overworld_pos = OverworldPos {
+        floor: 0,
+        x: 2,
+        y: 2,
+    };
     let mut current_downstair_teleport_pos: Option<Position> = None;
 
     let mut current_map_rc = get_map_ptr(&mut game, overworld_pos);
     let mut peek_map_rc: Option<MapRef> = None;
 
-    let shared_map_ptr: Rc<RefCell<Rc<RefCell<Map>>>> = Rc::new(RefCell::new(current_map_rc.clone()));
+    let shared_map_ptr: Rc<RefCell<Rc<RefCell<Map>>>> =
+        Rc::new(RefCell::new(current_map_rc.clone()));
 
     {
         let mut map = current_map_rc.borrow_mut();
         map.add_player_first_map(&mut game.player);
-        update_map_visited_state(
-            &mut game,
-            &mut map,
-            overworld_pos,
-            VisitedState::Visited
-        );
+        update_map_visited_state(&mut game, &mut map, overworld_pos, VisitedState::Visited);
     }
 
     let mut last_move_time = 0.0;
@@ -406,13 +426,14 @@ pub async fn run() {
     let shared_map_ptr_clone = shared_map_ptr.clone();
     game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
         let binding = monster_types.lock().unwrap();
-        let kind = binding.iter()
+        let kind = binding
+            .iter()
             .find(|mt| mt.id == kind_id)
             .expect("Monster type not found");
 
         // Create a new monster and wrap it in Rc
         let monster = Monster::new(pos.clone(), kind.clone());
-        
+
         let binding = shared_map_ptr_clone.borrow_mut();
         let mut map = binding.borrow_mut();
         map.generated_map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
@@ -437,7 +458,7 @@ pub async fn run() {
                 }
             }
         }
-        
+
         while ui.events.len() > 0 {
             let event = ui.events.pop_front().unwrap();
             match event {
@@ -446,19 +467,19 @@ pub async fn run() {
                         game.player.strength += 1;
                         game.player.sp -= 1;
                     }
-                },
+                }
                 UiEvent::IncDexterity => {
                     if game.player.sp > 0 {
                         game.player.dexterity += 1;
                         game.player.sp -= 1;
                     }
-                },
+                }
                 UiEvent::IncIntelligence => {
                     if game.player.sp > 0 {
                         game.player.intelligence += 1;
                         game.player.sp -= 1;
                     }
-                },
+                }
                 UiEvent::ChestAction(item_id) => {
                     let item = game.items.items.get(&item_id);
 
@@ -472,9 +493,9 @@ pub async fn run() {
                         println!("Item with ID {} not found.", item_id);
                         continue;
                     }
-                    
+
                     ui.hide();
-                },
+                }
                 _ => {}
             }
         }
@@ -486,7 +507,7 @@ pub async fn run() {
             &mut peek_map_rc,
             &mut current_map_rc,
             &mut current_downstair_teleport_pos,
-            &mut overworld_pos
+            &mut overworld_pos,
         );
 
         if !Rc::ptr_eq(&current_map_rc, &shared_map_ptr.borrow()) {
@@ -531,10 +552,16 @@ pub async fn run() {
         }
 
         let global_mouse_pos = PointF::new(input.mouse.x, input.mouse.y);
-        let map_mouse_pos = PointF::new(input.mouse.x - game_interface_offset.x, input.mouse.y - game_interface_offset.y);
+        let map_mouse_pos = PointF::new(
+            input.mouse.x - game_interface_offset.x,
+            input.mouse.y - game_interface_offset.y,
+        );
         let map_hover_x = (map_mouse_pos.x / TILE_SIZE) as usize;
         let map_hover_y = ((map_mouse_pos.y) / TILE_SIZE) as usize;
-        let current_tile = Position { x: map_hover_x, y: map_hover_y };
+        let current_tile = Position {
+            x: map_hover_x,
+            y: map_hover_y,
+        };
 
         {
             let mut map = current_map_rc.borrow_mut();
@@ -547,8 +574,7 @@ pub async fn run() {
         if let Some(_click) = input.click {
             if ui.is_focused {
                 ui.handle_click(global_mouse_pos);
-            }
-            else {
+            } else {
                 goal_position = Some(current_tile)
             }
         };
@@ -557,33 +583,39 @@ pub async fn run() {
             if input.keyboard_action == KeyboardAction::Cancel {
                 ui.hide();
             }
-        }
-        else {
+        } else {
             if input.keyboard_action == KeyboardAction::OpenCharacterSheet {
                 ui.toggle_character_sheet();
-            }
-            else {
-                update(&mut game, &mut current_map_rc, input.keyboard_action, input.direction, input.spell, goal_position);
+            } else {
+                update(
+                    &mut game,
+                    &mut current_map_rc,
+                    input.keyboard_action,
+                    input.direction,
+                    input.spell,
+                    goal_position,
+                );
                 let player_pos = game.player.position;
 
                 if player_event == PlayerEvent::OpenChest {
-                    if let Some(items_vec) = current_map_rc.borrow_mut().get_chest_items(&player_pos) {
-                        
-                        let actual_items: Vec<(u32, String)> = items_vec.iter()
+                    if let Some(items_vec) =
+                        current_map_rc.borrow_mut().get_chest_items(&player_pos)
+                    {
+                        let actual_items: Vec<(u32, String)> = items_vec
+                            .iter()
                             .filter_map(|item_id| {
-                                game.items.items.get(item_id).map(|item| {
-                                    (*item_id, item.name().to_string())
-                                })
+                                game.items
+                                    .items
+                                    .get(item_id)
+                                    .map(|item| (*item_id, item.name().to_string()))
                             })
                             .collect();
 
                         ui.show_chest_view(&actual_items);
                     }
-                }
-                else if player_event == PlayerEvent::ReachBorder {
+                } else if player_event == PlayerEvent::ReachBorder {
                     map_update = MapTravelEvent::Peek(MapTravelKind::BorderCross);
-                }
-                else if player_event == PlayerEvent::ClimbDown {
+                } else if player_event == PlayerEvent::ClimbDown {
                     map_update = MapTravelEvent::Peek(MapTravelKind::ClimbDown);
                 }
             }
@@ -599,18 +631,18 @@ pub async fn run() {
 
             draw(&mut game, &mut ui, &mut map, game_interface_offset);
         }
-        
+
         next_frame().await;
     }
 }
 
 pub fn update(
-        game: &mut GameState,
-        map_ref: &mut MapRef,
-        player_action: KeyboardAction,
-        player_direction: Direction,
-        spell_action: i32,
-        player_goal_position: Option<Position>
+    game: &mut GameState,
+    map_ref: &mut MapRef,
+    player_action: KeyboardAction,
+    player_direction: Direction,
+    spell_action: i32,
+    player_goal_position: Option<Position>,
 ) {
     game.last_player_event = PlayerEvent::None;
     let player_pos = game.player.position;
@@ -626,9 +658,13 @@ pub fn update(
             {
                 let (in_line_of_sight, spell_range) = {
                     let in_line_of_sight = game.player.line_of_sight.contains(&player_goal);
-                    let spell_range = game.player.spells.get(index)
+                    let spell_range = game
+                        .player
+                        .spells
+                        .get(index)
                         .expect("Selected spell index out of bounds")
-                        .spell_type.range;
+                        .spell_type
+                        .range;
                     (in_line_of_sight, spell_range)
                 };
 
@@ -638,50 +674,55 @@ pub fn update(
                             spell.charges -= 1;
                             println!("Casting spell charges {}", spell.charges);
                             should_cast = true;
-                        }
-                        else {
+                        } else {
                             println!("No charges left for this spell!");
                         }
                     }
                 }
             }
-            
+
             if should_cast {
-                combat::do_spell_combat(&mut game.player, map_ref, player_pos, player_goal, index, &game.lua_interface);
+                combat::do_spell_combat(
+                    &mut game.player,
+                    map_ref,
+                    player_pos,
+                    player_goal,
+                    index,
+                    &game.lua_interface,
+                );
                 update_turn = true;
             }
 
             game.player.selected_spell = None;
             game.player.goal_position = None; // Clear goal position
             game.last_player_event = PlayerEvent::SpellCast;
-        }
-        else {
-            let path: Option<Vec<Position>> = Navigator::find_path(player_pos, player_goal, |pos| {
-                map_ref.borrow().is_tile_walkable(pos)
-            });
+        } else {
+            let path: Option<Vec<Position>> =
+                Navigator::find_path(player_pos, player_goal, |pos| {
+                    map_ref.borrow().is_tile_walkable(pos)
+                });
 
             if let Some(path) = path {
                 if path.len() > 1 {
                     new_player_pos = Some(path[1]);
                     game.last_player_event = PlayerEvent::AutoMove;
-                }
-                else {
+                } else {
                     game.last_player_event = PlayerEvent::AutoMoveEnd;
                 }
                 game.player.goal_position = player_goal_position;
-            }
-            else {
+            } else {
                 game.player.goal_position = None; // Clear goal if no path found
                 game.last_player_event = PlayerEvent::AutoMoveEnd;
             }
         }
-        
-    }
-    else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
+    } else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
         let index = spell_action as usize - 1;
 
         let spell_name = {
-            game.player.spells.get(index).map(|spell| spell.spell_type.name.clone())
+            game.player
+                .spells
+                .get(index)
+                .map(|spell| spell.spell_type.name.clone())
         };
         if let Some(name) = spell_name {
             game.player.selected_spell = Some(index);
@@ -691,14 +732,12 @@ pub fn update(
         }
 
         game.last_player_event = PlayerEvent::SpellSelect;
-    }
-    else if player_action == KeyboardAction::Cancel {
+    } else if player_action == KeyboardAction::Cancel {
         game.player.selected_spell = None;
         game.player.goal_position = None; // Clear goal position
 
         game.last_player_event = PlayerEvent::Cancel;
-    }
-    else if player_action == KeyboardAction::Move {
+    } else if player_action == KeyboardAction::Move {
         let pos_change = match player_direction {
             Direction::Up => (0, -1),
             Direction::Right => (1, 0),
@@ -713,7 +752,7 @@ pub fn update(
 
         let pos = Position {
             x: (player_pos.x as isize + pos_change.0) as usize,
-            y: (player_pos.y as isize + pos_change.1) as usize
+            y: (player_pos.y as isize + pos_change.1) as usize,
         };
 
         {
@@ -722,12 +761,16 @@ pub fn update(
                 game.last_player_event = PlayerEvent::MeleeAttack;
                 update_turn = true; // Update monsters if player attacks
                 drop(map);
-                combat::do_melee_combat(&mut game.player, map_ref, player_pos, pos, &game.lua_interface);
-            }
-            else if map.generated_map.tiles[pos].is_border(&pos) && !map.monsters.is_empty() {
+                combat::do_melee_combat(
+                    &mut game.player,
+                    map_ref,
+                    player_pos,
+                    pos,
+                    &game.lua_interface,
+                );
+            } else if map.generated_map.tiles[pos].is_border(&pos) && !map.monsters.is_empty() {
                 game.last_player_event = PlayerEvent::Cancel;
-            }
-            else {
+            } else {
                 if map.is_tile_walkable(pos) {
                     new_player_pos = Some(pos);
                     update_turn = true; // Update monsters if player moves
@@ -736,10 +779,9 @@ pub fn update(
                 game.last_player_event = PlayerEvent::Move;
             }
         }
-        
+
         game.player.goal_position = None;
-    }
-    else if player_action == KeyboardAction::Wait {
+    } else if player_action == KeyboardAction::Wait {
         new_player_pos = Some(player_pos); // Stay in place
         game.player.goal_position = None; // Clear goal position
 
@@ -752,7 +794,7 @@ pub fn update(
         map.generated_map.tiles[pos].creature = PLAYER_CREATURE_ID;
 
         game.player.set_pos(pos);
-        
+
         if new_player_pos == game.player.goal_position {
             game.player.goal_position = None; // Clear goal position if reached
         }
@@ -761,7 +803,7 @@ pub fn update(
         update_turn = true;
 
         let mut to_remove: Vec<usize> = Vec::new();
-        
+
         for (idx, item) in map.generated_map.tiles[pos].items.iter().rev().enumerate() {
             match item {
                 ItemKind::Orb(_) => {
@@ -797,12 +839,11 @@ pub fn update(
 
     if update_turn {
         if game.player.accumulated_speed >= 200 {
-            game.player.accumulated_speed -= 100;            
+            game.player.accumulated_speed -= 100;
             return;
         }
 
         while game.player.accumulated_speed < 100 {
-
             // let player_movements = game.player.accumulated_speed as f32 / 100.0;
 
             // if player_movements > 1.0 {
@@ -829,7 +870,9 @@ pub fn update(
                     let monster_pos = monster.pos();
 
                     let path = Navigator::find_path(monster_pos, game.player.position, |pos| {
-                        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && walkable_tiles[pos].is_walkable()
+                        pos.x < GRID_WIDTH
+                            && pos.y < GRID_HEIGHT
+                            && walkable_tiles[pos].is_walkable()
                     });
 
                     if let Some(path) = path {
@@ -837,7 +880,11 @@ pub fn update(
                             let next_step = path[1];
 
                             if next_step == game.player.position {
-                                println!("Monster {} hit player for {} damage!", monster.name(), monster.kind.melee_damage);
+                                println!(
+                                    "Monster {} hit player for {} damage!",
+                                    monster.name(),
+                                    monster.kind.melee_damage
+                                );
                                 game.player.add_health(-monster.kind.melee_damage);
                                 if game.player.hp <= 0 {
                                     println!("Player has been defeated!");

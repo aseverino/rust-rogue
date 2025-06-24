@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use macroquad::prelude::*;
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
 use crate::{position::Direction, ui::point_f::PointF};
+use macroquad::prelude::*;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 #[derive(Clone, PartialEq)]
 pub enum KeyboardAction {
@@ -122,8 +122,9 @@ impl Input {
         }
         if is_mouse_button_released(MouseButton::Left) {
             if let Some(press_pos) = self.mouse_press_position.take() {
-                if (self.mouse_position.x - press_pos.x).abs() < 5.0 &&
-                (self.mouse_position.y - press_pos.y).abs() < 5.0 {
+                if (self.mouse_position.x - press_pos.x).abs() < 5.0
+                    && (self.mouse_position.y - press_pos.y).abs() < 5.0
+                {
                     self.clicked_position = Some(press_pos);
                 } else {
                     self.clicked_position = None;
@@ -146,11 +147,13 @@ impl Input {
     }
 }
 
-static INPUT: Lazy<Mutex<Input>> = Lazy::new(|| Mutex::new(Input {
-    keyboard_action: KeyboardAction::None,
-    direction_intention: Direction::None,
-    spell_action: 0,
-    mouse_position: PointF::new(0.0, 0.0),
-    clicked_position: None,
-    mouse_press_position: None,
-}));
+static INPUT: Lazy<Mutex<Input>> = Lazy::new(|| {
+    Mutex::new(Input {
+        keyboard_action: KeyboardAction::None,
+        direction_intention: Direction::None,
+        spell_action: 0,
+        mouse_position: PointF::new(0.0, 0.0),
+        clicked_position: None,
+        mouse_press_position: None,
+    })
+});

@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use crate::creature::Creature;
 use crate::lua_interface::LuaScripted;
 use crate::maps::TILE_SIZE;
+use crate::monster_type::MonsterType;
+use crate::position::Position;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
 use rlua::{Table, UserData, UserDataMethods};
-use crate::creature::Creature;
-use crate::position::Position;
-use crate::monster_type::MonsterType;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -98,10 +98,18 @@ impl Creature for Monster {
 
         // Optional glyph drawing
         let glyph = self.kind.glyph.to_string();
-        draw_text(&glyph, offset.x + self.position.x as f32 * TILE_SIZE + 12.0, offset.y + self.position.y as f32 * TILE_SIZE + 20.0, 16.0, WHITE);
+        draw_text(
+            &glyph,
+            offset.x + self.position.x as f32 * TILE_SIZE + 12.0,
+            offset.y + self.position.y as f32 * TILE_SIZE + 20.0,
+            16.0,
+            WHITE,
+        );
     }
 
-    fn is_monster(&self) -> bool { true }
+    fn is_monster(&self) -> bool {
+        true
+    }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -110,16 +118,17 @@ impl Creature for Monster {
 
 impl UserData for Monster {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("get_kind", |_, this, ()| {
-            Ok(this.kind.clone())
-        });
+        methods.add_method("get_kind", |_, this, ()| Ok(this.kind.clone()));
 
-        methods.add_method("get_position", |lua_ctx, this, ()| -> rlua::Result<Table<'lua>> {
-            // `lua_ctx` is your Context<'lua>
-            let tbl = lua_ctx.create_table()?;
-            tbl.set("x", this.position.x)?;
-            tbl.set("y", this.position.y)?;
-            Ok(tbl)
-        });
+        methods.add_method(
+            "get_position",
+            |lua_ctx, this, ()| -> rlua::Result<Table<'lua>> {
+                // `lua_ctx` is your Context<'lua>
+                let tbl = lua_ctx.create_table()?;
+                tbl.set("x", this.position.x)?;
+                tbl.set("y", this.position.y)?;
+                Ok(tbl)
+            },
+        );
     }
 }

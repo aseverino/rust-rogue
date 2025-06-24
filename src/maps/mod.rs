@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod map_generator;
 pub mod generated_map;
 pub mod map;
+mod map_generator;
 pub mod navigator;
 pub mod overworld;
 pub mod overworld_generator;
@@ -59,10 +59,10 @@ pub enum Border {
 impl Border {
     pub fn opposite(self) -> Border {
         match self {
-            Border::Top    => Border::Bottom,
+            Border::Top => Border::Bottom,
             Border::Bottom => Border::Top,
-            Border::Left   => Border::Right,
-            Border::Right  => Border::Left,
+            Border::Left => Border::Right,
+            Border::Right => Border::Left,
         }
     }
 }

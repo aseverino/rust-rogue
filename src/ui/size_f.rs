@@ -30,7 +30,10 @@ pub struct SizeF {
 
 impl SizeF {
     pub fn new(width: f32, height: f32) -> Self {
-        SizeF { w: width, h: height }
+        SizeF {
+            w: width,
+            h: height,
+        }
     }
 
     pub fn zero() -> Self {

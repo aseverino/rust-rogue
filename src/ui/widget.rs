@@ -23,12 +23,15 @@
 use std::any::Any;
 use std::fmt::Debug;
 
-use std::{cell::RefCell, rc::{Weak, Rc}};
-use macroquad::color::{Color, BLANK};
+use macroquad::color::{BLANK, Color};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
-use crate::ui::{manager::Ui};
+use crate::ui::manager::Ui;
 
-use crate::ui::{point_f::PointF, size_f::SizeF, quad_f::QuadF};
+use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AnchorKind {
@@ -95,18 +98,26 @@ impl WidgetBase {
 }
 
 pub trait WidgetBasicConstructor: Debug + 'static {
-    fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self where Self: Sized;
+    fn basic_constructor(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Self
+    where
+        Self: Sized;
 }
 
 pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+    fn new(ui: &mut Ui, id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>>
+    where
+        Self: Sized,
+    {
         Self::new_default(id, parent)
     }
 
-    fn new_default(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>> where Self: Sized {
+    fn new_default(id: u32, parent: Option<Weak<RefCell<dyn Widget>>>) -> Rc<RefCell<Self>>
+    where
+        Self: Sized,
+    {
         let w = Rc::new(RefCell::new(Self::basic_constructor(id, parent.clone())));
 
         // Cast to trait object for correct type
@@ -132,7 +143,7 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
     fn get_base(&self) -> &WidgetBase;
     fn get_base_mut(&mut self) -> &mut WidgetBase;
 
-    fn set_parent(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>)  {
+    fn set_parent(&mut self, parent: Option<Weak<RefCell<dyn Widget>>>) {
         self.get_base_mut().parent = parent.clone();
     }
 
@@ -190,8 +201,7 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
     fn contains_point(&mut self, ui: &Ui, point: PointF) -> bool {
         let q = self.get_drawing_coords(ui);
-        point.x >= q.x && point.x <= q.x + q.w &&
-        point.y >= q.y && point.y <= q.y + q.h
+        point.x >= q.x && point.x <= q.x + q.w && point.y >= q.y && point.y <= q.y + q.h
     }
 
     fn get_margin_top(&self) -> f32 {
@@ -255,8 +265,7 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         // Default implementation does nothing
     }
 
-    fn set_on_click(&mut self, _f: Box<dyn FnMut(&mut Ui, PointF)>)
-    {
+    fn set_on_click(&mut self, _f: Box<dyn FnMut(&mut Ui, PointF)>) {
         // Default implementation does nothing
     }
 
@@ -320,24 +329,12 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
             }
         }
     }
-    
+
     fn fill_parent(&mut self) {
-        self.add_anchor_to_parent(
-            AnchorKind::Left,
-            AnchorKind::Left
-        );
-        self.add_anchor_to_parent(
-            AnchorKind::Right,
-            AnchorKind::Right
-        );
-        self.add_anchor_to_parent(
-            AnchorKind::Top,
-            AnchorKind::Top
-        );
-        self.add_anchor_to_parent(
-            AnchorKind::Bottom,
-            AnchorKind::Bottom
-        );
+        self.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        self.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        self.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+        self.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
     }
 
     fn set_size(&mut self, sz: SizeF) {
@@ -365,23 +362,23 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
     fn recompute_quad(&self, ui: &Ui) -> QuadF {
         let mut quad = QuadF::zero();
-        let size   = self.get_base().size;
+        let size = self.get_base().size;
         let margin = self.get_base().margin;
-        let pos    = self.get_base().position;
+        let pos = self.get_base().position;
 
-        let mut left   = None;
-        let mut right  = None;
-        let mut top    = None;
+        let mut left = None;
+        let mut right = None;
+        let mut top = None;
         let mut bottom = None;
         let mut did_horiz_center = false;
-        let mut did_vert_center  = false;
+        let mut did_vert_center = false;
 
         for anchor in &self.get_base().anchors {
             let w = &ui.widgets[anchor.anchor_widget_id as usize];
             let anchor_pos = match anchor.anchor_to {
-                AnchorKind::Left   => w.borrow_mut().get_left(ui),
-                AnchorKind::Right  => w.borrow_mut().get_right(ui),
-                AnchorKind::Top    => w.borrow_mut().get_top(ui),
+                AnchorKind::Left => w.borrow_mut().get_left(ui),
+                AnchorKind::Right => w.borrow_mut().get_right(ui),
+                AnchorKind::Top => w.borrow_mut().get_top(ui),
                 AnchorKind::Bottom => w.borrow_mut().get_bottom(ui),
                 AnchorKind::HorizontalCenter => {
                     let l = w.borrow_mut().get_left(ui);
@@ -396,9 +393,9 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
             };
 
             match anchor.anchor_this {
-                AnchorKind::Left   => left   = Some(anchor_pos),
-                AnchorKind::Right  => right  = Some(anchor_pos),
-                AnchorKind::Top    => top    = Some(anchor_pos),
+                AnchorKind::Left => left = Some(anchor_pos),
+                AnchorKind::Right => right = Some(anchor_pos),
+                AnchorKind::Top => top = Some(anchor_pos),
                 AnchorKind::Bottom => bottom = Some(anchor_pos),
 
                 AnchorKind::HorizontalCenter => {
@@ -456,7 +453,6 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
 
         quad
     }
-
 }
 
 #[macro_export]

@@ -27,7 +27,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::maps::{generated_map::GeneratedMap, map::Map};
+use crate::maps::{
+    generated_map::GeneratedMap,
+    map::{Map, MapRef},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum VisitedState {
@@ -50,12 +53,12 @@ impl OverworldPos {
 }
 
 pub struct Overworld {
-    pub maps: Rc<RefCell<Vec<[[Option<Rc<RefCell<Map>>>; 5]; 5]>>>,
+    pub maps: Rc<RefCell<Vec<[[Option<MapRef>; 5]; 5]>>>,
 }
 
 impl Overworld {
     pub fn new() -> Self {
-        let maps: Rc<RefCell<Vec<[[Option<Rc<RefCell<Map>>>; 5]; 5]>>> =
+        let maps: Rc<RefCell<Vec<[[Option<MapRef>; 5]; 5]>>> =
             Rc::new(RefCell::new(vec![std::array::from_fn(|_| {
                 std::array::from_fn(|_| None)
             })]));
@@ -72,7 +75,7 @@ impl Overworld {
                         continue; // Skip the current position
                     }
                     if let Some(map) = map_opt {
-                        if map.borrow().generated_map.visited_state != VisitedState::Visited {
+                        if map.0.borrow().generated_map.visited_state != VisitedState::Visited {
                             result.push((row_idx, col_idx));
                         }
                     }
@@ -98,11 +101,7 @@ impl Overworld {
         }
     }
 
-    pub fn add_map(
-        &self,
-        opos: OverworldPos,
-        generated_map: Arc<Mutex<GeneratedMap>>,
-    ) -> Rc<RefCell<Map>> {
+    pub fn add_map(&self, opos: OverworldPos, generated_map: Arc<Mutex<GeneratedMap>>) -> MapRef {
         let mut maps_guard = self.maps.borrow_mut();
         if opos.floor >= maps_guard.len() {
             maps_guard.resize_with(opos.floor + 1, || {
@@ -111,22 +110,21 @@ impl Overworld {
         }
 
         if maps_guard[opos.floor][opos.x][opos.y].is_none() {
-            let map = Rc::new(RefCell::new(Map::new(
+            // This is getting ridiculous
+            let map = MapRef(Rc::new(RefCell::new(Map::new(
                 generated_map.lock().unwrap().clone(),
-            )));
-            maps_guard[opos.floor][opos.x][opos.y] = Some(Rc::clone(&map));
+            ))));
+            maps_guard[opos.floor][opos.x][opos.y] = Some(map.clone());
             map
         } else {
             panic!("Map at position {:?} already exists!", opos);
         }
     }
 
-    pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<Rc<RefCell<Map>>> {
-        let maps_guard = self.maps.borrow_mut();
+    pub fn get_map_ptr(&self, opos: OverworldPos) -> Option<MapRef> {
+        let maps_guard = self.maps.borrow();
         if opos.floor < maps_guard.len() && opos.x < 5 && opos.y < 5 {
-            maps_guard[opos.floor][opos.x][opos.y]
-                .as_ref()
-                .map(Rc::clone)
+            maps_guard[opos.floor][opos.x][opos.y].as_ref().cloned()
         } else {
             None
         }

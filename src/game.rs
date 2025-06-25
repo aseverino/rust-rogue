@@ -31,7 +31,7 @@ use crate::maps::overworld::{Overworld, OverworldPos, VisitedState};
 use crate::maps::overworld_generator::OverworldGenerator;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{TILE_SIZE, map::Map};
-use crate::monster::Monster;
+use crate::monster::{Monster, MonsterRef};
 use crate::player::Player;
 use crate::position::{Direction, Position};
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
@@ -39,6 +39,7 @@ use crate::ui::manager::{Ui, UiEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
 use macroquad::prelude::*;
+use mlua::Table;
 
 use crate::{combat, monster_type, spell_type};
 use macroquad::time::get_time;
@@ -119,7 +120,7 @@ fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset:
     ui.draw();
 }
 
-fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> Rc<RefCell<Map>> {
+fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> MapRef {
     let current_map_rc = game.overworld.get_map_ptr(overworld_pos);
 
     if current_map_rc.is_none() {
@@ -184,7 +185,7 @@ fn check_for_map_update(
         let new_map_rc = get_map_ptr(game, new_opos);
 
         if let MapTravelEvent::Peek(_) = map_update {
-            let mut map = new_map_rc.borrow_mut();
+            let mut map = new_map_rc.0.borrow_mut();
             if map.generated_map.visited_state == VisitedState::Visited {
                 if *map_update == MapTravelEvent::Peek(MapTravelKind::ClimbDown) {
                     *map_update = MapTravelEvent::Visit(MapTravelKind::ClimbDown);
@@ -206,13 +207,20 @@ fn check_for_map_update(
                 if map.generated_map.visited_state == VisitedState::Unvisited {
                     update_map_visited_state(game, &mut map, new_opos, VisitedState::Peeked);
                     *current_downstair_teleport_pos = {
-                        let current_map = current_map_rc.borrow();
+                        let current_map = current_map_rc.0.borrow();
                         current_map.generated_map.downstair_teleport.clone()
                     };
                     println!("peeking for the first time");
                     //let _ = game.lua_interface.borrow_mut().on_map_peeked(&mut map);
+                    drop(map);
+                    let map = peek_map_rc.as_ref().unwrap().clone();
+                    let peek_call_result = game.lua_interface.borrow_mut().on_map_peeked(&map);
+
+                    if let Err(e) = peek_call_result {
+                        eprintln!("Error calling Lua on_map_peeked: {}", e);
+                    }
                 }
-                drop(map);
+
                 print_overworld(game);
                 return;
             }
@@ -224,7 +232,7 @@ fn check_for_map_update(
                 let new_map_rc = get_map_ptr(game, new_opos);
 
                 {
-                    let mut map = current_map_rc.borrow_mut();
+                    let mut map = current_map_rc.0.borrow_mut();
                     current_tier = map.generated_map.tier;
                     map.remove_creature(&mut game.player);
                     map.remove_downstairs_teleport();
@@ -232,7 +240,7 @@ fn check_for_map_update(
 
                 *current_map_rc = new_map_rc;
 
-                let mut map = current_map_rc.borrow_mut();
+                let mut map = current_map_rc.0.borrow_mut();
 
                 if *map_update == MapTravelEvent::Visit(MapTravelKind::BorderCross) {
                     if player_pos.x == 0 {
@@ -323,7 +331,7 @@ pub fn print_overworld(game: &mut GameState) {
             for x in 0..5 {
                 let pos = OverworldPos { floor: 0, x, y };
                 if let Some(map_rc) = overworld.get_map_ptr(pos) {
-                    let map = map_rc.borrow();
+                    let map = map_rc.0.borrow();
                     grid[y][x] = match map.generated_map.visited_state {
                         VisitedState::Unvisited => 'n',
                         VisitedState::Visited => 'v',
@@ -407,11 +415,10 @@ pub async fn run() {
     let mut current_map_rc = get_map_ptr(&mut game, overworld_pos);
     let mut peek_map_rc: Option<MapRef> = None;
 
-    let shared_map_ptr: Rc<RefCell<Rc<RefCell<Map>>>> =
-        Rc::new(RefCell::new(current_map_rc.clone()));
+    let shared_map_ptr: Rc<RefCell<MapRef>> = Rc::new(RefCell::new(current_map_rc.clone()));
 
     {
-        let mut map = current_map_rc.borrow_mut();
+        let mut map = current_map_rc.0.borrow_mut();
         map.add_player_first_map(&mut game.player);
         update_map_visited_state(&mut game, &mut map, overworld_pos, VisitedState::Visited);
     }
@@ -424,37 +431,117 @@ pub async fn run() {
     let mut last_map_travel_kind = MapTravelKind::BorderCross;
     let mut ui = Ui::new();
 
-    let shared_map_ptr_clone = shared_map_ptr.clone();
-    // game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
-    //     let binding = monster_types.lock().unwrap();
-    //     let kind = binding
-    //         .iter()
-    //         .find(|mt| mt.id == kind_id)
-    //         .expect("Monster type not found");
+    {
+        //let shared_map_ptr_clone = shared_map_ptr.clone();
+        let mut lua_interface = game.lua_interface.borrow_mut();
+        lua_interface.map_add_monster_callback = Some(Rc::new(
+            move |map_rc, kind_id, pos: Position| -> MonsterRef {
+                let binding = monster_types.lock().unwrap();
+                let kind = binding
+                    .iter()
+                    .find(|mt| mt.id == kind_id)
+                    .expect("Monster type not found");
 
-    //     // Create a new monster and wrap it in Rc
-    //     let monster = Monster::new(pos.clone(), kind.clone());
+                // Create a new monster and wrap it in Rc
+                let monster = Rc::new(RefCell::new(Monster::new(pos.clone(), kind.clone())));
 
-    //     let binding = shared_map_ptr_clone.borrow_mut();
-    //     let mut map = binding.borrow_mut();
-    //     map.generated_map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
-    //     // Wrap the monster in Rc and push to creatures
-    //     map.monsters.insert(monster.id, monster);
-    // }));
+                let mut map = map_rc.0.borrow_mut();
+                map.generated_map.tiles[pos].creature = monster.borrow().id; // Set the creature ID in the tile
+                // Wrap the monster in Rc and push to creatures
+                map.monsters.insert(monster.borrow().id, monster.clone());
+                monster
+            },
+        ));
+
+        // lua_interface.add_monster_callback = Some(Rc::new(move |kind_id, pos| -> MonsterRef {
+        //     let binding = monster_types.lock().unwrap();
+        //     let kind = binding
+        //         .iter()
+        //         .find(|mt| mt.id == kind_id)
+        //         .expect("Monster type not found");
+
+        //     // Create a new monster and wrap it in Rc
+        //     let monster = Rc::new(RefCell::new(Monster::new(pos.clone(), kind.clone())));
+
+        //     let binding = shared_map_ptr_clone.borrow_mut();
+        //     let mut map = binding.borrow_mut();
+        //     map.generated_map.tiles[pos].creature = monster.borrow().id; // Set the creature ID in the tile
+        //     // Wrap the monster in Rc and push to creatures
+        //     map.monsters.insert(monster.borrow().id, monster.clone());
+        //     monster
+        // }));
+
+        // map:add_monster
+        // {
+        //     let lua = &lua_interface.lua;
+        //     let globals = lua.globals();
+
+        //     // Define the add_monster function
+        //     let monster_types = monster_types.clone();
+        //     let add_monster = lua.create_function(
+        //         move |_, (map, kind_id, pos): (mlua::AnyUserData, u32, Table)| {
+        //             let mut map = map.borrow_mut::<Map>()?;
+        //             let p = Position {
+        //                 x: pos.get("x")?,
+        //                 y: pos.get("y")?,
+        //             };
+
+        //             let kind = {
+        //                 let guard = monster_types.lock().unwrap();
+        //                 guard
+        //                     .iter()
+        //                     .find(|mt| mt.id == kind_id)
+        //                     .expect("Monster type not found")
+        //                     .clone()
+        //             };
+
+        //             let monster = Rc::new(RefCell::new(Monster::new(p, kind)));
+        //             let id = monster.borrow().id;
+        //             map.generated_map.tiles[p].creature = id;
+        //             map.monsters.insert(id, monster);
+        //             Ok(())
+        //         },
+        //     );
+
+        //     _ = globals.set("add_monster", add_monster.unwrap());
+        // }
+
+        let shared_map_ptr_clone = shared_map_ptr.clone();
+        lua_interface.get_monster_by_id_callback = Some(Rc::new(move |id| -> Option<MonsterRef> {
+            let binding = shared_map_ptr_clone.borrow();
+            let map = binding.0.borrow();
+            if let Some(monster) = map.monsters.get(&id) {
+                Some(monster.clone())
+            } else {
+                None
+            }
+        }));
+        let shared_map_ptr_clone = shared_map_ptr.clone();
+        lua_interface.get_current_map_callback = Some(Rc::new(move || -> MapRef {
+            let binding = shared_map_ptr_clone.borrow();
+            binding.clone()
+        }));
+    }
 
     let _ = LuaInterface::register_api(&game.lua_interface);
 
     loop {
         {
-            let mut map = current_map_rc.borrow_mut();
-            for monster in map.monsters.values_mut() {
-                if !monster.initialized {
-                    monster.initialized = true;
-                    if monster.kind.is_scripted() {
-                        // let r = game.lua_interface.borrow_mut().on_spawn(monster);
-                        // if let Err(e) = r {
-                        //     eprintln!("Error calling Lua on_spawn: {}", e);
-                        // }
+            let mut map = current_map_rc.0.borrow_mut();
+            for monster_ref in map.monsters.values_mut() {
+                let should_add = {
+                    let mut monster = monster_ref.borrow_mut();
+                    if !monster.initialized {
+                        monster.initialized = true;
+                        monster.kind.is_scripted()
+                    } else {
+                        false
+                    }
+                };
+                if should_add {
+                    let r = game.lua_interface.borrow_mut().on_spawn(monster_ref);
+                    if let Err(e) = r {
+                        eprintln!("Error calling Lua on_spawn: {}", e);
                     }
                 }
             }
@@ -487,7 +574,7 @@ pub async fn run() {
                     if let Some(item) = item {
                         game.player.add_item(item.clone());
                         {
-                            let mut map = current_map_rc.borrow_mut();
+                            let mut map = current_map_rc.0.borrow_mut();
                             map.remove_chest(game.player.position);
                         }
                     } else {
@@ -511,7 +598,7 @@ pub async fn run() {
             &mut overworld_pos,
         );
 
-        if !Rc::ptr_eq(&current_map_rc, &shared_map_ptr.borrow()) {
+        if !Rc::ptr_eq(&current_map_rc.0, &shared_map_ptr.borrow().0) {
             // Update the shared map pointer if it has changed
             *shared_map_ptr.borrow_mut() = current_map_rc.clone();
         }
@@ -519,7 +606,7 @@ pub async fn run() {
         let now = get_time();
         if now - last_move_time < move_interval {
             {
-                let mut map = current_map_rc.borrow_mut();
+                let mut map = current_map_rc.0.borrow_mut();
                 draw(&mut game, &mut ui, &mut map, game_interface_offset);
             }
             next_frame().await;
@@ -543,7 +630,7 @@ pub async fn run() {
             } else if input.keyboard_action == KeyboardAction::Cancel {
                 peek_map_rc = None; // Reset peek map
             } else {
-                let mut map = peek_map_rc.as_mut().unwrap().borrow_mut();
+                let mut map = peek_map_rc.as_mut().unwrap().0.borrow_mut();
                 map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
                 draw(&mut game, &mut ui, &mut map, game_interface_offset);
             }
@@ -565,7 +652,7 @@ pub async fn run() {
         };
 
         {
-            let mut map = current_map_rc.borrow_mut();
+            let mut map = current_map_rc.0.borrow_mut();
             map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
             map.hovered_tile = Some(current_tile);
         }
@@ -600,7 +687,7 @@ pub async fn run() {
 
                 if player_event == PlayerEvent::OpenChest {
                     if let Some(items_vec) =
-                        current_map_rc.borrow_mut().get_chest_items(&player_pos)
+                        current_map_rc.0.borrow_mut().get_chest_items(&player_pos)
                     {
                         let actual_items: Vec<(u32, String)> = items_vec
                             .iter()
@@ -623,7 +710,7 @@ pub async fn run() {
         }
 
         {
-            let mut map = current_map_rc.borrow_mut();
+            let mut map = current_map_rc.0.borrow_mut();
             if game.last_player_event == PlayerEvent::AutoMove {
                 last_move_time = now; // Update last move time for auto step
             } else {
@@ -700,7 +787,7 @@ pub fn update(
         } else {
             let path: Option<Vec<Position>> =
                 Navigator::find_path(player_pos, player_goal, |pos| {
-                    map_ref.borrow().is_tile_walkable(pos)
+                    map_ref.0.borrow().is_tile_walkable(pos)
                 });
 
             if let Some(path) = path {
@@ -757,7 +844,7 @@ pub fn update(
         };
 
         {
-            let map = map_ref.borrow();
+            let map = map_ref.0.borrow();
             if map.is_tile_enemy_occupied(pos) {
                 game.last_player_event = PlayerEvent::MeleeAttack;
                 update_turn = true; // Update monsters if player attacks
@@ -790,7 +877,7 @@ pub fn update(
     }
 
     if let Some(pos) = new_player_pos {
-        let mut map = map_ref.borrow_mut();
+        let mut map = map_ref.0.borrow_mut();
         map.generated_map.tiles[player_pos].creature = NO_CREATURE;
         map.generated_map.tiles[pos].creature = PLAYER_CREATURE_ID;
 
@@ -854,15 +941,26 @@ pub fn update(
             //     game.player.accumulated_speed += (player_movements * 100.0) as u32;
             // }
 
-            let mut map = map_ref.borrow_mut();
+            let mut map = map_ref.0.borrow_mut();
             let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
             let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
 
-            for (id, monster) in &mut map.monsters {
+            for (id, monster_ref) in &mut map.monsters {
+                let mut monster = monster_ref.borrow_mut();
                 if monster.hp <= 0 {
                     continue; // Skip dead monsters
                 }
 
+                if monster.kind.is_scripted() {
+                    drop(monster); // Drop the immutable borrow before mutable borrow
+                    let mut clone = monster_ref.clone();
+                    let r = game.lua_interface.borrow_mut().on_update(&mut clone);
+                    if let Err(e) = r {
+                        eprintln!("Error calling Lua on_update: {}", e);
+                    }
+                }
+
+                let mut monster = monster_ref.borrow_mut();
                 let mut monster_speed = monster.kind.speed + monster.accumulated_speed;
 
                 while monster_speed >= 100 {

@@ -23,10 +23,31 @@
 SPAWNERS = {}
 
 function on_map_peeked(map)
-    -- print('on_map_peeked')
-    SPAWNERS = {}
-    local monster_types = map:get_monster_types()
-    for _, monster_type in ipairs(monster_types) do
-        SPAWNERS[monster_type] = 0
+    -- SPAWNERS = {}
+    -- local monster_types = map:get_monster_types()
+    -- for _, monster_type in ipairs(monster_types) do
+    --     SPAWNERS[monster_type] = 0
+    -- end
+
+    local tiles = map:get_walkable_tiles()
+    -- select two random tiles, but careful not to select the same tile twice
+    local tile1 = tiles[math.random(#tiles)]
+    local tile2
+    print('oi2')
+    repeat
+        print('oi3')
+        tile2 = tiles[math.random(#tiles)]
+    until tile1 ~= tile2
+    print('oi4')
+
+    print('adding monsters')
+
+    for k, v in pairs(tile1) do
+        print('tile1: ' .. k .. ' = ' .. v)
     end
+
+    print(map)
+    print(map.add_monster)
+    map:add_monster(0, tile1)
+    map:add_monster(0, tile2)
 end

@@ -66,7 +66,7 @@ impl SpellFovCache {
 #[derive(Clone, Debug)]
 pub struct Map {
     pub generated_map: GeneratedMap,
-    pub monsters: HashMap<u32, Monster>,
+    pub monsters: HashMap<u32, MonsterRef>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
     pub spell_fov_cache: SpellFovCache,
@@ -89,15 +89,12 @@ impl Map {
         m
     }
 
-    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, Monster>
-    where
-        Monster: Clone,
-    {
+    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, MonsterRef> {
         monsters
             .into_iter()
             .map(|arc_mutex| {
                 let monster = arc_mutex.read().unwrap();
-                (monster.id, monster.clone())
+                (monster.id, Rc::new(RefCell::new(monster.clone())))
             })
             .collect()
     }
@@ -280,7 +277,7 @@ impl Map {
         }
 
         for (_, monster) in &self.monsters {
-            monster.draw(offset);
+            monster.borrow().draw(offset);
         }
 
         if self.generated_map.visited_state == VisitedState::Visited {
@@ -318,12 +315,47 @@ impl Map {
     }
 }
 
-impl UserData for Map {
+#[derive(Clone)]
+pub struct MapRef(pub Rc<RefCell<Map>>);
+
+impl UserData for MapRef {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_monster_types", |_, this, ()| {
-            Ok(this.generated_map.monster_types.clone())
+            Ok(this.0.borrow().generated_map.monster_types.clone())
         });
+
+        methods.add_method("get_walkable_tiles", |lua, this, ()| {
+            // borrow your Rust-side LuaInterface
+            // grab your Vec<Position>
+            let walkable = &this.0.borrow().generated_map.available_walkable_cache;
+            // create a new Lua table to hold the sequence
+            let tbl = lua.create_table()?;
+            // for each Position, call add_position and insert into tbl
+            for (i, pos) in walkable.iter().enumerate() {
+                let pos_tbl = LuaInterface::add_position(lua, pos)?;
+                tbl.set(i + 1, pos_tbl)?;
+            }
+            Ok(tbl)
+        });
+
+        // methods.add_method("add_monster", |_, this, (kind_id, pos): (u32, Table)| {
+        //     let p = Position {
+        //         x: pos.get("x")?,
+        //         y: pos.get("y")?,
+        //     };
+
+        //     let kind = monster_types
+        //         .lock()
+        //         .unwrap()
+        //         .iter()
+        //         .find(|mt| mt.id == kind_id)
+        //         .expect("Monster type not found");
+
+        //     let monster = Rc::new(RefCell::new(Monster::new(p, kind.clone())));
+        //     this.generated_map.tiles[p].creature = id;
+        //     let id = monster.borrow().id;
+        //     this.monsters.insert(id, monster);
+        //     Ok(())
+        // });
     }
 }
-
-pub type MapRef = Rc<RefCell<Map>>;

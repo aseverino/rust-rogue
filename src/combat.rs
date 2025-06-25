@@ -20,12 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::cell::RefMut;
+
 use rand::{Rng, thread_rng};
 
 use crate::{
     creature::Creature,
     lua_interface::{LuaInterfaceRc, LuaScripted},
     maps::map::{Map, MapRef},
+    monster::Monster,
     player::Player,
     position::Position,
     tile::{NO_CREATURE, PLAYER_CREATURE_ID},
@@ -38,15 +41,23 @@ fn do_damage(
     damage: i32,
     lua_interface: &LuaInterfaceRc,
 ) {
-    let mut map = map_ref.borrow_mut();
+    let mut map = map_ref.0.borrow_mut();
+    let mut _maybe_monster_guard: Option<RefMut<Monster>> = None;
     let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
         player as &mut dyn Creature
     } else {
-        map.monsters
-            .get_mut(&target_id)
-            .expect("Target creature not found") as &mut dyn Creature
+        _maybe_monster_guard = Some(
+            map.monsters
+                .get_mut(&target_id)
+                .expect("Target creature not found")
+                .borrow_mut(),
+        );
+
+        let monster_ref: &mut Monster = &mut *_maybe_monster_guard.as_mut().unwrap();
+        monster_ref as &mut dyn Creature
     };
 
+    let mut dead_at_pos: Option<Position> = None;
     // Scope to auto-drop the first lock before the second
     {
         target.add_health(-damage);
@@ -55,39 +66,46 @@ fn do_damage(
         if target.get_health().0 <= 0 {
             let target_pos = target.pos();
             let target_name = target.name().to_string();
-            map.generated_map.tiles[target_pos].creature = NO_CREATURE;
+            dead_at_pos = Some(target_pos);
             println!("{} has been defeated!", target_name);
         } else {
             println!("{} has {} HP left.", target.name(), target.get_health().0);
             return;
         }
-    } // <-- drops write lock here
+    }
+    drop(_maybe_monster_guard);
+    drop(map);
+
+    {
+        let mut map = map_ref.0.borrow_mut();
+        map.generated_map.tiles[dead_at_pos.unwrap()].creature = NO_CREATURE;
+    }
 
     // Now safe to lock again
     if target_id != PLAYER_CREATURE_ID as u32 {
-        {
-            let mut monster = map
-                .monsters
+        let mut map = map_ref.0.borrow_mut();
+        let mut monster = map
+            .monsters
+            .get_mut(&target_id)
+            .unwrap_or_else(|| panic!("Error on do_damage: no monster."))
+            .clone();
+        drop(map);
+        let is_scripted = { monster.borrow().kind.is_scripted() };
+        if is_scripted {
+            let r = lua_interface.borrow_mut().on_death(&mut monster);
+            // Re-lock the map to remove the monster
+            let mut map = map_ref.0.borrow_mut();
+            // update the monster in the map from Lua code
+            *map.monsters
                 .get_mut(&target_id)
-                .unwrap_or_else(|| panic!("Error on do_damage: no monster."))
-                .clone();
-            drop(map);
-            if monster.kind.is_scripted() {
-                // let r = lua_interface.borrow_mut().on_death(&mut monster);
-                // // Re-lock the map to remove the monster
-                // let mut map = map_ref.borrow_mut();
-                // // update the monster in the map from Lua code
-                // *map.monsters
-                //     .get_mut(&target_id)
-                //     .expect("Target creature not found") = monster;
-                // if let Err(e) = r {
-                //     eprintln!("Error calling Lua on_death: {}", e);
-                // }
+                .expect("Target creature not found") = monster;
+            if let Err(e) = r {
+                eprintln!("Error calling Lua on_death: {}", e);
             }
         }
 
         {
-            let mut map = map_ref.borrow_mut();
+            let mut map = map_ref.0.borrow_mut();
             map.monsters.remove(&target_id);
         }
     }
@@ -108,7 +126,7 @@ pub(crate) fn do_melee_combat(
             let mut damage: u32 = 0;
 
             let (target_id, mut monster) = {
-                let map = map_ref.borrow_mut();
+                let map = map_ref.0.borrow_mut();
                 let target_id = map.generated_map.tiles[target_pos].creature;
                 (
                     target_id,
@@ -128,6 +146,7 @@ pub(crate) fn do_melee_combat(
 
                 // update the monster in the map from Lua code
                 *map_ref
+                    .0
                     .borrow_mut()
                     .monsters
                     .get_mut(&target_id)
@@ -159,7 +178,7 @@ pub(crate) fn do_melee_combat(
         }
     };
 
-    let creature_id = map_ref.borrow().generated_map.tiles[target_pos].creature;
+    let creature_id = map_ref.0.borrow().generated_map.tiles[target_pos].creature;
     if creature_id >= 0 {
         do_damage(
             player,
@@ -179,7 +198,7 @@ pub(crate) fn do_spell_combat(
     spell_index: usize,
     lua_interface: &LuaInterfaceRc,
 ) {
-    let map = map_ref.borrow_mut();
+    let map = map_ref.0.borrow_mut();
     if !map.is_tile_walkable(target_pos) {
         println!("Target position is not walkable for spell casting.");
         return;

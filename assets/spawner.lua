@@ -21,15 +21,24 @@
 -- SOFTWARE.
 
 function on_spawn(monster)
-    print("on_spawn")
+    if not SPAWNERS then
+        return false
+    end
+
+    for k, spawner in pairs(SPAWNERS) do
+        if spawner == 0 then
+            SPAWNERS[k] = monster:get_id()
+            return true
+        end
+    end
+
+    return false
 end
 
 function on_update(monster)
-    print("on_update")
-end
+    if not SPAWNERS then
+        return false
+    end
 
-function on_death(monster)
-    print("on_death")
-    -- add_monster(monster:get_kind():get_id(), monster:get_position())
-    -- return true
+    return false
 end

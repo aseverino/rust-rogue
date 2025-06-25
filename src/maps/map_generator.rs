@@ -591,7 +591,7 @@ impl MapGenerator {
         monster_types_by_tier: &Vec<Vec<u32>>,
     ) {
         let monster_types_guard = monster_types.lock().unwrap();
-        map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
+        //map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();
         let mut positions: Vec<Position> = map

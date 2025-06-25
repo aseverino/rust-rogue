@@ -210,7 +210,7 @@ fn check_for_map_update(
                         current_map.generated_map.downstair_teleport.clone()
                     };
                     println!("peeking for the first time");
-                    let _ = game.lua_interface.borrow_mut().on_map_peeked(&mut map);
+                    //let _ = game.lua_interface.borrow_mut().on_map_peeked(&mut map);
                 }
                 drop(map);
                 print_overworld(game);
@@ -425,22 +425,22 @@ pub async fn run() {
     let mut ui = Ui::new();
 
     let shared_map_ptr_clone = shared_map_ptr.clone();
-    game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
-        let binding = monster_types.lock().unwrap();
-        let kind = binding
-            .iter()
-            .find(|mt| mt.id == kind_id)
-            .expect("Monster type not found");
+    // game.lua_interface.borrow_mut().add_monster_callback = Some(Rc::new(move |kind_id, pos| {
+    //     let binding = monster_types.lock().unwrap();
+    //     let kind = binding
+    //         .iter()
+    //         .find(|mt| mt.id == kind_id)
+    //         .expect("Monster type not found");
 
-        // Create a new monster and wrap it in Rc
-        let monster = Monster::new(pos.clone(), kind.clone());
+    //     // Create a new monster and wrap it in Rc
+    //     let monster = Monster::new(pos.clone(), kind.clone());
 
-        let binding = shared_map_ptr_clone.borrow_mut();
-        let mut map = binding.borrow_mut();
-        map.generated_map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
-        // Wrap the monster in Rc and push to creatures
-        map.monsters.insert(monster.id, monster);
-    }));
+    //     let binding = shared_map_ptr_clone.borrow_mut();
+    //     let mut map = binding.borrow_mut();
+    //     map.generated_map.tiles[pos].creature = monster.id; // Set the creature ID in the tile
+    //     // Wrap the monster in Rc and push to creatures
+    //     map.monsters.insert(monster.id, monster);
+    // }));
 
     let _ = LuaInterface::register_api(&game.lua_interface);
 
@@ -451,10 +451,10 @@ pub async fn run() {
                 if !monster.initialized {
                     monster.initialized = true;
                     if monster.kind.is_scripted() {
-                        let r = game.lua_interface.borrow_mut().on_spawn(monster);
-                        if let Err(e) = r {
-                            eprintln!("Error calling Lua on_spawn: {}", e);
-                        }
+                        // let r = game.lua_interface.borrow_mut().on_spawn(monster);
+                        // if let Err(e) = r {
+                        //     eprintln!("Error calling Lua on_spawn: {}", e);
+                        // }
                     }
                 }
             }

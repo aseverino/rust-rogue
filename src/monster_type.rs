@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use macroquad::prelude::*;
-use rlua::{UserData, UserDataMethods};
+use mlua::{UserData, UserDataMethods};
 use serde::Deserialize;
 use serde_json::from_str;
 use std::sync::{Arc, Mutex};

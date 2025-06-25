@@ -24,13 +24,18 @@
 // [dependencies]
 // rlua = "0.20.1"
 
-use rlua::{Context, Error, Function, Lua, RegistryKey, Result, Table, Value};
+use mlua::{
+    AnyUserData, AnyUserDataExt, Error, FromLuaMulti, Function, IntoLuaMulti, Lua, MultiValue,
+    RegistryKey, Result, Table, UserDataMetatable, Value,
+};
+
 use std::fs;
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::maps::map::Map;
-use crate::{items::holdable::Weapon, monster::Monster, player::Player, position::Position};
+use crate::maps::map::{Map, MapRef};
+use crate::monster::MonsterRef;
+use crate::{items::holdable::Weapon, player::Player, position::Position};
 
 pub trait LuaScripted {
     fn set_script_id(&mut self, id: u32);
@@ -51,9 +56,12 @@ struct ScriptedFunctions {
 
 /// Manages one Lua VM and a cache of loaded scripts → functions.
 pub struct LuaInterface {
-    lua: Lua,
+    pub lua: Lua,
     script_cache: HashMap<u32, ScriptedFunctions>,
-    pub add_monster_callback: Option<Rc<dyn Fn(u32, Position)>>,
+    //pub add_monster_callback: Option<Rc<dyn Fn(u32, Position) -> MonsterRef>>,
+    pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRef> + 'static>>,
+    pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRef>>,
+    pub map_add_monster_callback: Option<Rc<dyn Fn(MapRef, u32, Position) -> MonsterRef>>,
     pub script_id_counter: u32,
 }
 
@@ -65,7 +73,10 @@ impl LuaInterface {
         let i = Rc::new(RefCell::new(Self {
             lua: Lua::new(),
             script_cache: HashMap::new(),
-            add_monster_callback: None,
+            //add_monster_callback: None,
+            get_monster_by_id_callback: None,
+            get_current_map_callback: None,
+            map_add_monster_callback: None,
             script_id_counter: 1,
         }));
 
@@ -76,28 +87,61 @@ impl LuaInterface {
         i
     }
 
-    pub fn register_api(lua_if: &LuaInterfaceRc) -> Result<()> {
-        // 1) Clone the Rc so cb_opt can be cheaply cloned into the closure
-        let cb_opt = lua_if.borrow().add_monster_callback.clone();
+    pub fn register_api(lua_if_rc: &LuaInterfaceRc) -> Result<()> {
+        let lua_if = lua_if_rc.borrow();
 
-        lua_if.add_lua_fn("add_monster", move |id, pos: Table<'_>| {
-            let x: usize = pos.get("x")?;
-            let y: usize = pos.get("y")?;
-            let p = Position { x, y };
+        // lua_if.add_lua_fn("add_monster", move |lua, (id, pos): (u32, Table)| {
+        //     /* … */
+        //     Ok(())
+        // })?;
 
-            if let Some(cb) = &cb_opt {
-                cb(id, p);
-            } else {
-                eprintln!("No add_monster callback set!");
+        // lua_if.add_lua_fn("add_monster", {
+        //     let cb_opt = lua_if.add_monster_callback.clone();
+        //     move |_lua, (id, pos): (u32, Table)| {
+        //         let p = Position {
+        //             x: pos.get("x")?,
+        //             y: pos.get("y")?,
+        //         };
+        //         if let Some(cb) = &cb_opt {
+        //             Ok(cb(id, p)) // returns u32
+        //         } else {
+        //             Err(Error::external("…"))
+        //         }
+        //     }
+        // })?;
+
+        lua_if.add_lua_fn("get_monster_by_id", {
+            let cb_opt = lua_if.get_monster_by_id_callback.clone();
+            move |lua, id: u32| {
+                if let Some(cb) = &cb_opt {
+                    if let Some(monster_rc) = cb(id) {
+                        lua.create_userdata(monster_rc.clone()).map(Value::UserData)
+                    } else {
+                        Err(Error::external(format!("No monster with ID {}", id)))
+                    }
+                } else {
+                    Err(Error::external("No get_monster_by_id callback set!"))
+                }
             }
-            Ok(())
+        })?;
+
+        lua_if.add_lua_fn("get_current_map", {
+            let cb_opt = lua_if.get_current_map_callback.clone();
+            move |lua, ()| {
+                if let Some(cb) = &cb_opt {
+                    let map_rc = cb();
+                    lua.create_userdata(map_rc.clone())
+                } else {
+                    Err(Error::external("No get_monster_by_id callback set!"))
+                }
+            }
         })?;
 
         Ok(())
     }
 
-    pub fn add_position<'lua>(&'lua self, pos: &Position) -> rlua::Result<Table<'lua>> {
-        let lua_pos = self.lua.create_table()?;
+    pub fn add_position<'lua>(lua: &'lua Lua, pos: &Position) -> mlua::Result<Table<'lua>> {
+        let lua_pos = lua.create_table()?;
         lua_pos.set("x", pos.x)?;
         lua_pos.set("y", pos.y)?;
         Ok(lua_pos)
@@ -226,17 +270,15 @@ impl LuaInterface {
         &self,
         weapon: &mut Weapon,
         player: &mut Player,
-        monster: &mut Monster,
+        monster: &mut MonsterRef,
     ) -> Result<f32> {
-        let funcs = self
-            .script_cache
-            .get(&weapon.get_script_id())
-            .ok_or_else(|| {
-                Error::external(format!(
-                    "No Lua script loaded for weapon `{}`",
-                    weapon.get_script_id()
-                ))
-            })?;
+        let binding = &self.script_cache;
+        let funcs = binding.get(&weapon.get_script_id()).ok_or_else(|| {
+            Error::external(format!(
+                "No Lua script loaded for weapon `{}`",
+                weapon.get_script_id()
+            ))
+        })?;
 
         // Retrieve the Function from the registry
         let func: Function = self
@@ -245,24 +287,24 @@ impl LuaInterface {
 
         let lua_weapon = Rc::new(RefCell::new(weapon.clone()));
         let lua_player = Rc::new(RefCell::new(player.clone()));
-        let lua_monster = Rc::new(RefCell::new(monster.clone()));
 
         let lua_weapon_ud = self.lua.create_userdata(lua_weapon.clone())?;
         let lua_player_ud = self.lua.create_userdata(lua_player.clone())?;
-        let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
+        let lua_monster_ud = self.lua.create_userdata(monster.clone())?;
 
         // Invoke and return result
         let result = func.call((lua_weapon_ud, lua_player_ud, lua_monster_ud));
 
         *weapon = lua_weapon.borrow().clone();
         *player = lua_player.borrow().clone();
-        *monster = lua_monster.borrow().clone();
 
         result
     }
 
-    pub fn on_spawn(&self, monster: &mut Monster) -> Result<bool> {
-        let funcs = self.script_cache.get(&monster.kind.id).ok_or_else(|| {
+    pub fn on_spawn(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
+        let monster = monster_ref.borrow_mut();
+        let binding = &self.script_cache;
+        let funcs = binding.get(&monster.kind.id).ok_or_else(|| {
             Error::external(format!(
                 "No Lua script loaded for monster type `{}`",
                 monster.kind.get_script_id()
@@ -273,13 +315,10 @@ impl LuaInterface {
         if let Some(func_key) = &funcs.on_spawn {
             let func: Function = self.lua.registry_value(func_key)?;
 
-            let lua_monster = Rc::new(RefCell::new(monster.clone()));
-            let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
+            let lua_monster_ud = self.lua.create_userdata(monster_ref.clone())?;
 
             // Invoke and return result
             let result = func.call(lua_monster_ud);
-
-            *monster = lua_monster.borrow().clone();
 
             result
         } else {
@@ -287,8 +326,35 @@ impl LuaInterface {
         }
     }
 
-    pub fn on_death(&self, monster: &mut Monster) -> Result<bool> {
-        let funcs = self.script_cache.get(&monster.kind.id).ok_or_else(|| {
+    pub fn on_update(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
+        let monster = monster_ref.borrow_mut();
+        let binding = &self.script_cache;
+        let funcs = binding.get(&monster.kind.id).ok_or_else(|| {
+            Error::external(format!(
+                "No Lua script loaded for monster type `{}`",
+                monster.kind.get_script_id()
+            ))
+        })?;
+
+        // Retrieve the Function from the registry
+        if let Some(func_key) = &funcs.on_update {
+            let func: Function = self.lua.registry_value(func_key)?;
+
+            let lua_monster_ud = self.lua.create_userdata(monster_ref.clone())?;
+
+            // Invoke and return result
+            let result = func.call(lua_monster_ud);
+
+            result
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn on_death(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
+        let monster = monster_ref.borrow_mut();
+        let binding = &self.script_cache;
+        let funcs = binding.get(&monster.kind.id).ok_or_else(|| {
             Error::external(format!(
                 "No Lua script loaded for monster type `{}`",
                 monster.kind.get_script_id()
@@ -299,13 +365,10 @@ impl LuaInterface {
         if let Some(func_key) = &funcs.on_death {
             let func: Function = self.lua.registry_value(func_key)?;
 
-            let lua_monster = Rc::new(RefCell::new(monster.clone()));
-            let lua_monster_ud = self.lua.create_userdata(lua_monster.clone())?;
+            let lua_monster_ud = self.lua.create_userdata(monster_ref.clone())?;
 
             // Invoke and return result
             let result = func.call(lua_monster_ud);
-
-            *monster = lua_monster.borrow().clone();
 
             result
         } else {
@@ -313,9 +376,43 @@ impl LuaInterface {
         }
     }
 
-    pub fn on_map_peeked(&self, map: &mut Map) -> Result<bool> {
-        let funcs = self
-            .script_cache
+    fn setup_lua_map_methods(&self, lua_map_ud: AnyUserData) -> mlua::Result<()> {
+        let map_add_monster_callback = self.map_add_monster_callback.clone();
+        let mt = lua_map_ud.get_metatable()?; // mt: UserDataMetatable
+
+        let methods_tbl: Table = mt.get("__index")?;
+        methods_tbl.set(
+            "add_monster",
+            self.lua.create_function(
+                move |lua_ctx, (lua_self, kind_id, pos): (AnyUserData, u32, Table)| {
+                    // pull the MapRef back out of the userdata:
+                    let map_ref: MapRef = lua_self.borrow::<MapRef>()?.clone();
+
+                    // build the Position
+                    let p = Position {
+                        x: pos.get("x")?,
+                        y: pos.get("y")?,
+                    };
+
+                    // call your Rust callback
+                    if let Some(cb) = &map_add_monster_callback {
+                        let monster_rc = cb(map_ref, kind_id, p);
+                        // return the new monster userdata back into Lua
+                        let ud = lua_ctx.create_userdata(monster_rc)?;
+                        Ok(ud)
+                    } else {
+                        Err(mlua::Error::external("No map_add_monster_callback set!"))
+                    }
+                },
+            )?,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn on_map_peeked(&self, map: &MapRef) -> Result<bool> {
+        let binding = &self.script_cache;
+        let funcs = binding
             .get(&0)
             .ok_or_else(|| Error::external(format!("No Lua script loaded for on_map_peeked")))?;
 
@@ -323,8 +420,14 @@ impl LuaInterface {
         if let Some(func_key) = &funcs.on_map_peeked {
             let func: Function = self.lua.registry_value(func_key)?;
 
-            let lua_map = Rc::new(RefCell::new(map.clone()));
-            let lua_map_ud = self.lua.create_userdata(lua_map.clone())?;
+            let lua_map_ud = self.lua.create_userdata(map.clone())?;
+            let setup_result = self.setup_lua_map_methods(lua_map_ud.clone());
+            if setup_result.is_err() {
+                return Err(Error::external(format!(
+                    "Failed to setup Lua map methods: {}",
+                    setup_result.unwrap_err(),
+                )));
+            }
             // Invoke and return result
             let result: bool = func.call(lua_map_ud)?;
             Ok(result)
@@ -335,35 +438,31 @@ impl LuaInterface {
 }
 
 pub trait LuaBinder {
-    /// name: the global Lua function name (“add_monster”)
-    /// f: a pure Rust closure that takes (id, pos) and returns a Lua Result
-    fn add_lua_fn<F>(&self, name: &'static str, f: F) -> Result<()>
+    fn add_lua_fn<'lua, A, R, F>(&'lua self, name: &'static str, f: F) -> Result<()>
     where
-        F: Fn(u32, Table<'_>) -> Result<()> + 'static;
+        A: FromLuaMulti<'lua>,
+        R: IntoLuaMulti<'lua>,
+        F: Fn(&'lua Lua, A) -> Result<R> + 'static;
 }
 
-impl LuaBinder for LuaInterfaceRc {
-    fn add_lua_fn<F>(&self, name: &'static str, f: F) -> Result<()>
+impl LuaBinder for LuaInterface {
+    fn add_lua_fn<'lua, A, R, F>(&'lua self, name: &'static str, f: F) -> Result<()>
     where
-        F: Fn(u32, Table<'_>) -> Result<()> + 'static,
+        A: FromLuaMulti<'lua>,
+        R: IntoLuaMulti<'lua>,
+        F: Fn(&'lua Lua, A) -> Result<R> + 'static,
     {
-        // grab the Lua handle
-        let lua = &self.borrow().lua;
-        let globals = lua.globals();
+        //let lua = &guard.lua; // &Lua also lives for 'lua
 
-        // build the Lua‐callable function
-        // we clone the Rc so that the closure can refer back to our interface
-        let this_rc = self.clone();
-        let func: Function =
-            lua.create_function(move |_ctx: Context<'_>, (id, pos): (u32, Table<'_>)| {
-                // now *inside* here you can do:
-                //    let this = this_rc.borrow();
-                // or directly call your callback.
-                f(id, pos)
-            })?;
+        // 2) Pass your f directly to mlua::create_function
+        //    mlua will do FromLuaMulti->A, call f, then IntoLuaMulti->MultiValue
+        let func: Function = self.lua.create_function(move |lua, args: A| {
+            let r: R = f(lua, args)?; // returns your R
+            Ok(r) // mlua packs R into Lua return values
+        })?;
 
-        // register in Lua globals
-        globals.set(name, func)?;
+        // 3) Register & drop the guard
+        self.lua.globals().set(name, func)?;
         Ok(())
     }
 }

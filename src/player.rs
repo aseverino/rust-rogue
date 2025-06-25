@@ -29,7 +29,7 @@ use crate::position::Position;
 use crate::spell_type;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
-use rlua::{UserData, UserDataMethods};
+use mlua::{UserData, UserDataMethods};
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::HashSet;

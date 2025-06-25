@@ -27,7 +27,7 @@ use crate::monster_type::MonsterType;
 use crate::position::Position;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
-use rlua::{Table, UserData, UserDataMethods};
+use mlua::{Table, UserData, UserDataMethods};
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
@@ -122,7 +122,7 @@ impl UserData for Monster {
 
         methods.add_method(
             "get_position",
-            |lua_ctx, this, ()| -> rlua::Result<Table<'lua>> {
+            |lua_ctx, this, ()| -> mlua::Result<Table<'lua>> {
                 // `lua_ctx` is your Context<'lua>
                 let tbl = lua_ctx.create_table()?;
                 tbl.set("x", this.position.x)?;
@@ -130,5 +130,7 @@ impl UserData for Monster {
                 Ok(tbl)
             },
         );
+
+        methods.add_method("get_id", |_, this, ()| Ok(this.id));
     }
 }

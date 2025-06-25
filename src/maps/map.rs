@@ -24,16 +24,17 @@ use macroquad::prelude::*;
 extern crate rand as external_rand;
 
 use external_rand::thread_rng;
-use rlua::{UserData, UserDataMethods};
+use mlua::{Table, UserData, UserDataMethods};
 
 use crate::creature::Creature;
 use crate::items::base_item::ItemKind;
 use crate::items::container::Container;
+use crate::lua_interface::LuaInterface;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::VisitedState;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator};
-use crate::monster::Monster;
 use crate::monster::MonsterArc;
+use crate::monster::{Monster, MonsterRef};
 use crate::player::Player;
 use crate::position::POSITION_INVALID;
 use crate::position::Position;

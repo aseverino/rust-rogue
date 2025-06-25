@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use rlua::{UserData, UserDataMethods};
+use mlua::{UserData, UserDataMethods};
 use serde::Deserialize;
 
 use crate::items::base_item::{BaseItemData, Item};

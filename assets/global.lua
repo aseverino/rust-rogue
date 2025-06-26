@@ -38,17 +38,10 @@ function on_map_peeked(map)
     local spawners_count = math.max(map:get_tier(), 2)
     local spawners = {}
 
-    print('total monster_types:', #monster_types)
-
     for i = 1, spawners_count do
-        print('aff')
         -- select a random tile from the shuffled list
         local tile = tiles[i]
         local monster = map:add_monster(0, tile)
-        print('going with monster_types[' .. i % #monster_types .. ']')
-        GlobalData.SPAWNERS[monster:get_id()] = monster_types[i % #monster_types]
-        print('GlobalData.SPAWNERS[' .. monster:get_id() .. '] = ' .. GlobalData.SPAWNERS[monster:get_id()])
+        GlobalData.SPAWNERS[monster:get_id()] = monster_types[i % #monster_types + 1]
     end
-
-    print('GlobalData:', GlobalData)
 end

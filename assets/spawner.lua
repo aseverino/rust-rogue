@@ -24,31 +24,24 @@ local turn_count = 1
 local spawner_type = nil
 
 function on_spawn(monster)
-    print('on_spawn1')
     if not GlobalData.SPAWNERS then
         return false
     end
-    print('on_spawn2')
     
     spawner_type = GlobalData.SPAWNERS[monster:get_id()]
     if not spawner_type then
         return false
     end
-    print('on_spawn3')
 
     return true
 end
 
 function on_update(monster)
-    print('on_update1')
     if not spawner_type then return false end
-    print('on_update2')
 
     if turn_count % 3 == 0 then
-        print('on_update3')
         local pos = monster:get_position()
         local map = get_current_map()
-        print(map)
 
         pos = map:get_random_adjacent_walkable_position(pos)
 

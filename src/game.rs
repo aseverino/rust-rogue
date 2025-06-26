@@ -948,7 +948,6 @@ pub fn update(
 
             let map = map_ref.0.borrow_mut();
             let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
-            let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
 
             let mut monsters = map.monsters.clone(); // Clone the monsters to avoid borrowing conflicts
             drop(map);
@@ -977,9 +976,12 @@ pub fn update(
                     let monster_pos = monster.pos();
 
                     let path = Navigator::find_path(monster_pos, game.player.position, |pos| {
-                        pos.x < GRID_WIDTH
-                            && pos.y < GRID_HEIGHT
-                            && walkable_tiles[pos].is_walkable()
+                        if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
+                            return false;
+                        }
+                        // borrow the map _immutably_ each time to see current occupancy:
+                        let map = map_ref.0.borrow();
+                        map.generated_map.tiles[pos].is_walkable()
                     });
 
                     if let Some(path) = path {
@@ -1001,19 +1003,17 @@ pub fn update(
                                 continue;
                             }
 
-                            monster_moves.push((monster_pos, next_step, *id as usize));
+                            //monster_moves.push((monster_pos, next_step, *id as usize));
                             monster.set_pos(next_step);
+
+                            let mut map = map_ref.0.borrow_mut();
+                            map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
+                            map.generated_map.tiles[next_step].creature = *id;
                         }
                     }
                 }
 
                 monster.accumulated_speed = monster_speed as u32;
-            }
-
-            for (monster_pos, next_step, i) in monster_moves {
-                let mut map = map_ref.0.borrow_mut();
-                map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
-                map.generated_map.tiles[next_step].creature = i as u32;
             }
 
             game.turn += 1;

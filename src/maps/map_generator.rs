@@ -29,6 +29,9 @@ use rand::rngs::ThreadRng;
 use rand::{Rng, thread_rng};
 use serde_json::Map;
 
+use crate::items::base_item::ItemKind;
+use crate::items::collection::{Items, ItemsArc};
+use crate::items::container::Container;
 use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
@@ -111,16 +114,22 @@ pub struct MapGenerator {
     thread_handle: Option<JoinHandle<()>>,
     monster_types: MonsterTypes,
     monster_types_by_tier: Vec<Vec<u32>>,
+    items: ItemsArc,
     pub map_statuses: Arc<Mutex<HashMap<OverworldPos, SharedMapStatus>>>,
 }
 
 impl MapGenerator {
-    pub async fn new(_lua_interface: &LuaInterfaceRc, monster_types: &MonsterTypes) -> Self {
+    pub async fn new(
+        _lua_interface: &LuaInterfaceRc,
+        monster_types: &MonsterTypes,
+        items: &ItemsArc,
+    ) -> Self {
         let mut mg = Self {
             command_tx: None,
             thread_handle: None,
             monster_types: monster_types.clone(),
             monster_types_by_tier: Vec::new(),
+            items: items.clone(),
             map_statuses: Arc::new(Mutex::new(HashMap::new())),
         };
 
@@ -150,17 +159,20 @@ impl MapGenerator {
         self.command_tx = Some(command_tx);
         let monster_types = Arc::clone(&self.monster_types);
         let monster_types_by_tier = self.monster_types_by_tier.clone();
+        let items = Arc::clone(&self.items);
+
         let statuses = Arc::clone(&self.map_statuses);
         self.thread_handle = Some(thread::spawn(move || {
             for command in command_rx {
                 match command {
                     Command::Generate(pos, params) => {
-                        let mut map = Self::generate_map(&params);
+                        let mut map: GeneratedMap = Self::generate_map(&params);
                         Self::populate_map(
                             &mut map,
                             &params,
                             &monster_types,
                             &monster_types_by_tier,
+                            &items,
                         );
                         let map_arc = Arc::new(Mutex::new(map));
                         {
@@ -589,9 +601,10 @@ impl MapGenerator {
         params: &GenerationParams,
         monster_types: &MonsterTypes,
         monster_types_by_tier: &Vec<Vec<u32>>,
+        items_arc: &ItemsArc,
     ) {
         let monster_types_guard = monster_types.lock().unwrap();
-        map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
+        //map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();
         let mut positions: Vec<Position> = map
@@ -612,6 +625,41 @@ impl MapGenerator {
 
         for pos in positions {
             map.tiles[pos].add_orb();
+        }
+
+        if params.tier > 1 {
+            let chest_pos_opt = map.available_walkable_cache.pop();
+            if let Some(chest_pos) = chest_pos_opt {
+                let mut container = Container::new();
+
+                let items = items_arc.read().unwrap();
+
+                // get 3 random items from items of the specified tier
+                let mut rng = thread_rng();
+                let items_of_tier: Vec<u32> = items
+                    .items_ids_by_tier
+                    .get(params.tier as usize)
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect();
+
+                let selected_items = items_of_tier
+                    .choose_multiple(&mut rng, 3)
+                    .cloned()
+                    .collect::<Vec<u32>>();
+
+                // Add them to the container, ensuring they are unique (0 to 3, depending on availability)
+                for item_id in selected_items {
+                    if let Some(_) = items.items_by_id.get(&item_id) {
+                        container.add_item(item_id);
+                    }
+                }
+
+                map.tiles[chest_pos]
+                    .items
+                    .push(ItemKind::Container(container));
+            }
         }
     }
 }

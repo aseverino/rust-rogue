@@ -23,6 +23,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
+    items::collection::ItemsArc,
     lua_interface::LuaInterfaceRc,
     maps::{
         Border, BorderFlags, GRID_HEIGHT, GRID_WIDTH, MapTheme,
@@ -92,13 +93,14 @@ impl OverworldGenerator {
     pub async fn new(
         lua_interface: &LuaInterfaceRc,
         monster_types: &MonsterTypes,
+        items: &ItemsArc,
     ) -> Arc<Mutex<Self>> {
         let generated_maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<GeneratedMap>>>; 5]; 5]>>> =
             Arc::new(Mutex::new(vec![std::array::from_fn(|_| {
                 std::array::from_fn(|_| None)
             })]));
 
-        let map_generator = MapGenerator::new(lua_interface, monster_types).await;
+        let map_generator = MapGenerator::new(lua_interface, monster_types, items).await;
 
         let overworld = Arc::new(Mutex::new(Self {
             generated_maps: Arc::clone(&generated_maps),
@@ -142,7 +144,7 @@ impl OverworldGenerator {
                 // This is the center map, setup adjacent maps
                 if let Some(overworld_strong) = overworld_weak.upgrade() {
                     let mut o = overworld_strong.lock().unwrap();
-                    o.setup_adjacent_maps(1, floor, x, y, stairs_pos);
+                    o.setup_adjacent_maps(2, floor, x, y, stairs_pos);
                 }
             }
         });

@@ -31,6 +31,7 @@ pub struct BaseHoldableItemData {
     #[serde(flatten)]
     pub base_item: BaseItemData,
     pub class: String,
+    pub tier: u32,
     pub modifier: i32,
     pub attribute_modifier: String,
     pub required: Vec<Vec<serde_json::Value>>,

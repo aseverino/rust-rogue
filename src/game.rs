@@ -23,7 +23,7 @@
 use crate::creature::Creature;
 use crate::input::{Input, KeyboardAction};
 use crate::items::base_item::ItemKind;
-use crate::items::collection::Items;
+use crate::items::collection::{Items, ItemsArc};
 use crate::lua_interface::{self, LuaInterface, LuaInterfaceRc, LuaScripted};
 use crate::maps::map::MapRef;
 use crate::maps::navigator::Navigator;
@@ -47,7 +47,7 @@ use macroquad::time::get_time;
 use std::cell::{RefCell, RefMut};
 use std::cmp::max;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum PlayerEvent {
@@ -72,7 +72,7 @@ pub struct GameState {
     pub player: Player,
     pub overworld_generator: Arc<Mutex<OverworldGenerator>>,
     pub overworld: Overworld,
-    pub items: Items,
+    pub items: ItemsArc,
     pub lua_interface: LuaInterfaceRc,
     pub last_player_event: PlayerEvent,
 }
@@ -393,17 +393,23 @@ pub async fn run() {
         monster_type::load_monster_types(&lua_interface).await,
     ));
 
+    let items = Arc::new(RwLock::new(Items::new()));
+
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld_generator: OverworldGenerator::new(&lua_interface, &monster_types).await,
+        overworld_generator: OverworldGenerator::new(&lua_interface, &monster_types, &items).await,
         overworld: Overworld::new(),
-        items: Items::new(),
+        items: items,
         lua_interface: lua_interface,
         last_player_event: PlayerEvent::None,
         turn: 1,
     };
 
-    game.items.load_holdable_items(&game.lua_interface).await;
+    game.items
+        .write()
+        .unwrap()
+        .load_holdable_items(&game.lua_interface)
+        .await;
 
     let mut overworld_pos = OverworldPos {
         floor: 0,
@@ -574,7 +580,8 @@ pub async fn run() {
                     }
                 }
                 UiEvent::ChestAction(item_id) => {
-                    let item = game.items.items.get(&item_id);
+                    let items_borrow = game.items.read().unwrap();
+                    let item = items_borrow.items_by_id.get(&item_id);
 
                     if let Some(item) = item {
                         game.player.add_item(item.clone());
@@ -698,7 +705,9 @@ pub async fn run() {
                             .iter()
                             .filter_map(|item_id| {
                                 game.items
-                                    .items
+                                    .read()
+                                    .unwrap()
+                                    .items_by_id
                                     .get(item_id)
                                     .map(|item| (*item_id, item.name().to_string()))
                             })

@@ -3,7 +3,8 @@
         "weapons": [
             {
                 "id": 1,
-                "name": "Rusty Short Sword",
+                "tier": 1,
+                "name": "Rusted Short Sword",
                 "description": "",
                 "class": "Sword",
                 "attack_dice": [6],
@@ -16,6 +17,7 @@
             },
             {
                 "id": 2,
+                "tier": 1,
                 "name": "Small Old Axe",
                 "description": "",
                 "class": "Axe",
@@ -28,9 +30,10 @@
             },
             {
                 "id": 3,
+                "tier": 1,
                 "name": "Small Carpenter Hammer",
                 "description": "",
-                "class": "Hammer",
+                "class": "Club",
                 "attack_dice": [6],
                 "modifier": 100,
                 "attribute_modifier": "STR",
@@ -40,6 +43,7 @@
             },
             {
                 "id": 4,
+                "tier": 1,
                 "name": "Rotten Wood Bow",
                 "description": "",
                 "class": "Bow",
@@ -53,7 +57,74 @@
             },
             {
                 "id": 5,
+                "tier": 1,
                 "name": "Branch Staff",
+                "description": "",
+                "class": "Staff",
+                "attack_dice": [3],
+                "modifier": 100,
+                "attribute_modifier": "INT",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": false
+            },
+            {
+                "id": 8,
+                "tier": 2,
+                "name": "Cracked Iron Sword",
+                "description": "",
+                "class": "Sword",
+                "attack_dice": [6],
+                "modifier": 100,
+                "attribute_modifier": "STR",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": false
+            },
+            {
+                "id": 9,
+                "tier": 2,
+                "name": "Dull Axe",
+                "description": "",
+                "class": "Axe",
+                "attack_dice": [6],
+                "modifier": 100,
+                "attribute_modifier": "STR",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": false
+            },
+            {
+                "id": 10,
+                "tier": 2,
+                "name": "Caveman Club",
+                "description": "",
+                "class": "Club",
+                "attack_dice": [6],
+                "modifier": 100,
+                "attribute_modifier": "STR",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": false
+            },
+            {
+                "id": 11,
+                "tier": 2,
+                "name": "Wood Bow",
+                "description": "",
+                "class": "Bow",
+                "attack_dice": [6],
+                "modifier": 100,
+                "attribute_modifier": "DEX",
+                "required": [ ["STR", 5], ["DEX", 5] ],
+                "slot": "hand",
+                "two-handed": true,
+                "range": 5
+            },
+            {
+                "id": 12,
+                "tier": 2,
+                "name": "Oak Rod",
                 "description": "",
                 "class": "Staff",
                 "attack_dice": [3],
@@ -69,6 +140,7 @@
         "armor": [
             {
                 "id": 6,
+                "tier": 1,
                 "name": "Leather Armor",
                 "description": "",
                 "class": "Armor",
@@ -80,6 +152,7 @@
             },
             {
                 "id": 7,
+                "tier": 1,
                 "name": "Chainmail",
                 "description": "",
                 "class": "Armor",

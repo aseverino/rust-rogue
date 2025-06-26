@@ -23,7 +23,8 @@
 use std::{
     any::Any,
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    rc::Rc,
     sync::{Arc, RwLock, Weak},
 };
 
@@ -35,16 +36,20 @@ use crate::{
     lua_interface::LuaInterfaceRc,
 };
 
+type ItemsById = HashMap<u32, Item>;
 pub struct Items {
-    pub items: HashMap<u32, Item>,
+    pub items_by_id: ItemsById,
+    pub items_ids_by_tier: Vec<HashSet<u32>>,
     //holdable_items: HashMap<HoldableGroupKind, Vec<Weak<RwLock<dyn Item>>>>// = HashMap::new();
 }
+
+pub type ItemsArc = Arc<RwLock<Items>>;
 
 impl Items {
     pub fn new() -> Self {
         Self {
-            items: HashMap::new(),
-            //holdable_items: HashMap::new(),
+            items_by_id: HashMap::new(),
+            items_ids_by_tier: Vec::new(),
         }
     }
     pub async fn load_holdable_items(&mut self, lua_interface_rc: &LuaInterfaceRc) {
@@ -66,8 +71,17 @@ impl Items {
                             }
                         }
 
-                        self.items
-                            .insert(weapon.base_holdable.base_item.id, Item::Weapon(weapon));
+                        let id = weapon.base_holdable.base_item.id;
+                        let tier = weapon.base_holdable.tier;
+
+                        self.items_by_id.insert(id, Item::Weapon(weapon));
+
+                        // Add the weapon to the items_ids_by_tier map
+                        if tier as usize >= self.items_ids_by_tier.len() {
+                            self.items_ids_by_tier
+                                .resize(tier as usize + 1, HashSet::new());
+                        }
+                        self.items_ids_by_tier[tier as usize].insert(id);
                     }
                 }
                 HoldableGroup::Armor { armor } => {
@@ -82,10 +96,17 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(
-                            armor_item.base_holdable.base_item.id,
-                            Item::Armor(armor_item),
-                        );
+                        let id = armor_item.base_holdable.base_item.id;
+                        let tier = armor_item.base_holdable.tier;
+
+                        self.items_by_id.insert(id, Item::Armor(armor_item));
+
+                        // Add the armor to the items_ids_by_tier map
+                        if tier as usize >= self.items_ids_by_tier.len() {
+                            self.items_ids_by_tier
+                                .resize(tier as usize + 1, HashSet::new());
+                        }
+                        self.items_ids_by_tier[tier as usize].insert(id);
                     }
                 }
 
@@ -101,10 +122,17 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(
-                            helmet_item.base_holdable.base_item.id,
-                            Item::Helmet(helmet_item),
-                        );
+                        let id = helmet_item.base_holdable.base_item.id;
+                        let tier = helmet_item.base_holdable.tier;
+
+                        self.items_by_id.insert(id, Item::Helmet(helmet_item));
+
+                        // Add the helmet to the items_ids_by_tier map
+                        if tier as usize >= self.items_ids_by_tier.len() {
+                            self.items_ids_by_tier
+                                .resize(tier as usize + 1, HashSet::new());
+                        }
+                        self.items_ids_by_tier[tier as usize].insert(id);
                     }
                 }
                 HoldableGroup::Boots { boots } => {
@@ -119,10 +147,17 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(
-                            boots_item.base_holdable.base_item.id,
-                            Item::Boots(boots_item),
-                        );
+                        let id = boots_item.base_holdable.base_item.id;
+                        let tier = boots_item.base_holdable.tier;
+
+                        self.items_by_id.insert(id, Item::Boots(boots_item));
+
+                        // Add the boots to the items_ids_by_tier map
+                        if tier as usize >= self.items_ids_by_tier.len() {
+                            self.items_ids_by_tier
+                                .resize(tier as usize + 1, HashSet::new());
+                        }
+                        self.items_ids_by_tier[tier as usize].insert(id);
                     }
                 }
                 HoldableGroup::Shields { shields } => {
@@ -137,10 +172,17 @@ impl Items {
                             }
                         }
 
-                        self.items.insert(
-                            shield_item.base_holdable.base_item.id,
-                            Item::Shield(shield_item),
-                        );
+                        let id = shield_item.base_holdable.base_item.id;
+                        let tier = shield_item.base_holdable.tier;
+
+                        self.items_by_id.insert(id, Item::Shield(shield_item));
+
+                        // Add the shield to the items_ids_by_tier map
+                        if tier as usize >= self.items_ids_by_tier.len() {
+                            self.items_ids_by_tier
+                                .resize(tier as usize + 1, HashSet::new());
+                        }
+                        self.items_ids_by_tier[tier as usize].insert(id);
                     }
                 }
             }

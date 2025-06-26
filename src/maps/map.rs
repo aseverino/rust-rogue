@@ -313,6 +313,24 @@ impl Map {
             }
         }
     }
+
+    pub fn get_random_adjacent_walkable_position(
+        &mut self,
+        position: Position,
+    ) -> Option<Position> {
+        let mut rng = thread_rng();
+        let mut adjacent_positions: Vec<Position> = position
+            .positions_around()
+            .into_iter()
+            .filter(|&pos| self.is_tile_walkable(pos))
+            .collect();
+
+        if !adjacent_positions.is_empty() {
+            adjacent_positions.shuffle(&mut rng);
+            return Some(adjacent_positions[0]);
+        }
+        None
+    }
 }
 
 #[derive(Clone)]
@@ -320,8 +338,14 @@ pub struct MapRef(pub Rc<RefCell<Map>>);
 
 impl UserData for MapRef {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method("get_tier", |_, this, ()| {
+            Ok(this.0.borrow().generated_map.tier)
+        });
+
         methods.add_method("get_monster_types", |_, this, ()| {
-            Ok(this.0.borrow().generated_map.monster_types.clone())
+            let test = this.0.borrow().generated_map.monster_types.clone();
+            println!("Monster types: {:?}", test);
+            Ok(test)
         });
 
         methods.add_method("get_walkable_tiles", |lua, this, ()| {
@@ -337,6 +361,27 @@ impl UserData for MapRef {
             }
             Ok(tbl)
         });
+
+        methods.add_method(
+            "get_random_adjacent_walkable_position",
+            |lua, this, pos: Table| {
+                let position = Position {
+                    x: pos.get("x")?,
+                    y: pos.get("y")?,
+                };
+                let new_pos = this
+                    .0
+                    .borrow_mut()
+                    .get_random_adjacent_walkable_position(position);
+                match new_pos {
+                    Some(pos) => {
+                        let tbl = LuaInterface::add_position(&lua, &pos)?;
+                        Ok(tbl)
+                    }
+                    None => Ok(LuaInterface::add_position(&lua, &POSITION_INVALID)?),
+                }
+            },
+        );
 
         // methods.add_method("add_monster", |_, this, (kind_id, pos): (u32, Table)| {
         //     let p = Position {

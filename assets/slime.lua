@@ -21,15 +21,15 @@
 -- SOFTWARE.
 
 function on_spawn(monster)
-    print("on_spawn")
+    -- print("on_spawn")
 end
 
 function on_update(monster)
-    print("on_update")
+    -- print("on_update")
 end
 
 function on_death(monster)
-    print("on_death")
+    -- print("on_death")
     -- add_monster(monster:get_kind():get_id(), monster:get_position())
     -- return true
 end

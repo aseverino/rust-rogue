@@ -523,13 +523,18 @@ pub async fn run() {
         }));
     }
 
+    let _peek_call_result = game
+        .lua_interface
+        .borrow_mut()
+        .on_map_peeked(&current_map_rc);
+
     let _ = LuaInterface::register_api(&game.lua_interface);
 
     loop {
         {
             let mut map = current_map_rc.0.borrow_mut();
             for monster_ref in map.monsters.values_mut() {
-                let should_add = {
+                let should_call_on_spawn = {
                     let mut monster = monster_ref.borrow_mut();
                     if !monster.initialized {
                         monster.initialized = true;
@@ -538,7 +543,7 @@ pub async fn run() {
                         false
                     }
                 };
-                if should_add {
+                if should_call_on_spawn {
                     let r = game.lua_interface.borrow_mut().on_spawn(monster_ref);
                     if let Err(e) = r {
                         eprintln!("Error calling Lua on_spawn: {}", e);
@@ -941,12 +946,15 @@ pub fn update(
             //     game.player.accumulated_speed += (player_movements * 100.0) as u32;
             // }
 
-            let mut map = map_ref.0.borrow_mut();
+            let map = map_ref.0.borrow_mut();
             let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
             let mut monster_moves: Vec<(Position, Position, usize)> = Vec::new();
 
-            for (id, monster_ref) in &mut map.monsters {
-                let mut monster = monster_ref.borrow_mut();
+            let mut monsters = map.monsters.clone(); // Clone the monsters to avoid borrowing conflicts
+            drop(map);
+
+            for (id, monster_ref) in &mut monsters {
+                let monster = monster_ref.borrow_mut();
                 if monster.hp <= 0 {
                     continue; // Skip dead monsters
                 }
@@ -1003,6 +1011,7 @@ pub fn update(
             }
 
             for (monster_pos, next_step, i) in monster_moves {
+                let mut map = map_ref.0.borrow_mut();
                 map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
                 map.generated_map.tiles[next_step].creature = i as u32;
             }

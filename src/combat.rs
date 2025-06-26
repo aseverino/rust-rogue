@@ -138,11 +138,11 @@ pub(crate) fn do_melee_combat(
             };
 
             if weapon.is_scripted() {
-                // let lua_result = lua_interface.borrow_mut().on_get_attack_damage(
-                //     &mut weapon,
-                //     player,
-                //     &mut monster,
-                // );
+                let lua_result = lua_interface.borrow_mut().on_get_attack_damage(
+                    &mut weapon,
+                    player,
+                    &mut monster,
+                );
 
                 // update the monster in the map from Lua code
                 *map_ref
@@ -152,15 +152,15 @@ pub(crate) fn do_melee_combat(
                     .get_mut(&target_id)
                     .expect("Target creature not found") = monster;
 
-                // match lua_result {
-                //     Ok(lua_damage) => {
-                //         damage = lua_damage as u32;
-                //         println!("Damage from Lua script: {}", damage);
-                //     }
-                //     Err(e) => {
-                //         eprintln!("Error calling Lua on_get_attack_damage: {}", e);
-                //     }
-                // }
+                match lua_result {
+                    Ok(lua_damage) => {
+                        damage = lua_damage as u32;
+                        println!("Damage from Lua script: {}", damage);
+                    }
+                    Err(e) => {
+                        eprintln!("Error calling Lua on_get_attack_damage: {}", e);
+                    }
+                }
             } else {
                 for &d in weapon.attack_dice.iter() {
                     let mut rng = thread_rng();

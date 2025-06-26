@@ -20,34 +20,35 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
-SPAWNERS = {}
+GlobalData = {}
 
 function on_map_peeked(map)
-    -- SPAWNERS = {}
-    -- local monster_types = map:get_monster_types()
-    -- for _, monster_type in ipairs(monster_types) do
-    --     SPAWNERS[monster_type] = 0
-    -- end
-
+    if not GlobalData.SPAWNERS then
+        GlobalData.SPAWNERS = {}
+    end
     local tiles = map:get_walkable_tiles()
-    -- select two random tiles, but careful not to select the same tile twice
-    local tile1 = tiles[math.random(#tiles)]
-    local tile2
-    print('oi2')
-    repeat
-        print('oi3')
-        tile2 = tiles[math.random(#tiles)]
-    until tile1 ~= tile2
-    print('oi4')
-
-    print('adding monsters')
-
-    for k, v in pairs(tile1) do
-        print('tile1: ' .. k .. ' = ' .. v)
+    local monster_types = map:get_monster_types()
+    
+    -- shuffle the tiles to ensure randomness
+    for i = #tiles, 2, -1 do
+        local j = math.random(i)
+        tiles[i], tiles[j] = tiles[j], tiles[i]
     end
 
-    print(map)
-    print(map.add_monster)
-    map:add_monster(0, tile1)
-    map:add_monster(0, tile2)
+    local spawners_count = math.max(map:get_tier(), 2)
+    local spawners = {}
+
+    print('total monster_types:', #monster_types)
+
+    for i = 1, spawners_count do
+        print('aff')
+        -- select a random tile from the shuffled list
+        local tile = tiles[i]
+        local monster = map:add_monster(0, tile)
+        print('going with monster_types[' .. i % #monster_types .. ']')
+        GlobalData.SPAWNERS[monster:get_id()] = monster_types[i % #monster_types]
+        print('GlobalData.SPAWNERS[' .. monster:get_id() .. '] = ' .. GlobalData.SPAWNERS[monster:get_id()])
+    end
+
+    print('GlobalData:', GlobalData)
 end

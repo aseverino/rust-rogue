@@ -147,31 +147,6 @@ impl LuaInterface {
         Ok(lua_pos)
     }
 
-    fn setup_spawners_table(lua: &Lua, spawners_ids: &Vec<u32>) -> Result<()> {
-        let globals = lua.globals();
-
-        let global_data: Table = match globals.get::<_, Value>("GlobalData")? {
-            Value::Table(t) => t,
-            _ => {
-                let new_table = lua.create_table()?;
-                globals.set("GlobalData", new_table.clone())?;
-                new_table
-            }
-        };
-
-        // Create your subtable
-        let my_table = lua.create_table()?;
-        for (i, id) in spawners_ids.iter().enumerate() {
-            // Set each ID as a key with a dummy value
-            my_table.set(i + 1, *id)?;
-        }
-
-        // Store it inside GlobalData
-        global_data.set("spawners", my_table)?;
-
-        Ok(())
-    }
-
     pub fn load_global_script(&mut self) -> Result<bool> {
         // 1) Read the script file
         let path = "assets/global.lua";
@@ -183,8 +158,8 @@ impl LuaInterface {
         let globals = self.lua.globals(); // Table<'_>
         let mt: Table = self.lua.create_table()?;
 
-        if let Ok(global_data) = globals.get::<_, Table>("GlobalData") {
-            env.set("GlobalData", global_data)?;
+        if let Ok(old_gd) = globals.get::<_, Table>("GlobalData") {
+            env.set("GlobalData", old_gd)?;
         }
 
         mt.set("__index", globals)?;
@@ -192,6 +167,9 @@ impl LuaInterface {
 
         // 3) Load and execute the script in that environment
         self.lua.load(&script).set_environment(env.clone()).exec()?;
+
+        let gd: Table = env.get("GlobalData")?;
+        self.lua.globals().set("GlobalData", gd)?;
 
         let f: Function = env.get("on_map_peeked")?;
         let key: RegistryKey = self.lua.create_registry_value(f)?;
@@ -225,9 +203,8 @@ impl LuaInterface {
         let globals = self.lua.globals(); // Table<'_>
         let mt: Table = self.lua.create_table()?;
 
-        if let Ok(global_data) = globals.get::<_, Table>("GlobalData") {
-            env.set("GlobalData", global_data)?;
-        }
+        let gd: Table = globals.get("GlobalData")?;
+        env.set("GlobalData", gd)?;
 
         mt.set("__index", globals)?;
         env.set_metatable(Some(mt));
@@ -304,13 +281,14 @@ impl LuaInterface {
     pub fn on_spawn(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
         let monster = monster_ref.borrow_mut();
         let binding = &self.script_cache;
-        let funcs = binding.get(&monster.kind.id).ok_or_else(|| {
+        let funcs = binding.get(&monster.kind.get_script_id()).ok_or_else(|| {
             Error::external(format!(
                 "No Lua script loaded for monster type `{}`",
                 monster.kind.get_script_id()
             ))
         })?;
 
+        drop(monster);
         // Retrieve the Function from the registry
         if let Some(func_key) = &funcs.on_spawn {
             let func: Function = self.lua.registry_value(func_key)?;
@@ -329,7 +307,7 @@ impl LuaInterface {
     pub fn on_update(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
         let monster = monster_ref.borrow_mut();
         let binding = &self.script_cache;
-        let funcs = binding.get(&monster.kind.id).ok_or_else(|| {
+        let funcs = binding.get(&monster.kind.get_script_id()).ok_or_else(|| {
             Error::external(format!(
                 "No Lua script loaded for monster type `{}`",
                 monster.kind.get_script_id()
@@ -342,6 +320,7 @@ impl LuaInterface {
 
             let lua_monster_ud = self.lua.create_userdata(monster_ref.clone())?;
 
+            drop(monster);
             // Invoke and return result
             let result = func.call(lua_monster_ud);
 
@@ -429,8 +408,13 @@ impl LuaInterface {
                 )));
             }
             // Invoke and return result
-            let result: bool = func.call(lua_map_ud)?;
-            Ok(result)
+            let result: Result<bool> = func.call(lua_map_ud);
+            if let Err(e) = result {
+                eprintln!("Error calling Lua on_map_peeked: {}", e);
+                return Err(e);
+            } else {
+                return Ok(true);
+            }
         } else {
             return Ok(false);
         }

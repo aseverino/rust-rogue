@@ -96,6 +96,8 @@ pub struct Weapon {
     pub attack_dice: Vec<u32>,
     #[serde(rename = "two-handed")]
     pub two_handed: bool,
+    #[serde(default)]
+    pub range: Option<u32>,
 }
 
 impl UserData for Weapon {

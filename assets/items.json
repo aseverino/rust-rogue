@@ -48,7 +48,8 @@
                 "attribute_modifier": "DEX",
                 "required": [ ["STR", 5], ["DEX", 5] ],
                 "slot": "hand",
-                "two-handed": true
+                "two-handed": true,
+                "range": 5
             },
             {
                 "id": 5,

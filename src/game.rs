@@ -790,22 +790,51 @@ pub fn update(
             game.player.goal_position = None; // Clear goal position
             game.last_player_event = PlayerEvent::SpellCast;
         } else {
-            let path: Option<Vec<Position>> =
-                Navigator::find_path(player_pos, player_goal, |pos| {
-                    map_ref.0.borrow().is_tile_walkable(pos)
-                });
-
-            if let Some(path) = path {
-                if path.len() > 1 {
-                    new_player_pos = Some(path[1]);
-                    game.last_player_event = PlayerEvent::AutoMove;
+            let ranged_attack = {
+                if let Some(weapon) = &game.player.equipment.weapon {
+                    if let Some(range) = weapon.range {
+                        let map = map_ref.0.borrow();
+                        if map.is_tile_enemy_occupied(player_goal) {
+                            player_pos.distance_to(&player_goal) <= (range as usize)
+                                && game.player.line_of_sight.contains(&player_goal)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
                 } else {
+                    false
+                }
+            };
+
+            if ranged_attack {
+                update_turn = true; // Update monsters if player attacks
+                combat::do_melee_combat(
+                    &mut game.player,
+                    map_ref,
+                    player_pos,
+                    player_goal,
+                    &game.lua_interface,
+                );
+            } else {
+                let path: Option<Vec<Position>> =
+                    Navigator::find_path(player_pos, player_goal, |pos| {
+                        map_ref.0.borrow().is_tile_walkable(pos)
+                    });
+
+                if let Some(path) = path {
+                    if path.len() > 1 {
+                        new_player_pos = Some(path[1]);
+                        game.last_player_event = PlayerEvent::AutoMove;
+                    } else {
+                        game.last_player_event = PlayerEvent::AutoMoveEnd;
+                    }
+                    game.player.goal_position = player_goal_position;
+                } else {
+                    game.player.goal_position = None; // Clear goal if no path found
                     game.last_player_event = PlayerEvent::AutoMoveEnd;
                 }
-                game.player.goal_position = player_goal_position;
-            } else {
-                game.player.goal_position = None; // Clear goal if no path found
-                game.last_player_event = PlayerEvent::AutoMoveEnd;
             }
         }
     } else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {

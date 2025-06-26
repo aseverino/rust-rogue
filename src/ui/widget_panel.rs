@@ -46,12 +46,11 @@ pub struct WidgetPanel {
 
 impl WidgetPanel {
     pub fn draw(&self, ui: &Ui) {
-        let quad_opt = self.base.computed_quad;
-
-        // 2) Early‐exit if the widget is invisible
-        if !self.base.visible {
+        if !self.is_visible() {
             return;
         }
+
+        let quad_opt = self.base.computed_quad;
 
         if let Some(drawing_coords) = quad_opt {
             if let Some(border_color) = self.border_color {

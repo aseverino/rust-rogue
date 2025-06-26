@@ -45,8 +45,7 @@ pub struct WidgetBar {
 
 impl WidgetBar {
     pub fn draw(&self, ui: &Ui) {
-        // 2) Early‐exit if the widget is invisible
-        if !self.base.visible {
+        if !self.is_visible() {
             return;
         }
 

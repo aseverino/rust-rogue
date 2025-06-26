@@ -51,6 +51,9 @@ pub struct WidgetButton {
 
 impl WidgetButton {
     pub fn draw(&self, ui: &Ui) {
+        if !self.is_visible() {
+            return;
+        }
         let quad_opt = self.base.computed_quad;
 
         if let Some(drawing_coords) = quad_opt {

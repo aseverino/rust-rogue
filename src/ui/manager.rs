@@ -230,7 +230,6 @@ impl Ui {
     }
 
     pub fn set_chest_items(&mut self, items: &Vec<(u32, String)>) {
-        use std::cell::RefCell;
         use std::rc::Rc;
 
         let chest_view_rc = if let Some(chest_view) = self.widgets.get(self.chest_view_id as usize)
@@ -256,15 +255,15 @@ impl Ui {
                 let item_widget =
                     self.create_widget::<WidgetButton>(Some(Rc::downgrade(&chest_view_rc)));
                 {
-                    let mut item_text = item_widget.borrow_mut();
-                    item_text.set_text(&format!("{}", item_name));
-                    item_text.set_margin_top(10.0);
-                    item_text.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
-                    item_text.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Left);
+                    let mut item_button = item_widget.borrow_mut();
+                    item_button.set_text(&format!("{}", item_name));
+                    item_button.set_margin_top(10.0);
+                    item_button.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+                    item_button.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Left);
+                    item_button.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
 
-                    let ui_weak = Rc::downgrade(&self.widgets[ROOT_ID as usize]);
                     let item_id = item_id;
-                    item_text.set_on_click(Box::new(move |ui, _| {
+                    item_button.set_on_click(Box::new(move |ui, _| {
                         ui.events.push_back(UiEvent::ChestAction(item_id));
                     }));
                 }
@@ -272,15 +271,34 @@ impl Ui {
         }
 
         // Update existing items
-        let mut chest_ref = chest_view_rc.borrow_mut();
-        if let Some(panel) = chest_ref.as_any_mut().downcast_mut::<WidgetPanel>() {
-            let panel_children = panel.get_children();
+        {
+            let mut chest_ref = chest_view_rc.borrow_mut();
+            if let Some(panel) = chest_ref.as_any_mut().downcast_mut::<WidgetPanel>() {
+                let panel_children = panel.get_children();
 
-            for (index, (item_id, item_name)) in items.iter().enumerate() {
-                if let Some(child_rc) = panel_children.get(index + 1).and_then(|c| c.upgrade()) {
-                    let mut child_ref = child_rc.borrow_mut();
-                    if let Some(item_text) = child_ref.as_any_mut().downcast_mut::<WidgetButton>() {
-                        item_text.set_text(&format!("{}", item_name));
+                for (index, (item_id, item_name)) in items.iter().enumerate() {
+                    if let Some(child_rc) = panel_children.get(index + 1).and_then(|c| c.upgrade())
+                    {
+                        let mut child_ref = child_rc.borrow_mut();
+                        if let Some(item_text) =
+                            child_ref.as_any_mut().downcast_mut::<WidgetButton>()
+                        {
+                            item_text.set_visible(true);
+                            item_text.set_text(&format!("{}", item_name));
+                        }
+                    }
+                }
+            }
+        }
+
+        if panel_children_len > items.len() {
+            // Remove excess items
+            let mut chest_ref = chest_view_rc.borrow_mut();
+            if let Some(panel) = chest_ref.as_any_mut().downcast_mut::<WidgetPanel>() {
+                let panel_children = panel.get_children();
+                for child in panel_children.iter().skip(items.len() + 1) {
+                    if let Some(child_rc) = child.upgrade() {
+                        child_rc.borrow_mut().set_visible(false);
                     }
                 }
             }

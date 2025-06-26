@@ -47,6 +47,10 @@ pub struct WidgetText {
 
 impl WidgetText {
     pub fn draw(&self, _ui: &Ui) {
+        if !self.is_visible() {
+            return;
+        }
+
         if let Some(drawing_coords) = self.base.computed_quad {
             let top =
                 drawing_coords.y + self.base.size.h + (self.offset_y - self.base.size.h) / 2.0;

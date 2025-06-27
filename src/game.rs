@@ -117,6 +117,51 @@ fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset:
     ui.set_player_dex(game.player.dexterity);
     ui.set_player_int(game.player.intelligence);
 
+    ui.set_player_weapon(
+        game.player
+            .equipment
+            .weapon
+            .as_ref()
+            .map(|weapon| weapon.base_holdable.base_item.name.clone())
+            .unwrap_or_else(|| "".to_string()),
+    );
+
+    ui.set_player_armor(
+        game.player
+            .equipment
+            .armor
+            .as_ref()
+            .map(|armor| armor.base_holdable.base_item.name.clone())
+            .unwrap_or_else(|| "".to_string()),
+    );
+
+    ui.set_player_shield(
+        game.player
+            .equipment
+            .shield
+            .as_ref()
+            .map(|shield| shield.base_holdable.base_item.name.clone())
+            .unwrap_or_else(|| "".to_string()),
+    );
+
+    ui.set_player_helmet(
+        game.player
+            .equipment
+            .helmet
+            .as_ref()
+            .map(|helmet| helmet.base_holdable.base_item.name.clone())
+            .unwrap_or_else(|| "".to_string()),
+    );
+
+    ui.set_player_boots(
+        game.player
+            .equipment
+            .boots
+            .as_ref()
+            .map(|boots| boots.base_holdable.base_item.name.clone())
+            .unwrap_or_else(|| "".to_string()),
+    );
+
     ui.draw();
 }
 

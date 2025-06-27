@@ -28,15 +28,18 @@ use std::{
 
 use macroquad::prelude::*;
 
-use crate::ui::{
-    point_f::PointF,
-    quad_f::QuadF,
-    size_f::SizeF,
-    widget::{AnchorKind, Widget},
-    widget_bar::WidgetBar,
-    widget_button::WidgetButton,
-    widget_panel::WidgetPanel,
-    widget_text::WidgetText,
+use crate::{
+    items::holdable::HoldableGroupKind,
+    ui::{
+        point_f::PointF,
+        quad_f::QuadF,
+        size_f::SizeF,
+        widget::{AnchorKind, Widget},
+        widget_bar::WidgetBar,
+        widget_button::WidgetButton,
+        widget_panel::WidgetPanel,
+        widget_text::WidgetText,
+    },
 };
 use std::fmt::Debug;
 
@@ -66,6 +69,11 @@ pub struct Ui {
     player_str: u32,
     player_dex: u32,
     player_int: u32,
+    player_weapon: String,
+    player_armor: String,
+    player_shield: String,
+    player_helmet: String,
+    player_boots: String,
 
     left_panel_id: u32,
     right_panel_id: u32,
@@ -80,6 +88,11 @@ pub struct Ui {
     str_value_bound_ids: Vec<u32>,
     dex_value_bound_ids: Vec<u32>,
     int_value_bound_ids: Vec<u32>,
+    weapon_value_bound_ids: Vec<u32>,
+    armor_value_bound_ids: Vec<u32>,
+    shield_value_bound_ids: Vec<u32>,
+    helmet_value_bound_ids: Vec<u32>,
+    boots_value_bound_ids: Vec<u32>,
 
     pub events: VecDeque<UiEvent>,
 
@@ -100,6 +113,11 @@ impl Ui {
             player_str: 0,
             player_dex: 0,
             player_int: 0,
+            player_weapon: String::new(),
+            player_armor: String::new(),
+            player_shield: String::new(),
+            player_helmet: String::new(),
+            player_boots: String::new(),
             is_focused: false,
             id_counter: 0,
             left_panel_id: u32::MAX,
@@ -115,6 +133,11 @@ impl Ui {
             str_value_bound_ids: Vec::new(),
             dex_value_bound_ids: Vec::new(),
             int_value_bound_ids: Vec::new(),
+            weapon_value_bound_ids: Vec::new(),
+            armor_value_bound_ids: Vec::new(),
+            shield_value_bound_ids: Vec::new(),
+            helmet_value_bound_ids: Vec::new(),
+            boots_value_bound_ids: Vec::new(),
 
             events: VecDeque::new(),
 
@@ -230,6 +253,71 @@ impl Ui {
                 let mut text_ref = int_value.borrow_mut();
                 if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
                     text.set_text(&format!("{}", self.player_int));
+                }
+            }
+        }
+    }
+
+    pub fn set_player_weapon(&mut self, weapon: String) {
+        self.player_weapon = weapon;
+
+        for id in &self.weapon_value_bound_ids {
+            if let Some(weapon_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = weapon_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&self.player_weapon);
+                }
+            }
+        }
+    }
+
+    pub fn set_player_armor(&mut self, armor: String) {
+        self.player_armor = armor;
+
+        for id in &self.armor_value_bound_ids {
+            if let Some(armor_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = armor_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&self.player_armor);
+                }
+            }
+        }
+    }
+
+    pub fn set_player_shield(&mut self, shield: String) {
+        self.player_shield = shield;
+
+        for id in &self.shield_value_bound_ids {
+            if let Some(shield_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = shield_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&self.player_shield);
+                }
+            }
+        }
+    }
+
+    pub fn set_player_helmet(&mut self, helmet: String) {
+        self.player_helmet = helmet;
+
+        for id in &self.helmet_value_bound_ids {
+            if let Some(helmet_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = helmet_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&self.player_helmet);
+                }
+            }
+        }
+    }
+
+    pub fn set_player_boots(&mut self, boots: String) {
+        self.player_boots = boots;
+
+        for id in &self.boots_value_bound_ids {
+            if let Some(boots_value) = self.widgets.get(*id as usize) {
+                let mut text_ref = boots_value.borrow_mut();
+                if let Some(text) = text_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                    text.set_text(&self.player_boots);
                 }
             }
         }
@@ -444,6 +532,55 @@ impl Ui {
         }
     }
 
+    fn create_equip_label(
+        &mut self,
+        anchor_left_id: u32,
+        group: HoldableGroupKind,
+        parent: &Rc<RefCell<dyn Widget>>,
+    ) {
+        let str_label = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent)));
+        let str_value = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent)));
+
+        let (label, value_now, binding) = match group {
+            HoldableGroupKind::Weapons => {
+                ("Wpn", &self.player_weapon, &mut self.weapon_value_bound_ids)
+            }
+            HoldableGroupKind::Armor => {
+                ("Arm", &self.player_armor, &mut self.armor_value_bound_ids)
+            }
+            HoldableGroupKind::Shields => {
+                ("Shd", &self.player_shield, &mut self.shield_value_bound_ids)
+            }
+            HoldableGroupKind::Helmets => {
+                ("Hel", &self.player_helmet, &mut self.helmet_value_bound_ids)
+            }
+            HoldableGroupKind::Boots => {
+                ("Bts", &self.player_boots, &mut self.boots_value_bound_ids)
+            }
+        };
+
+        {
+            let mut lbl = str_label.borrow_mut();
+            lbl.set_text(&label.to_string());
+            lbl.set_color(GREEN);
+            lbl.set_margin_top(10.0);
+            lbl.base.size = SizeF::new(50.0, 20.0);
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+            lbl.add_anchor(AnchorKind::Left, anchor_left_id, AnchorKind::Left);
+        }
+
+        binding.push(self.id_counter);
+
+        {
+            let mut lbl = str_value.borrow_mut();
+            lbl.set_color(GREEN);
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
+            lbl.set_text(value_now);
+            lbl.base.size = SizeF::new(50.0, 20.0);
+        }
+    }
+
     fn create_left_panel(&mut self) {
         self.left_panel_id = self.id_counter + 1;
         let left_panel_rc =
@@ -582,6 +719,18 @@ impl Ui {
                 _ => continue,
             };
             self.create_attr_label(attr_kind, &parent_dyn);
+        }
+
+        for i in 0..5 {
+            let group = match i {
+                0 => HoldableGroupKind::Weapons,
+                1 => HoldableGroupKind::Armor,
+                2 => HoldableGroupKind::Shields,
+                3 => HoldableGroupKind::Helmets,
+                4 => HoldableGroupKind::Boots,
+                _ => continue,
+            };
+            self.create_equip_label(self.id_counter - 1, group, &parent_dyn);
         }
 
         //self.create_attr_label("DEX", dex_ids, self.player_dex, &parent_dyn);

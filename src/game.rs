@@ -1080,6 +1080,12 @@ pub fn update(
                     let r = game.lua_interface.borrow_mut().on_update(&mut clone);
                     if let Err(e) = r {
                         eprintln!("Error calling Lua on_update: {}", e);
+                    } else {
+                        if r.unwrap() {
+                            // If the Lua script returned true, we skip the rest of the update for this monster
+                            // The update has already been handled in Lua
+                            continue;
+                        }
                     }
                 }
 

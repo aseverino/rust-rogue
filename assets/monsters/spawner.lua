@@ -50,4 +50,5 @@ function on_update(monster)
     end
 
     turn_count = turn_count + 1
+    return true
 end

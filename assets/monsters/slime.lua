@@ -26,6 +26,7 @@ end
 
 function on_update(monster)
     -- print("on_update")
+    return true
 end
 
 function on_death(monster)

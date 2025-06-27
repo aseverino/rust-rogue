@@ -371,9 +371,9 @@ impl UserData for MapRef {
             Ok(this.0.borrow().generated_map.tier)
         });
 
-        methods.add_method("get_monster_types", |_, this, ()| {
-            let test = this.0.borrow().generated_map.monster_types.clone();
-            println!("Monster types: {:?}", test);
+        methods.add_method("get_monster_kinds", |_, this, ()| {
+            let test = this.0.borrow().generated_map.monster_kinds.clone();
+            println!("Monster kinds: {:?}", test);
             Ok(test)
         });
 

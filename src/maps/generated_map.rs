@@ -28,7 +28,7 @@ use crate::{
     lua_interface::LuaInterfaceRc,
     maps::overworld::VisitedState,
     monster::{Monster, MonsterArc},
-    monster_type::MonsterType,
+    monster_kind::MonsterKind,
     position::Position,
     tile::Tile,
     tile_map::TileMap,
@@ -44,7 +44,7 @@ pub struct GeneratedMap {
     pub border_positions: [Vec<Position>; 4],
     pub downstair_teleport: Option<Position>,
     pub visited_state: VisitedState,
-    pub monster_types: Vec<u32>,
+    pub monster_kinds: Vec<u32>,
 }
 
 impl GeneratedMap {
@@ -68,34 +68,34 @@ impl GeneratedMap {
             ],
             downstair_teleport: None,
             visited_state: VisitedState::Unvisited,
-            monster_types: Vec::new(),
+            monster_kinds: Vec::new(),
         }
     }
 
     pub(crate) fn add_random_monsters(
         &mut self,
-        monster_types: &Vec<Arc<MonsterType>>,
-        monster_types_by_tier: &Vec<Vec<u32>>,
+        monster_kinds: &Vec<Arc<MonsterKind>>,
+        monster_kinds_by_tier: &Vec<Vec<u32>>,
         tier: u32,
     ) {
         let mut rng = thread_rng();
 
-        let mut monster_types_in_this_tier = if tier as usize >= monster_types_by_tier.len() {
-            monster_types
+        let mut monster_kinds_in_this_tier = if tier as usize >= monster_kinds_by_tier.len() {
+            monster_kinds
                 .iter()
                 .filter(|mt| mt.tier == tier)
                 .collect::<Vec<_>>()
         } else {
-            monster_types_by_tier[tier as usize]
+            monster_kinds_by_tier[tier as usize]
                 .iter()
-                .filter_map(|&id| monster_types.iter().find(|mt| mt.id == id))
+                .filter_map(|&id| monster_kinds.iter().find(|mt| mt.id == id))
                 .collect::<Vec<_>>()
         };
 
-        monster_types_in_this_tier.shuffle(&mut rng);
-        monster_types_in_this_tier.truncate(2);
+        monster_kinds_in_this_tier.shuffle(&mut rng);
+        monster_kinds_in_this_tier.truncate(2);
 
-        if monster_types_in_this_tier.is_empty() {
+        if monster_kinds_in_this_tier.is_empty() {
             println!("No monster types available for tier {}", tier);
             return;
         }
@@ -107,7 +107,7 @@ impl GeneratedMap {
             .collect();
 
         for pos in positions {
-            let kind = (*monster_types_in_this_tier
+            let kind = (*monster_kinds_in_this_tier
                 .choose(&mut rng)
                 .expect("No monster types available"))
             .clone();
@@ -122,7 +122,7 @@ impl GeneratedMap {
             self.monsters.push(monster);
         }
 
-        self.monster_types = monster_types_in_this_tier
+        self.monster_kinds = monster_kinds_in_this_tier
             .into_iter()
             .map(|mt| mt.id)
             .collect::<Vec<u32>>();

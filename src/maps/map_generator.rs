@@ -36,10 +36,10 @@ use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{BorderFlags, GRID_HEIGHT, GRID_WIDTH, MapTheme};
-use crate::monster_type::MonsterTypes;
+use crate::monster;
+use crate::monster_kind::{MonsterKind, MonsterKinds};
 use crate::position::Position;
 use crate::tile::{Tile, TileKind};
-use crate::{monster, monster_type};
 use rand::seq::SliceRandom;
 
 #[derive(Debug, Clone)]
@@ -112,8 +112,8 @@ pub struct MapAssignment {
 pub struct MapGenerator {
     command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
-    monster_types: MonsterTypes,
-    monster_types_by_tier: Vec<Vec<u32>>,
+    monster_kinds: MonsterKinds,
+    monster_kinds_by_tier: Vec<Vec<u32>>,
     items: ItemsArc,
     pub map_statuses: Arc<Mutex<HashMap<OverworldPos, SharedMapStatus>>>,
 }
@@ -121,26 +121,26 @@ pub struct MapGenerator {
 impl MapGenerator {
     pub async fn new(
         _lua_interface: &LuaInterfaceRc,
-        monster_types: &MonsterTypes,
+        monster_kinds: &MonsterKinds,
         items: &ItemsArc,
     ) -> Self {
         let mut mg = Self {
             command_tx: None,
             thread_handle: None,
-            monster_types: monster_types.clone(),
-            monster_types_by_tier: Vec::new(),
+            monster_kinds: monster_kinds.clone(),
+            monster_kinds_by_tier: Vec::new(),
             items: items.clone(),
             map_statuses: Arc::new(Mutex::new(HashMap::new())),
         };
 
         // Initialize monster types by tier
-        let monster_types_guard = monster_types.lock().unwrap();
-        for mt in monster_types_guard.iter() {
-            if mg.monster_types_by_tier.len() <= mt.tier as usize {
-                mg.monster_types_by_tier
+        let monster_kinds_guard = monster_kinds.lock().unwrap();
+        for mt in monster_kinds_guard.iter() {
+            if mg.monster_kinds_by_tier.len() <= mt.tier as usize {
+                mg.monster_kinds_by_tier
                     .resize(mt.tier as usize + 1, Vec::new());
             }
-            mg.monster_types_by_tier[mt.tier as usize].push(mt.id);
+            mg.monster_kinds_by_tier[mt.tier as usize].push(mt.id);
         }
         mg
     }
@@ -157,8 +157,8 @@ impl MapGenerator {
     pub fn set_callback(&mut self, callback: Box<dyn Fn(MapAssignment) + Send + 'static>) {
         let (command_tx, command_rx) = mpsc::channel::<Command>();
         self.command_tx = Some(command_tx);
-        let monster_types = Arc::clone(&self.monster_types);
-        let monster_types_by_tier = self.monster_types_by_tier.clone();
+        let monster_kinds = Arc::clone(&self.monster_kinds);
+        let monster_kinds_by_tier = self.monster_kinds_by_tier.clone();
         let items = Arc::clone(&self.items);
 
         let statuses = Arc::clone(&self.map_statuses);
@@ -170,8 +170,8 @@ impl MapGenerator {
                         Self::populate_map(
                             &mut map,
                             &params,
-                            &monster_types,
-                            &monster_types_by_tier,
+                            &monster_kinds,
+                            &monster_kinds_by_tier,
                             &items,
                         );
                         let map_arc = Arc::new(Mutex::new(map));
@@ -599,12 +599,12 @@ impl MapGenerator {
     fn populate_map(
         map: &mut GeneratedMap,
         params: &GenerationParams,
-        monster_types: &MonsterTypes,
-        monster_types_by_tier: &Vec<Vec<u32>>,
+        monster_kinds: &MonsterKinds,
+        monster_kinds_by_tier: &Vec<Vec<u32>>,
         items_arc: &ItemsArc,
     ) {
-        let monster_types_guard = monster_types.lock().unwrap();
-        map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
+        let monster_kinds_guard = monster_kinds.lock().unwrap();
+        map.add_random_monsters(&*monster_kinds_guard, monster_kinds_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();
         let mut positions: Vec<Position> = map

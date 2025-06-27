@@ -23,7 +23,7 @@
 use crate::creature::Creature;
 use crate::lua_interface::LuaScripted;
 use crate::maps::TILE_SIZE;
-use crate::monster_type::MonsterType;
+use crate::monster_kind::MonsterKind;
 use crate::position::Position;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex, RwLock};
 #[derive(Debug, Clone)]
 pub struct Monster {
     pub hp: u32,
-    pub kind: Arc<MonsterType>,
+    pub kind: Arc<MonsterKind>,
     pub position: Position,
     pub id: u32,
     pub initialized: bool,
@@ -50,7 +50,7 @@ pub type MonsterArc = Arc<RwLock<Monster>>;
 static MONSTER_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 impl Monster {
-    pub fn new(pos: Position, kind: Arc<MonsterType>) -> Self {
+    pub fn new(pos: Position, kind: Arc<MonsterKind>) -> Self {
         let id = MONSTER_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self {
             position: pos,

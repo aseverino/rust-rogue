@@ -28,10 +28,10 @@ use std::sync::{Arc, Mutex};
 
 use crate::lua_interface::{LuaInterfaceRc, LuaScripted};
 
-pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<MonsterType>> {
+pub async fn load_monster_kinds(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<MonsterKind>> {
     let mut lua_interface = lua_interface_rc.borrow_mut();
     let file: String = load_string("assets/monsters.json").await.unwrap();
-    let list: Vec<MonsterType> = from_str(&file).unwrap();
+    let list: Vec<MonsterKind> = from_str(&file).unwrap();
 
     list.into_iter()
         .map(|mut mt| {
@@ -49,7 +49,7 @@ pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<Mo
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct MonsterType {
+pub struct MonsterKind {
     pub id: u32,
     pub tier: u32,
     pub name: String,
@@ -67,13 +67,13 @@ pub struct MonsterType {
     pub script_id: u32,
 }
 
-impl MonsterType {
+impl MonsterKind {
     pub fn color(&self) -> Color {
         Color::from_rgba(self.color[0], self.color[1], self.color[2], 255)
     }
 }
 
-impl LuaScripted for MonsterType {
+impl LuaScripted for MonsterKind {
     fn set_script_id(&mut self, id: u32) {
         self.script_id = id;
     }
@@ -98,12 +98,12 @@ impl LuaScripted for MonsterType {
     }
 }
 
-impl UserData for MonsterType {
+impl UserData for MonsterKind {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_id", |_, this, ()| Ok(this.id));
         methods.add_method("can_fly", |_, this, ()| Ok(this.flying));
     }
 }
 
-pub type MonsterCollection = Vec<Arc<MonsterType>>;
-pub type MonsterTypes = Arc<Mutex<MonsterCollection>>;
+pub type MonsterCollection = Vec<Arc<MonsterKind>>;
+pub type MonsterKinds = Arc<Mutex<MonsterCollection>>;

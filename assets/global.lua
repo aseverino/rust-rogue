@@ -27,7 +27,7 @@ function on_map_peeked(map)
         GlobalData.SPAWNERS = {}
     end
     local tiles = map:get_walkable_tiles()
-    local monster_types = map:get_monster_types()
+    local monster_kinds = map:get_monster_kinds()
     
     -- shuffle the tiles to ensure randomness
     for i = #tiles, 2, -1 do
@@ -42,6 +42,6 @@ function on_map_peeked(map)
         -- select a random tile from the shuffled list
         local tile = tiles[i]
         local monster = map:add_monster(0, tile)
-        GlobalData.SPAWNERS[monster:get_id()] = monster_types[i % #monster_types + 1]
+        GlobalData.SPAWNERS[monster:get_id()] = monster_kinds[i % #monster_kinds + 1]
     end
 end

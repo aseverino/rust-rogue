@@ -28,7 +28,7 @@ mod items;
 mod lua_interface;
 mod maps;
 mod monster;
-mod monster_type;
+mod monster_kind;
 mod player;
 mod player_spell;
 mod position;

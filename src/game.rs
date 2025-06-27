@@ -32,7 +32,7 @@ use crate::maps::overworld_generator::OverworldGenerator;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{TILE_SIZE, map::Map};
 use crate::monster::{Monster, MonsterRef};
-use crate::monster_type::MonsterType;
+use crate::monster_kind::MonsterKind;
 use crate::player::Player;
 use crate::position::{Direction, Position};
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
@@ -42,7 +42,7 @@ use crate::ui::size_f::SizeF;
 use macroquad::prelude::*;
 use mlua::Table;
 
-use crate::{combat, monster_type, spell_type};
+use crate::{combat, monster_kind, spell_type};
 use macroquad::time::get_time;
 
 use std::cell::{RefCell, RefMut};
@@ -435,15 +435,15 @@ pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
-    let monster_types = Arc::new(Mutex::new(
-        monster_type::load_monster_types(&lua_interface).await,
+    let monster_kinds = Arc::new(Mutex::new(
+        monster_kind::load_monster_kinds(&lua_interface).await,
     ));
 
     let items = Arc::new(RwLock::new(Items::new()));
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld_generator: OverworldGenerator::new(&lua_interface, &monster_types, &items).await,
+        overworld_generator: OverworldGenerator::new(&lua_interface, &monster_kinds, &items).await,
         overworld: Overworld::new(),
         items: items,
         lua_interface: lua_interface,
@@ -486,10 +486,10 @@ pub async fn run() {
     {
         //let shared_map_ptr_clone = shared_map_ptr.clone();
         let mut lua_interface = game.lua_interface.borrow_mut();
-        let monster_types_clone = monster_types.clone();
+        let monster_kinds_clone = monster_kinds.clone();
         lua_interface.map_add_monster_callback = Some(Rc::new(
             move |map_rc, kind_id, pos: Position| -> MonsterRef {
-                let binding = monster_types_clone.lock().unwrap();
+                let binding = monster_kinds_clone.lock().unwrap();
                 let kind = binding
                     .iter()
                     .find(|mt| mt.id == kind_id)
@@ -569,15 +569,14 @@ pub async fn run() {
                 None
             }
         }));
-        let monster_types_clone = monster_types.clone();
+        let monster_kinds_clone = monster_kinds.clone();
         let shared_map_ptr_clone = shared_map_ptr.clone();
         lua_interface.get_monster_kind_by_id_callback =
-            Some(Rc::new(move |id| -> Option<MonsterType> {
+            Some(Rc::new(move |id| -> Option<MonsterKind> {
                 let binding = shared_map_ptr_clone.borrow();
                 let map = binding.0.borrow();
-                if let Some(monster_kind) = monster_types_clone.lock().unwrap().get(id as usize) {
+                if let Some(monster_kind) = monster_kinds_clone.lock().unwrap().get(id as usize) {
                     let monster_kind_ref = monster_kind.as_ref();
-                    // Clone the MonsterType to return
                     let monster_kind_clone = (*monster_kind_ref).clone();
                     Some(monster_kind_clone)
                 } else {

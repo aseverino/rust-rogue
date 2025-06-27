@@ -35,7 +35,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::maps::map::{Map, MapRef};
 use crate::monster::MonsterRef;
-use crate::monster_type::MonsterType;
+use crate::monster_kind::MonsterKind;
 use crate::{items::holdable::Weapon, player::Player, position::Position};
 
 pub trait LuaScripted {
@@ -61,7 +61,7 @@ pub struct LuaInterface {
     script_cache: HashMap<u32, ScriptedFunctions>,
     //pub add_monster_callback: Option<Rc<dyn Fn(u32, Position) -> MonsterRef>>,
     pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRef> + 'static>>,
-    pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterType>>>,
+    pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterKind>>>,
     pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRef>>,
     pub map_add_monster_callback: Option<Rc<dyn Fn(MapRef, u32, Position) -> MonsterRef>>,
     pub script_id_counter: u32,

@@ -42,6 +42,12 @@ use std::fmt::Debug;
 
 static ROOT_ID: u32 = 0;
 
+pub enum AttrKind {
+    Strength,
+    Dexterity,
+    Intelligence,
+}
+
 #[derive(Debug, Clone)]
 pub enum UiEvent {
     IncStrength,
@@ -407,6 +413,37 @@ impl Ui {
         (button, value_id)
     }
 
+    fn create_attr_label(&mut self, attr: AttrKind, parent: &Rc<RefCell<dyn Widget>>) {
+        let str_label = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent)));
+        let str_value = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent)));
+
+        let (label, value_now, binding) = match attr {
+            AttrKind::Strength => ("STR", self.player_str, &mut self.str_value_bound_ids),
+            AttrKind::Dexterity => ("DEX", self.player_dex, &mut self.dex_value_bound_ids),
+            AttrKind::Intelligence => ("INT", self.player_int, &mut self.int_value_bound_ids),
+        };
+
+        {
+            let mut lbl = str_label.borrow_mut();
+            lbl.set_text(&label.to_string());
+            lbl.set_color(GREEN);
+            lbl.set_margin_top(10.0);
+            lbl.base.size = SizeF::new(50.0, lbl.base.size.h);
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+            lbl.add_anchor(AnchorKind::Left, self.sp_value_id - 1, AnchorKind::Left);
+        }
+
+        binding.push(self.id_counter);
+
+        {
+            let mut lbl = str_value.borrow_mut();
+            lbl.set_color(GREEN);
+            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
+            lbl.set_text(&format!("{}", value_now));
+        }
+    }
+
     fn create_left_panel(&mut self) {
         self.left_panel_id = self.id_counter + 1;
         let left_panel_rc =
@@ -537,33 +574,46 @@ impl Ui {
             lbl.set_text(&format!("{}", self.player_sp));
         }
 
-        let str_label = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
-        {
-            let mut lbl = str_label.borrow_mut();
-            lbl.set_text(&"STR".to_string());
-            lbl.set_color(GREEN);
-            lbl.set_margin_top(10.0);
-            lbl.add_anchor(
-                AnchorKind::Top,
-                soul_label.borrow().get_id(),
-                AnchorKind::Bottom,
-            );
-            lbl.add_anchor(
-                AnchorKind::Left,
-                soul_label.borrow().get_id(),
-                AnchorKind::Left,
-            );
+        for i in 0..3 {
+            let attr_kind = match i {
+                0 => AttrKind::Strength,
+                1 => AttrKind::Dexterity,
+                2 => AttrKind::Intelligence,
+                _ => continue,
+            };
+            self.create_attr_label(attr_kind, &parent_dyn);
         }
 
-        self.str_value_bound_ids.push(self.id_counter + 1);
-        let str_value = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
-        {
-            let mut lbl = str_value.borrow_mut();
-            lbl.set_color(GREEN);
-            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
-            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
-            lbl.set_text(&format!("{}", self.player_str));
-        }
+        //self.create_attr_label("DEX", dex_ids, self.player_dex, &parent_dyn);
+        //self.create_attr_label("INT", dex_ids, self.player_int, &parent_dyn);
+
+        // let str_label = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
+        // {
+        //     let mut lbl = str_label.borrow_mut();
+        //     lbl.set_text(&"STR".to_string());
+        //     lbl.set_color(GREEN);
+        //     lbl.set_margin_top(10.0);
+        //     lbl.add_anchor(
+        //         AnchorKind::Top,
+        //         soul_label.borrow().get_id(),
+        //         AnchorKind::Bottom,
+        //     );
+        //     lbl.add_anchor(
+        //         AnchorKind::Left,
+        //         soul_label.borrow().get_id(),
+        //         AnchorKind::Left,
+        //     );
+        // }
+
+        // self.str_value_bound_ids.push(self.id_counter + 1);
+        // let str_value = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
+        // {
+        //     let mut lbl = str_value.borrow_mut();
+        //     lbl.set_color(GREEN);
+        //     lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+        //     lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
+        //     lbl.set_text(&format!("{}", self.player_str));
+        // }
     }
 
     fn create_right_panel(&mut self) {

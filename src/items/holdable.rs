@@ -74,8 +74,13 @@ macro_rules! impl_lua_scripted {
             }
 
             fn script_path(&self) -> Option<String> {
-                self.base_holdable.script.clone()
+                if self.base_holdable.script.clone().is_some() {
+                    Some(format!("assets/items/{}", self.base_holdable.script.clone().unwrap()))
+                } else {
+                    None
+                }
             }
+
 
             fn is_scripted(&self) -> bool {
                 self.base_holdable.scripted

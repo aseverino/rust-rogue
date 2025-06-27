@@ -30,7 +30,7 @@ use crate::lua_interface::{LuaInterfaceRc, LuaScripted};
 
 pub async fn load_monster_kinds(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<MonsterKind>> {
     let mut lua_interface = lua_interface_rc.borrow_mut();
-    let file: String = load_string("assets/monsters.json").await.unwrap();
+    let file: String = load_string("assets/monsters/monsters.json").await.unwrap();
     let list: Vec<MonsterKind> = from_str(&file).unwrap();
 
     list.into_iter()
@@ -82,7 +82,11 @@ impl LuaScripted for MonsterKind {
     }
 
     fn script_path(&self) -> Option<String> {
-        self.script.clone()
+        if self.script.clone().is_some() {
+            Some(format!("assets/monsters/{}", self.script.clone().unwrap()))
+        } else {
+            None
+        }
     }
 
     fn is_scripted(&self) -> bool {

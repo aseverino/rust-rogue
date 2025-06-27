@@ -58,7 +58,7 @@ pub struct SpellType {
 }
 
 pub async fn load_spell_types() -> Vec<Option<Arc<SpellType>>> {
-    let file = load_string("assets/spells.json").await.unwrap();
+    let file = load_string("assets/spells/spells.json").await.unwrap();
     let list: Vec<SpellType> = from_str(&file).unwrap();
 
     // Find the highest index to size the vector

@@ -54,7 +54,7 @@ impl Items {
     }
     pub async fn load_holdable_items(&mut self, lua_interface_rc: &LuaInterfaceRc) {
         let mut lua_interface = lua_interface_rc.borrow_mut();
-        let json_str = std::fs::read_to_string("assets/items.json").unwrap();
+        let json_str = std::fs::read_to_string("assets/items/items.json").unwrap();
         let groups: Vec<HoldableGroup> = serde_json::from_str(&json_str).unwrap();
 
         for group in groups {

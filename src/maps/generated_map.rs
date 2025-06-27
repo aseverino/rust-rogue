@@ -95,6 +95,11 @@ impl GeneratedMap {
         monster_types_in_this_tier.shuffle(&mut rng);
         monster_types_in_this_tier.truncate(2);
 
+        if monster_types_in_this_tier.is_empty() {
+            println!("No monster types available for tier {}", tier);
+            return;
+        }
+
         let len = self.available_walkable_cache.len();
         let positions: Vec<Position> = self
             .available_walkable_cache
@@ -104,7 +109,7 @@ impl GeneratedMap {
         for pos in positions {
             let kind = (*monster_types_in_this_tier
                 .choose(&mut rng)
-                .expect("Monster type list is empty"))
+                .expect("No monster types available"))
             .clone();
 
             let monster = Arc::new(RwLock::new(Monster::new(pos.clone(), kind.clone())));

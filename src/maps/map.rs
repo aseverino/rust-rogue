@@ -86,7 +86,6 @@ impl Map {
         };
 
         m.monsters = Self::convert_monsters(m.generated_map.monsters.clone());
-
         m
     }
 
@@ -337,15 +336,22 @@ impl Map {
         }
     }
 
-    pub fn get_random_adjacent_walkable_position(
+    pub fn get_random_adjacent_position(
         &mut self,
         position: Position,
+        must_be_walkable: bool,
     ) -> Option<Position> {
         let mut rng = thread_rng();
         let mut adjacent_positions: Vec<Position> = position
             .positions_around()
             .into_iter()
-            .filter(|&pos| self.is_tile_walkable(pos))
+            .filter(|&pos| {
+                if must_be_walkable {
+                    self.is_tile_walkable(pos)
+                } else {
+                    !self.is_tile_blocking(pos)
+                }
+            })
             .collect();
 
         if !adjacent_positions.is_empty() {
@@ -386,8 +392,8 @@ impl UserData for MapRef {
         });
 
         methods.add_method(
-            "get_random_adjacent_walkable_position",
-            |lua, this, pos: Table| {
+            "get_random_adjacent_position",
+            |lua, this, (pos, must_be_walkable): (Table, bool)| {
                 let position = Position {
                     x: pos.get("x")?,
                     y: pos.get("y")?,
@@ -395,7 +401,7 @@ impl UserData for MapRef {
                 let new_pos = this
                     .0
                     .borrow_mut()
-                    .get_random_adjacent_walkable_position(position);
+                    .get_random_adjacent_position(position, must_be_walkable);
                 match new_pos {
                     Some(pos) => {
                         let tbl = LuaInterface::add_position(&lua, &pos)?;

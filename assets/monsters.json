@@ -19,6 +19,7 @@
     "max_hp": 10,
     "speed": 100,
     "melee_damage": 1,
+    "flying": true,
     "script": "assets/slime.lua"
   },
   {

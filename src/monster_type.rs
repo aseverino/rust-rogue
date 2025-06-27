@@ -48,7 +48,7 @@ pub async fn load_monster_types(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<Mo
         .collect()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct MonsterType {
     pub id: u32,
     pub tier: u32,
@@ -58,6 +58,8 @@ pub struct MonsterType {
     pub max_hp: u32,
     pub speed: u32,
     pub melee_damage: i32,
+    #[serde(default)]
+    pub flying: bool,
     pub script: Option<String>,
     #[serde(default)]
     pub scripted: bool,
@@ -99,6 +101,7 @@ impl LuaScripted for MonsterType {
 impl UserData for MonsterType {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_id", |_, this, ()| Ok(this.id));
+        methods.add_method("can_fly", |_, this, ()| Ok(this.flying));
     }
 }
 

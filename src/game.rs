@@ -32,6 +32,7 @@ use crate::maps::overworld_generator::OverworldGenerator;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{TILE_SIZE, map::Map};
 use crate::monster::{Monster, MonsterRef};
+use crate::monster_type::MonsterType;
 use crate::player::Player;
 use crate::position::{Direction, Position};
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
@@ -485,9 +486,10 @@ pub async fn run() {
     {
         //let shared_map_ptr_clone = shared_map_ptr.clone();
         let mut lua_interface = game.lua_interface.borrow_mut();
+        let monster_types_clone = monster_types.clone();
         lua_interface.map_add_monster_callback = Some(Rc::new(
             move |map_rc, kind_id, pos: Position| -> MonsterRef {
-                let binding = monster_types.lock().unwrap();
+                let binding = monster_types_clone.lock().unwrap();
                 let kind = binding
                     .iter()
                     .find(|mt| mt.id == kind_id)
@@ -567,6 +569,21 @@ pub async fn run() {
                 None
             }
         }));
+        let monster_types_clone = monster_types.clone();
+        let shared_map_ptr_clone = shared_map_ptr.clone();
+        lua_interface.get_monster_kind_by_id_callback =
+            Some(Rc::new(move |id| -> Option<MonsterType> {
+                let binding = shared_map_ptr_clone.borrow();
+                let map = binding.0.borrow();
+                if let Some(monster_kind) = monster_types_clone.lock().unwrap().get(id as usize) {
+                    let monster_kind_ref = monster_kind.as_ref();
+                    // Clone the MonsterType to return
+                    let monster_kind_clone = (*monster_kind_ref).clone();
+                    Some(monster_kind_clone)
+                } else {
+                    None
+                }
+            }));
         let shared_map_ptr_clone = shared_map_ptr.clone();
         lua_interface.get_current_map_callback = Some(Rc::new(move || -> MapRef {
             let binding = shared_map_ptr_clone.borrow();
@@ -1067,7 +1084,12 @@ pub fn update(
                         }
                         // borrow the map _immutably_ each time to see current occupancy:
                         let map = map_ref.0.borrow();
-                        map.generated_map.tiles[pos].is_walkable()
+
+                        if monster.kind.flying {
+                            return !map.generated_map.tiles[pos].is_blocking();
+                        } else {
+                            return map.generated_map.tiles[pos].is_walkable();
+                        }
                     });
 
                     if let Some(path) = path {

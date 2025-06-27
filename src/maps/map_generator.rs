@@ -604,7 +604,7 @@ impl MapGenerator {
         items_arc: &ItemsArc,
     ) {
         let monster_types_guard = monster_types.lock().unwrap();
-        //map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
+        map.add_random_monsters(&*monster_types_guard, monster_types_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();
         let mut positions: Vec<Position> = map

@@ -35,6 +35,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::maps::map::{Map, MapRef};
 use crate::monster::MonsterRef;
+use crate::monster_type::MonsterType;
 use crate::{items::holdable::Weapon, player::Player, position::Position};
 
 pub trait LuaScripted {
@@ -60,6 +61,7 @@ pub struct LuaInterface {
     script_cache: HashMap<u32, ScriptedFunctions>,
     //pub add_monster_callback: Option<Rc<dyn Fn(u32, Position) -> MonsterRef>>,
     pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRef> + 'static>>,
+    pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterType>>>,
     pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRef>>,
     pub map_add_monster_callback: Option<Rc<dyn Fn(MapRef, u32, Position) -> MonsterRef>>,
     pub script_id_counter: u32,
@@ -75,6 +77,7 @@ impl LuaInterface {
             script_cache: HashMap::new(),
             //add_monster_callback: None,
             get_monster_by_id_callback: None,
+            get_monster_kind_by_id_callback: None,
             get_current_map_callback: None,
             map_add_monster_callback: None,
             script_id_counter: 1,
@@ -118,6 +121,23 @@ impl LuaInterface {
                         lua.create_userdata(monster_rc.clone()).map(Value::UserData)
                     } else {
                         Err(Error::external(format!("No monster with ID {}", id)))
+                    }
+                } else {
+                    Err(Error::external("No get_monster_by_id callback set!"))
+                }
+            }
+        })?;
+
+        lua_if.add_lua_fn("get_monster_kind_by_id", {
+            let cb_opt = lua_if.get_monster_kind_by_id_callback.clone();
+            move |lua, id: u32| {
+                if let Some(cb) = &cb_opt {
+                    if let Some(monster_kind) = cb(id) {
+                        let lua_monster_kind = Rc::new(RefCell::new(monster_kind.clone()));
+                        lua.create_userdata(lua_monster_kind.clone())
+                            .map(Value::UserData)
+                    } else {
+                        Err(Error::external(format!("No monster kind with ID {}", id)))
                     }
                 } else {
                     Err(Error::external("No get_monster_by_id callback set!"))

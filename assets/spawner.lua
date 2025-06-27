@@ -43,7 +43,8 @@ function on_update(monster)
         local pos = monster:get_position()
         local map = get_current_map()
 
-        pos = map:get_random_adjacent_walkable_position(pos)
+        local monster_kind = get_monster_kind_by_id(spawner_type)
+        pos = map:get_random_adjacent_position(pos, monster_kind:can_fly())
 
         map:add_monster(spawner_type, pos)
     end

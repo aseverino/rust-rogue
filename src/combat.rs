@@ -199,16 +199,16 @@ pub(crate) fn do_spell_combat(
     spell_index: usize,
     lua_interface: &LuaInterfaceRc,
 ) {
-    let map = map_ref.0.borrow_mut();
-    if map.is_tile_blocking(target_pos) {
-        println!("Target position is blocked for spell casting.");
-        return;
-    }
-
     let spell = player
         .spells
         .get_mut(spell_index)
         .expect("Selected spell index out of bounds");
+
+    let map = map_ref.0.borrow_mut();
+    if spell.spell_type.strategy == SpellStrategy::Aim && map.is_tile_blocking(target_pos) {
+        println!("Target position is blocked for spell casting.");
+        return;
+    }
 
     let damage = spell.spell_type.basepower as i32;
 

@@ -863,16 +863,13 @@ pub fn update(
             game.player.goal_position = None; // Clear goal position
             game.last_player_event = PlayerEvent::SpellCast;
         } else {
-            let ranged_attack = {
+            let attack = {
                 if let Some(weapon) = &game.player.equipment.weapon {
-                    if let Some(range) = weapon.range {
-                        let map = map_ref.0.borrow();
-                        if map.is_tile_enemy_occupied(player_goal) {
-                            player_pos.distance_to(&player_goal) <= (range as usize)
-                                && game.player.line_of_sight.contains(&player_goal)
-                        } else {
-                            false
-                        }
+                    let range = weapon.range.unwrap_or(1);
+                    let map = map_ref.0.borrow();
+                    if map.is_tile_enemy_occupied(player_goal) {
+                        player_pos.distance_to(&player_goal) <= (range as usize)
+                            && game.player.line_of_sight.contains(&player_goal)
                     } else {
                         false
                     }
@@ -881,7 +878,7 @@ pub fn update(
                 }
             };
 
-            if ranged_attack {
+            if attack {
                 update_turn = true; // Update monsters if player attacks
                 combat::do_melee_combat(
                     &mut game.player,
@@ -908,6 +905,23 @@ pub fn update(
                     game.player.goal_position = None; // Clear goal if no path found
                     game.last_player_event = PlayerEvent::AutoMoveEnd;
                 }
+
+                // if game.player.goal_position == None
+                //     && game.last_player_event == PlayerEvent::AutoMoveEnd
+                // {
+                //     let map = map_ref.0.borrow();
+                //     if map.is_tile_enemy_occupied(player_goal) {
+                //         update_turn = true; // Update monsters if player is at goal
+                //         drop(map);
+                //         combat::do_melee_combat(
+                //             &mut game.player,
+                //             map_ref,
+                //             player_pos,
+                //             player_goal,
+                //             &game.lua_interface,
+                //         );
+                //     }
+                // }
             }
         }
     } else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {

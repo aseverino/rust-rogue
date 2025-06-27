@@ -312,7 +312,7 @@ impl Map {
     }
 
     pub fn is_tile_blocking(&self, pos: Position) -> bool {
-        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.generated_map.tiles[pos].is_blocking()
+        pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT || self.generated_map.tiles[pos].is_blocking()
     }
 
     pub fn get_chest_items(&self, position: &Position) -> Option<&Vec<u32>> {

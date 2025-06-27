@@ -754,7 +754,7 @@ pub async fn run() {
                                     .unwrap()
                                     .items_by_id
                                     .get(item_id)
-                                    .map(|item| (*item_id, item.name().to_string()))
+                                    .map(|item| (item.id(), item.name().to_string()))
                             })
                             .collect();
 

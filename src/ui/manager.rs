@@ -356,7 +356,6 @@ impl Ui {
                     item_button.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Left);
                     item_button.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
 
-                    let item_id = item_id;
                     item_button.set_on_click(Box::new(move |ui, _| {
                         ui.events.push_back(UiEvent::ChestAction(item_id));
                     }));
@@ -374,11 +373,16 @@ impl Ui {
                     if let Some(child_rc) = panel_children.get(index + 1).and_then(|c| c.upgrade())
                     {
                         let mut child_ref = child_rc.borrow_mut();
-                        if let Some(item_text) =
+                        if let Some(item_button) =
                             child_ref.as_any_mut().downcast_mut::<WidgetButton>()
                         {
-                            item_text.set_visible(true);
-                            item_text.set_text(&format!("{}", item_name));
+                            item_button.set_visible(true);
+                            item_button.set_text(&format!("{}", item_name));
+
+                            let item_id = *item_id;
+                            item_button.set_on_click(Box::new(move |ui, _| {
+                                ui.events.push_back(UiEvent::ChestAction(item_id));
+                            }));
                         }
                     }
                 }

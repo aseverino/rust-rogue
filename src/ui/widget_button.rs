@@ -168,7 +168,7 @@ impl Widget for WidgetButton {
     }
 
     fn on_click(&mut self, ui: &mut Ui, pos: PointF) {
-        if self.contains_point(ui, pos) {
+        if self.is_visible() && self.contains_point(ui, pos) {
             if let Some(cb) = self.click_callback.as_mut() {
                 cb(ui, pos);
             }

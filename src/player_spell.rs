@@ -26,5 +26,4 @@ use std::sync::Arc;
 #[derive(Clone, Debug)]
 pub struct PlayerSpell {
     pub spell_type: Arc<SpellType>,
-    pub charges: u32, // Current charges available
 }

@@ -31,6 +31,7 @@ use crate::{
     monster::Monster,
     player::Player,
     position::Position,
+    spell_type::SpellStrategy,
     tile::{NO_CREATURE, PLAYER_CREATURE_ID},
 };
 
@@ -179,7 +180,7 @@ pub(crate) fn do_melee_combat(
     };
 
     let creature_id = map_ref.0.borrow().generated_map.tiles[target_pos].creature;
-    if creature_id >= 0 {
+    if creature_id > 0 {
         do_damage(
             player,
             map_ref,
@@ -193,14 +194,14 @@ pub(crate) fn do_melee_combat(
 pub(crate) fn do_spell_combat(
     player: &mut Player,
     map_ref: &MapRef,
-    _attacker_pos: Position,
+    attacker_pos: Position,
     target_pos: Position,
     spell_index: usize,
     lua_interface: &LuaInterfaceRc,
 ) {
     let map = map_ref.0.borrow_mut();
-    if !map.is_tile_walkable(target_pos) {
-        println!("Target position is not walkable for spell casting.");
+    if map.is_tile_blocking(target_pos) {
+        println!("Target position is blocked for spell casting.");
         return;
     }
 
@@ -215,9 +216,12 @@ pub(crate) fn do_spell_combat(
     let mut target_creatures: Vec<u32> = Vec::new();
 
     map.spell_fov_cache.area.iter().for_each(|&pos| {
+        if pos == attacker_pos && spell.spell_type.strategy == SpellStrategy::Fixed {
+            return;
+        }
         target_positions.push(pos);
         let creature_id = map.generated_map.tiles[pos].creature;
-        if creature_id >= 0 {
+        if creature_id > 0 {
             target_creatures.push(creature_id as u32);
         }
     });

@@ -71,15 +71,11 @@ pub struct Player {
 
 impl Player {
     pub fn new(pos: Position) -> Self {
-        let first_spell = spell_type::get_spell_types()[1].clone();
+        let first_spell = spell_type::get_spell_types()[2].clone();
         let mut spells: Vec<PlayerSpell> = Vec::new();
 
         if let Some(spell) = first_spell {
-            let max_charges = spell.max_charges;
-            spells = vec![PlayerSpell {
-                spell_type: spell,
-                charges: max_charges,
-            }];
+            spells = vec![PlayerSpell { spell_type: spell }];
         }
 
         Self {

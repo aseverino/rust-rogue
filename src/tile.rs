@@ -64,6 +64,10 @@ impl Tile {
             && (self.creature == NO_CREATURE || self.creature == PLAYER_CREATURE_ID)
     }
 
+    pub fn is_blocking(&self) -> bool {
+        self.kind == TileKind::Wall
+    }
+
     pub fn has_container(&self) -> bool {
         self.items
             .iter()

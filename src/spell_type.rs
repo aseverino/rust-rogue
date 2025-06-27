@@ -38,10 +38,9 @@ pub enum SpellKind {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
-pub enum SpellAreaKind {
-    Missile,
-    Area,
-    Bomb,
+pub enum SpellStrategy {
+    Aim,
+    Fixed,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -49,13 +48,13 @@ pub struct SpellType {
     pub index: u32, // Unique index for the spell type
     pub name: String,
     pub kind: SpellKind,
-    pub area_kind: SpellAreaKind,
+    pub strategy: SpellStrategy,
     pub area_radius: Option<u32>,
     pub description: String,
-    pub max_charges: u32, // Number of charges available
-    pub range: u32,       // Range in tiles
-    pub basepower: u32,   // Base Power of the spell
-    pub cost: u32,        // Cost to buy
+    pub mp_cost: u32,
+    pub range: Option<u32>, // Range in tiles
+    pub basepower: u32,     // Base Power of the spell
+    pub cost: u32,          // Cost to buy
 }
 
 pub async fn load_spell_types() -> Vec<Option<Arc<SpellType>>> {

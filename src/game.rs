@@ -815,14 +815,17 @@ pub fn update(
                     (in_line_of_sight, spell_range)
                 };
 
-                if in_line_of_sight && player_pos.in_range(&player_goal, spell_range as usize) {
+                if in_line_of_sight
+                    && (spell_range.is_none()
+                        || player_pos.in_range(&player_goal, spell_range.unwrap() as usize))
+                {
                     if let Some(spell) = game.player.spells.get_mut(index) {
-                        if spell.charges > 0 {
-                            spell.charges -= 1;
-                            println!("Casting spell charges {}", spell.charges);
+                        if game.player.mp > spell.spell_type.mp_cost {
+                            game.player.mp -= spell.spell_type.mp_cost;
+                            println!("Casting spell");
                             should_cast = true;
                         } else {
-                            println!("No charges left for this spell!");
+                            println!("Not enough mp for this spell!");
                         }
                     }
                 }

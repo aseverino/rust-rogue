@@ -3,9 +3,9 @@
     "index": 0,
     "name": "Magic Missile",
     "kind": "Attack",
-    "area_kind": "Missile",
+    "strategy": "Aim",
     "description": "A basic spell that launches a missile at a target.",
-    "max_charges": 25,
+    "mp_cost": 1,
     "range": 12,
     "basepower": 11,
     "cost": 1
@@ -14,12 +14,23 @@
     "index": 1,
     "name": "Fireball",
     "kind": "Attack",
-    "area_kind": "Bomb",
+    "strategy": "Aim",
     "area_radius": 2,
-    "description": "A basic spell that launches a missile at a target.",
-    "max_charges": 18,
+    "description": "A basic spell that launches a fireball.",
+    "mp_cost": 2,
     "range": 8,
     "basepower": 9,
+    "cost": 1
+  },
+  {
+    "index": 2,
+    "name": "Explosion",
+    "kind": "Attack",
+    "strategy": "Fixed",
+    "area_radius": 3,
+    "description": "A basic spell that launches a fireball.",
+    "mp_cost": 3,
+    "basepower": 12,
     "cost": 1
   }
 ]

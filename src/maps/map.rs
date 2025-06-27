@@ -38,6 +38,7 @@ use crate::monster::{Monster, MonsterRef};
 use crate::player::Player;
 use crate::position::POSITION_INVALID;
 use crate::position::Position;
+use crate::spell_type::SpellStrategy;
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::point_f::PointF;
 use external_rand::seq::SliceRandom;
@@ -186,15 +187,27 @@ impl Map {
         let mut spell_fov_needs_update = false;
         if let Some(selected_spell) = player.selected_spell {
             if let Some(player_spell) = player.spells.get(selected_spell) {
-                if let Some(hovered) = self.hovered_tile {
-                    let spell_type = &player_spell.spell_type;
-                    let radius = self.spell_fov_cache.radius;
-                    if spell_type.area_radius != Some(radius) {
-                        spell_fov_needs_update = true;
-                    } else if hovered != self.spell_fov_cache.origin {
-                        spell_fov_needs_update = true;
+                if player_spell.spell_type.strategy == crate::spell_type::SpellStrategy::Aim {
+                    if let Some(hovered) = self.hovered_tile {
+                        let spell_type = &player_spell.spell_type;
+                        let radius = self.spell_fov_cache.radius;
+                        if spell_type.area_radius != Some(radius) {
+                            spell_fov_needs_update = true;
+                        } else if hovered != self.spell_fov_cache.origin {
+                            spell_fov_needs_update = true;
+                        }
+                        self.should_draw_spell_fov = true;
                     }
+                } else {
                     self.should_draw_spell_fov = true;
+                    self.spell_fov_cache.origin = player.pos();
+                    self.spell_fov_cache.radius = player_spell.spell_type.area_radius.unwrap_or(0);
+                    self.spell_fov_cache.area = Navigator::compute_fov(
+                        &self.generated_map.tiles,
+                        self.spell_fov_cache.origin,
+                        self.spell_fov_cache.radius as usize,
+                    );
+                    return;
                 }
             }
         }
@@ -225,8 +238,14 @@ impl Map {
                     let player_pos = player.pos();
                     let tile_pos = Position { x, y };
                     if let Some(spell) = player.spells.get(player.selected_spell.unwrap()) {
-                        if spell.spell_type.range > 0
-                            && player_pos.in_range(&tile_pos, spell.spell_type.range as usize)
+                        if spell.spell_type.strategy == SpellStrategy::Fixed {
+                            if tile_pos == player_pos {
+                                continue;
+                            }
+                        }
+                        if spell.spell_type.range.is_some()
+                            && player_pos
+                                .in_range(&tile_pos, spell.spell_type.range.unwrap() as usize)
                             && player.line_of_sight.contains(&tile_pos)
                         {
                             draw_rectangle(
@@ -291,6 +310,10 @@ impl Map {
 
     pub fn is_tile_walkable(&self, pos: Position) -> bool {
         pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.generated_map.tiles[pos].is_walkable()
+    }
+
+    pub fn is_tile_blocking(&self, pos: Position) -> bool {
+        pos.x < GRID_WIDTH && pos.y < GRID_HEIGHT && self.generated_map.tiles[pos].is_blocking()
     }
 
     pub fn get_chest_items(&self, position: &Position) -> Option<&Vec<u32>> {

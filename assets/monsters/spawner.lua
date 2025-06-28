@@ -20,9 +20,13 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
+---@type integer
 local turn_count = 1
+---@type integer?
 local spawner_type = nil
 
+---@param monster Monster
+---@return boolean
 function on_spawn(monster)
     if not GlobalData.SPAWNERS then
         return false
@@ -36,9 +40,11 @@ function on_spawn(monster)
     return true
 end
 
+---@param monster Monster
+---@return boolean
 function on_update(monster)
     if not spawner_type then return false end
-
+    
     if turn_count % 3 == 0 then
         local pos = monster:get_position()
         local map = get_current_map()

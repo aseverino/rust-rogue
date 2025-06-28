@@ -20,18 +20,36 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
+---@class Position
+---@field x integer
+---@field y integer
+Position = {}
+
+---@meta
+---@param monster Monster
+---@return boolean
+function on_spawn(monster) end
+
+---@param monster Monster
+---@return boolean
+function on_update(monster) end
+
+---@param monster Monster
+---@return boolean
+function on_death(monster) end
+
+---@param map Map
+function on_map_peeked(map) end
+
 ---@param weapon Weapon
 ---@param player Player
 ---@param target Player|Monster
 ---@return integer
-function on_get_attack_damage(weapon, player, target)
-    local damage = 0
-    for _, die in ipairs(weapon:get_attack_dice()) do
-        damage = damage + math.random(1, die)
-    end
-    return damage + weapon:get_modifier()
-end
+function on_get_attack_damage(weapon, player, target) end
 
--- function on_check_accuracy(weapon, player, target)
---     return 1.0
--- end
+---@return Map
+function get_current_map() end
+
+---@param id integer
+---@return MonsterKind
+function get_monster_kind_by_id(id) end

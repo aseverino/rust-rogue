@@ -20,18 +20,6 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
----@param weapon Weapon
----@param player Player
----@param target Player|Monster
----@return integer
-function on_get_attack_damage(weapon, player, target)
-    local damage = 0
-    for _, die in ipairs(weapon:get_attack_dice()) do
-        damage = damage + math.random(1, die)
-    end
-    return damage + weapon:get_modifier()
-end
-
--- function on_check_accuracy(weapon, player, target)
---     return 1.0
--- end
+---@meta
+---@class Player
+Player = {}

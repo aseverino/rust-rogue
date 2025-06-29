@@ -27,6 +27,7 @@ use external_rand::thread_rng;
 use mlua::{Table, UserData, UserDataMethods};
 
 use crate::creature::Creature;
+use crate::graphics;
 use crate::graphics::graphics_manager::GraphicsManager;
 use crate::items::base_item::ItemKind;
 use crate::items::container::Container;
@@ -300,12 +301,17 @@ impl Map {
             }
         }
 
+        let mut material = graphics_manager.get_color_replace_material();
+        gl_use_material(&material);
+
         for (_, monster) in &self.monsters {
-            monster.borrow().draw(graphics_manager, offset);
+            monster.borrow().draw(&mut material, offset);
         }
 
+        gl_use_default_material();
+
         if self.generated_map.visited_state == VisitedState::Visited {
-            player.draw(graphics_manager, offset);
+            player.draw(&mut material, offset);
         }
     }
 

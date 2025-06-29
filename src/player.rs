@@ -155,7 +155,7 @@ impl Creature for Player {
         (self.hp, self.max_hp)
     }
 
-    fn draw(&self, graphics_manager: &mut GraphicsManager, offset: PointF) {
+    fn draw(&self, _material: &mut Material, offset: PointF) {
         // Base colored rectangle
         draw_rectangle(
             offset.x + self.position.x as f32 * TILE_SIZE + 4.0,

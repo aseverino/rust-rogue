@@ -99,12 +99,15 @@ impl MonsterKinds {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(from = "MonsterKindHelper")]
 pub struct MonsterKind {
     pub id: u32,
     pub tier: u32,
     pub name: String,
     pub glyph: char,
     pub colors: Vec<[u8; 3]>,
+    #[serde(skip)]
+    pub material_colors: [Vec4; 2],
     pub max_hp: u32,
     pub speed: u32,
     pub melee_damage: i32,
@@ -119,6 +122,62 @@ pub struct MonsterKind {
     pub sprite_image: String,
     #[serde(skip)]
     pub sprite: Option<MonsterKindSprite>,
+}
+
+#[derive(Deserialize)]
+struct MonsterKindHelper {
+    pub id: u32,
+    pub tier: u32,
+    pub name: String,
+    pub glyph: char,
+    pub colors: Vec<[u8; 3]>,
+    pub max_hp: u32,
+    pub speed: u32,
+    pub melee_damage: i32,
+    #[serde(default)]
+    pub flying: bool,
+    pub script: Option<String>,
+    #[serde(default)]
+    pub scripted: bool,
+    #[serde(default)]
+    pub sprite_image: String,
+}
+
+fn to_vec4(rgb: &[u8; 3]) -> Vec4 {
+    Vec4::new(
+        rgb[0] as f32 / 255.0,
+        rgb[1] as f32 / 255.0,
+        rgb[2] as f32 / 255.0,
+        1.0,
+    )
+}
+
+impl From<MonsterKindHelper> for MonsterKind {
+    fn from(helper: MonsterKindHelper) -> Self {
+        let color1 = &helper.colors.get(0).copied().unwrap_or([255, 0, 0]);
+        let material_colors = [
+            to_vec4(color1),
+            to_vec4(&helper.colors.get(1).copied().unwrap_or(*color1)),
+        ];
+
+        Self {
+            id: helper.id,
+            tier: helper.tier,
+            name: helper.name,
+            glyph: helper.glyph,
+            colors: helper.colors,
+            material_colors,
+            max_hp: helper.max_hp,
+            speed: helper.speed,
+            melee_damage: helper.melee_damage,
+            flying: helper.flying,
+            script: helper.script,
+            scripted: helper.scripted,
+            script_id: 0,
+            sprite_image: helper.sprite_image,
+            sprite: None,
+        }
+    }
 }
 
 impl MonsterKind {

@@ -26,13 +26,15 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use macroquad::prelude::Material;
+
 use crate::{graphics::graphics_manager::GraphicsManager, position::Position, ui::point_f::PointF};
 
 pub trait Creature {
     fn name(&self) -> &str;
     fn pos(&self) -> Position;
     fn set_pos(&mut self, pos: Position);
-    fn draw(&self, graphics_manager: &mut GraphicsManager, offset: PointF);
+    fn draw(&self, material: &mut Material, offset: PointF);
 
     fn add_health(&mut self, amount: i32);
 

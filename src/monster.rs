@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 use crate::creature::Creature;
+use crate::graphics;
+use crate::graphics::graphics_manager::GraphicsManager;
 use crate::maps::TILE_SIZE;
 use crate::monster_kind::{MonsterKind, MonsterKindSprite};
 use crate::position::Position;
@@ -83,12 +85,16 @@ impl Creature for Monster {
         (self.hp, self.kind.max_hp)
     }
 
-    fn draw(&self, offset: PointF) {
+    fn draw(&self, graphics_manager: &mut GraphicsManager, offset: PointF) {
         if self.hp <= 0 {
             return; // Don't draw dead monsters
         }
 
         if let Some(sprite_arc) = &self.kind.sprite {
+            let mut material = graphics_manager.get_color_replace_material().clone();
+            gl_use_material(&material);
+            graphics::graphics_manager::set_color_replacement_uniforms(&mut material);
+
             let sprite = sprite_arc.read().unwrap();
             let sprite_size = Vec2::new(32.0, 32.0);
 
@@ -109,6 +115,7 @@ impl Creature for Monster {
                 offset.y + self.position.y as f32 * TILE_SIZE + (TILE_SIZE - sprite_size.y) / 2.0;
 
             draw_texture_ex(&sprite, x, y, WHITE, draw_params);
+            gl_use_default_material();
         } else {
             draw_rectangle(
                 offset.x + self.position.x as f32 * TILE_SIZE + 8.0,

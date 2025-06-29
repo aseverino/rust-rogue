@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::creature::Creature;
+use crate::graphics::graphics_manager::GraphicsManager;
 use crate::items::base_item::Item;
 use crate::items::holdable::*;
 use crate::maps::TILE_SIZE;
@@ -154,7 +155,7 @@ impl Creature for Player {
         (self.hp, self.max_hp)
     }
 
-    fn draw(&self, offset: PointF) {
+    fn draw(&self, graphics_manager: &mut GraphicsManager, offset: PointF) {
         // Base colored rectangle
         draw_rectangle(
             offset.x + self.position.x as f32 * TILE_SIZE + 4.0,

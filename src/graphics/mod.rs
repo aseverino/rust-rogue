@@ -20,44 +20,4 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
-
-use crate::{graphics::graphics_manager::GraphicsManager, position::Position, ui::point_f::PointF};
-
-pub trait Creature {
-    fn name(&self) -> &str;
-    fn pos(&self) -> Position;
-    fn set_pos(&mut self, pos: Position);
-    fn draw(&self, graphics_manager: &mut GraphicsManager, offset: PointF);
-
-    fn add_health(&mut self, amount: i32);
-
-    fn get_health(&self) -> (u32, u32);
-
-    fn is_player(&self) -> bool {
-        false
-    }
-    fn is_monster(&self) -> bool {
-        false
-    }
-    fn as_any(&self) -> &dyn std::any::Any;
-}
-
-// pub type CreatureRef = Arc<RwLock<dyn Creature>>;
-
-// pub fn downcast_rc_creature<T: 'static>(rc: &Rc<dyn Creature>) -> Option<Rc<T>> {
-//     if rc.as_any().is::<T>() {
-//         // SAFETY: we just checked type, so we can clone Rc and transmute its type
-//         let raw = Rc::as_ptr(rc) as *const T;
-//         let cloned = unsafe { Rc::from_raw(raw) };
-//         let result = Rc::clone(&cloned);
-//         std::mem::forget(cloned); // avoid dropping original
-//         Some(result)
-//     } else {
-//         None
-//     }
-// }
+pub mod graphics_manager;

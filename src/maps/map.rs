@@ -27,6 +27,7 @@ use external_rand::thread_rng;
 use mlua::{Table, UserData, UserDataMethods};
 
 use crate::creature::Creature;
+use crate::graphics::graphics_manager::GraphicsManager;
 use crate::items::base_item::ItemKind;
 use crate::items::container::Container;
 use crate::lua_interface::LuaInterface;
@@ -225,7 +226,12 @@ impl Map {
         }
     }
 
-    pub fn draw(&mut self, player: &mut Player, offset: PointF) {
+    pub fn draw(
+        &mut self,
+        graphics_manager: &mut GraphicsManager,
+        player: &mut Player,
+        offset: PointF,
+    ) {
         self.update_spell_fov_cache(player);
 
         for x in 0..GRID_WIDTH {
@@ -295,11 +301,11 @@ impl Map {
         }
 
         for (_, monster) in &self.monsters {
-            monster.borrow().draw(offset);
+            monster.borrow().draw(graphics_manager, offset);
         }
 
         if self.generated_map.visited_state == VisitedState::Visited {
-            player.draw(offset);
+            player.draw(graphics_manager, offset);
         }
     }
 

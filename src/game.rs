@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::creature::Creature;
+use crate::graphics::graphics_manager::GraphicsManager;
 use crate::input::{Input, KeyboardAction};
 use crate::items::base_item::ItemKind;
 use crate::items::collection::{Items, ItemsArc};
@@ -101,9 +102,15 @@ impl GameState {
     }
 }
 
-fn draw(game: &mut GameState, ui: &mut Ui, map: &mut Map, game_interface_offset: PointF) {
+fn draw(
+    graphics_manager: &mut GraphicsManager,
+    game: &mut GameState,
+    ui: &mut Ui,
+    map: &mut Map,
+    game_interface_offset: PointF,
+) {
     if !ui.is_focused {
-        map.draw(&mut game.player, game_interface_offset);
+        map.draw(graphics_manager, &mut game.player, game_interface_offset);
     }
 
     ui.update_geometry(SizeF::new(screen_width(), screen_height()));
@@ -485,6 +492,7 @@ pub async fn run() {
     let mut map_update = MapTravelEvent::None;
     let mut last_map_travel_kind = MapTravelKind::BorderCross;
     let mut ui = Ui::new();
+    let mut graphics_manager = GraphicsManager::new();
 
     {
         //let shared_map_ptr_clone = shared_map_ptr.clone();
@@ -691,7 +699,13 @@ pub async fn run() {
         if now - last_move_time < move_interval {
             {
                 let mut map = current_map_rc.0.borrow_mut();
-                draw(&mut game, &mut ui, &mut map, game_interface_offset);
+                draw(
+                    &mut graphics_manager,
+                    &mut game,
+                    &mut ui,
+                    &mut map,
+                    game_interface_offset,
+                );
             }
             next_frame().await;
             continue;
@@ -716,7 +730,13 @@ pub async fn run() {
             } else {
                 let mut map = peek_map_rc.as_mut().unwrap().0.borrow_mut();
                 map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
-                draw(&mut game, &mut ui, &mut map, game_interface_offset);
+                draw(
+                    &mut graphics_manager,
+                    &mut game,
+                    &mut ui,
+                    &mut map,
+                    game_interface_offset,
+                );
             }
 
             next_frame().await;
@@ -803,7 +823,13 @@ pub async fn run() {
                 goal_position = None;
             }
 
-            draw(&mut game, &mut ui, &mut map, game_interface_offset);
+            draw(
+                &mut graphics_manager,
+                &mut game,
+                &mut ui,
+                &mut map,
+                game_interface_offset,
+            );
         }
 
         next_frame().await;
@@ -1098,6 +1124,9 @@ pub fn update(
                             continue;
                         }
                     }
+                    drop(clone);
+                } else {
+                    drop(monster); // Just drop the immutable borrow
                 }
 
                 let mut monster = monster_ref.borrow_mut();

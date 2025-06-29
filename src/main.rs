@@ -23,6 +23,7 @@
 mod combat;
 mod creature;
 mod game;
+mod graphics;
 mod input;
 mod items;
 mod lua_interface;

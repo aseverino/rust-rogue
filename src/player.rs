@@ -27,8 +27,8 @@ use crate::items::holdable::*;
 use crate::maps::TILE_SIZE;
 use crate::player_spell::PlayerSpell;
 use crate::position::Position;
-use crate::spell_type;
 use crate::ui::point_f::PointF;
+use crate::{graphics, spell_type};
 use macroquad::prelude::*;
 use mlua::{UserData, UserDataMethods};
 use std::cell::RefCell;
@@ -68,10 +68,13 @@ pub struct Player {
     pub line_of_sight: HashSet<Position>,
 
     pub equipment: Equipment,
+
+    pub sprite: Option<Arc<RwLock<Texture2D>>>,
+    pub material_colors: [Color; 2],
 }
 
 impl Player {
-    pub fn new(pos: Position) -> Self {
+    pub async fn new(pos: Position) -> Self {
         let first_spell = spell_type::get_spell_types()[2].clone();
         let mut spells: Vec<PlayerSpell> = Vec::new();
 
@@ -79,7 +82,7 @@ impl Player {
             spells = vec![PlayerSpell { spell_type: spell }];
         }
 
-        Self {
+        let mut p = Self {
             hp: 100,
             max_hp: 100,
             mp: 50,
@@ -101,7 +104,26 @@ impl Player {
                 armor: None,
                 boots: None,
             },
-        }
+
+            sprite: None,
+            material_colors: [
+                Color::from_rgba(0, 0, 255, 255),
+                Color::from_rgba(255, 255, 255, 255),
+            ],
+        };
+
+        let path = "assets/sprites/player/player.png";
+        match macroquad::texture::load_texture(path).await {
+            Ok(texture) => {
+                texture.set_filter(FilterMode::Nearest);
+                p.sprite = Some(Arc::new(RwLock::new(texture)));
+            }
+            Err(e) => {
+                eprintln!("Failed to load texture from {}: {}", path, e);
+            }
+        };
+
+        p
     }
 
     fn add_mana(&mut self, amount: i32) {
@@ -155,24 +177,51 @@ impl Creature for Player {
         (self.hp, self.max_hp)
     }
 
-    fn draw(&self, _material: &mut Material, offset: PointF) {
-        // Base colored rectangle
-        draw_rectangle(
-            offset.x + self.position.x as f32 * TILE_SIZE + 4.0,
-            offset.y + self.position.y as f32 * TILE_SIZE + 4.0,
-            TILE_SIZE - 8.0,
-            TILE_SIZE - 8.0,
-            BLUE,
-        );
+    fn draw(&self, material: &mut Material, offset: PointF) {
+        if let Some(sprite_arc) = &self.sprite {
+            let sprite = sprite_arc.read().unwrap();
+            let sprite_size = Vec2::new(32.0, 32.0);
+            graphics::graphics_manager::set_color_replacement_uniforms(
+                material,
+                self.material_colors[0],
+                self.material_colors[1],
+            );
 
-        // Glyph overlay
-        draw_text(
-            "@",
-            offset.x + self.position.x as f32 * TILE_SIZE + 10.0,
-            offset.y + self.position.y as f32 * TILE_SIZE + 20.0,
-            18.0,
-            WHITE,
-        );
+            let draw_params = DrawTextureParams {
+                dest_size: Some(sprite_size),
+                source: Some(Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 16.0,
+                    h: 16.0,
+                }),
+                ..Default::default()
+            };
+
+            let x =
+                offset.x + self.position.x as f32 * TILE_SIZE + (TILE_SIZE - sprite_size.x) / 2.0;
+            let y =
+                offset.y + self.position.y as f32 * TILE_SIZE + (TILE_SIZE - sprite_size.y) / 2.0;
+
+            draw_texture_ex(&sprite, x, y, WHITE, draw_params);
+        } else {
+            draw_rectangle(
+                offset.x + self.position.x as f32 * TILE_SIZE + 4.0,
+                offset.y + self.position.y as f32 * TILE_SIZE + 4.0,
+                TILE_SIZE - 8.0,
+                TILE_SIZE - 8.0,
+                BLUE,
+            );
+
+            // Glyph overlay
+            draw_text(
+                "@",
+                offset.x + self.position.x as f32 * TILE_SIZE + 10.0,
+                offset.y + self.position.y as f32 * TILE_SIZE + 20.0,
+                18.0,
+                WHITE,
+            );
+        }
     }
 
     fn is_player(&self) -> bool {

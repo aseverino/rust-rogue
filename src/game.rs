@@ -447,7 +447,7 @@ pub async fn run() {
     let items = Arc::new(RwLock::new(Items::new()));
 
     let mut game = GameState {
-        player: Player::new(Position::new(1, 1)),
+        player: Player::new(Position::new(1, 1)).await,
         overworld_generator: OverworldGenerator::new(
             &lua_interface,
             monster_kinds.read().unwrap().vec.clone(),

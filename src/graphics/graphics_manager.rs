@@ -57,7 +57,7 @@ fn setup_color_replacement_material() -> Result<Material, macroquad::Error> {
     Ok(palette_material)
 }
 
-pub fn set_color_replacement_uniforms(material: &mut Material, target1: Vec4, target2: Vec4) {
+pub fn set_color_replacement_uniforms(material: &mut Material, target1: Color, target2: Color) {
     material.set_uniform("SourceColor1", Vec4::new(1.0, 0.0, 0.0, 1.0)); // red
     material.set_uniform("TargetColor1", target1);
     material.set_uniform("SourceColor2", Vec4::new(0.0, 1.0, 0.0, 1.0)); // green

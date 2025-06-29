@@ -308,11 +308,11 @@ impl Map {
             monster.borrow().draw(&mut material, offset);
         }
 
-        gl_use_default_material();
-
         if self.generated_map.visited_state == VisitedState::Visited {
             player.draw(&mut material, offset);
         }
+
+        gl_use_default_material();
     }
 
     pub fn is_tile_enemy_occupied(&self, pos: Position) -> bool {

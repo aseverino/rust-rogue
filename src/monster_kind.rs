@@ -24,28 +24,78 @@ use macroquad::prelude::*;
 use mlua::{UserData, UserDataMethods};
 use serde::Deserialize;
 use serde_json::from_str;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use crate::lua_interface::{LuaInterfaceRc, LuaScripted};
 
-pub async fn load_monster_kinds(lua_interface_rc: &LuaInterfaceRc) -> Vec<Arc<MonsterKind>> {
-    let mut lua_interface = lua_interface_rc.borrow_mut();
+pub async fn load_monster_kinds(lua_interface_rc: &LuaInterfaceRc) -> MonsterKindsDataArc {
     let file: String = load_string("assets/monsters/monsters.json").await.unwrap();
     let list: Vec<MonsterKind> = from_str(&file).unwrap();
+    let monster_kinds = MonsterKinds::new();
 
-    list.into_iter()
-        .map(|mut mt| {
+    use futures::future::join_all;
+    let monsters_futures = list.into_iter().map(|mut mt| {
+        let lua_interface_rc = lua_interface_rc.clone();
+        let monster_kinds = monster_kinds.clone();
+
+        async move {
             if mt.script.is_some() {
-                let script_result = lua_interface.load_script(&mut mt);
-                if let Err(e) = script_result {
-                    eprintln!("Error loading monster script: {}", e);
-                } else {
-                    mt.scripted = script_result.unwrap();
+                let result = {
+                    let mut lua_interface = lua_interface_rc.borrow_mut();
+                    lua_interface.load_script(&mut mt)
+                };
+
+                match result {
+                    Ok(val) => mt.scripted = val,
+                    Err(e) => eprintln!("Error loading monster script: {}", e),
+                }
+            }
+            if !mt.sprite_path().is_empty() {
+                let mut mk = monster_kinds.write().unwrap();
+                if !mk.sprite_cache.contains_key(&mt.sprite_image) {
+                    match macroquad::texture::load_texture(&mt.sprite_path()).await {
+                        Ok(texture) => {
+                            texture.set_filter(FilterMode::Nearest);
+                            mk.sprite_cache
+                                .insert(mt.sprite_image.clone(), Arc::new(RwLock::new(texture)));
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to load texture from {}: {}", mt.sprite_path(), e);
+                        }
+                    }
+                }
+
+                if let Some(sprite) = mk.sprite_cache.get(&mt.sprite_image) {
+                    mt.sprite = Some(sprite.clone());
                 }
             }
             Arc::new(mt)
-        })
-        .collect()
+        }
+    });
+    monster_kinds.write().unwrap().vec = Arc::new(RwLock::new(join_all(monsters_futures).await));
+    monster_kinds
+}
+
+pub type MonsterKindsVecArc = Arc<RwLock<Vec<Arc<MonsterKind>>>>;
+pub type MonsterKindSprite = Arc<RwLock<Texture2D>>;
+#[derive(Debug)]
+pub struct MonsterKinds {
+    pub vec: MonsterKindsVecArc,
+    pub sprite_cache: HashMap<String, MonsterKindSprite>,
+}
+
+pub type MonsterKindsDataArc = Arc<RwLock<MonsterKinds>>;
+
+impl MonsterKinds {
+    pub fn new() -> MonsterKindsDataArc {
+        Arc::new(RwLock::new(Self {
+            vec: Arc::new(RwLock::new(Vec::new())),
+            sprite_cache: HashMap::new(),
+        }))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -54,7 +104,7 @@ pub struct MonsterKind {
     pub tier: u32,
     pub name: String,
     pub glyph: char,
-    pub color: [u8; 3], // RGB, will convert to macroquad::Color
+    pub colors: Vec<[u8; 3]>,
     pub max_hp: u32,
     pub speed: u32,
     pub melee_damage: i32,
@@ -65,11 +115,19 @@ pub struct MonsterKind {
     pub scripted: bool,
     #[serde(skip)]
     pub script_id: u32,
+    #[serde(default)]
+    pub sprite_image: String,
+    #[serde(skip)]
+    pub sprite: Option<MonsterKindSprite>,
 }
 
 impl MonsterKind {
     pub fn color(&self) -> Color {
-        Color::from_rgba(self.color[0], self.color[1], self.color[2], 255)
+        Color::from_rgba(self.colors[0][0], self.colors[0][1], self.colors[0][2], 255)
+    }
+
+    pub fn sprite_path(&self) -> String {
+        format!("assets/sprites/monsters/{}.png", self.sprite_image)
     }
 }
 
@@ -109,5 +167,5 @@ impl UserData for MonsterKind {
     }
 }
 
-pub type MonsterCollection = Vec<Arc<MonsterKind>>;
-pub type MonsterKinds = Arc<Mutex<MonsterCollection>>;
+// pub type MonsterCollection = Vec<Arc<MonsterKind>>;
+// pub type MonsterKinds = Arc<Mutex<MonsterCollection>>;

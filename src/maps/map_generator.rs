@@ -37,7 +37,7 @@ use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{BorderFlags, GRID_HEIGHT, GRID_WIDTH, MapTheme};
 use crate::monster;
-use crate::monster_kind::{MonsterKind, MonsterKinds};
+use crate::monster_kind::{MonsterKind, MonsterKinds, MonsterKindsVecArc};
 use crate::position::Position;
 use crate::tile::{Tile, TileKind};
 use rand::seq::SliceRandom;
@@ -112,7 +112,7 @@ pub struct MapAssignment {
 pub struct MapGenerator {
     command_tx: Option<Sender<Command>>,
     thread_handle: Option<JoinHandle<()>>,
-    monster_kinds: MonsterKinds,
+    monster_kinds: MonsterKindsVecArc,
     monster_kinds_by_tier: Vec<Vec<u32>>,
     items: ItemsArc,
     pub map_statuses: Arc<Mutex<HashMap<OverworldPos, SharedMapStatus>>>,
@@ -121,7 +121,7 @@ pub struct MapGenerator {
 impl MapGenerator {
     pub async fn new(
         _lua_interface: &LuaInterfaceRc,
-        monster_kinds: &MonsterKinds,
+        monster_kinds: &MonsterKindsVecArc,
         items: &ItemsArc,
     ) -> Self {
         let mut mg = Self {
@@ -134,7 +134,7 @@ impl MapGenerator {
         };
 
         // Initialize monster types by tier
-        let monster_kinds_guard = monster_kinds.lock().unwrap();
+        let monster_kinds_guard = monster_kinds.read().unwrap();
         for mt in monster_kinds_guard.iter() {
             if mg.monster_kinds_by_tier.len() <= mt.tier as usize {
                 mg.monster_kinds_by_tier
@@ -599,11 +599,11 @@ impl MapGenerator {
     fn populate_map(
         map: &mut GeneratedMap,
         params: &GenerationParams,
-        monster_kinds: &MonsterKinds,
+        monster_kinds: &MonsterKindsVecArc,
         monster_kinds_by_tier: &Vec<Vec<u32>>,
         items_arc: &ItemsArc,
     ) {
-        let monster_kinds_guard = monster_kinds.lock().unwrap();
+        let monster_kinds_guard = monster_kinds.read().unwrap();
         map.add_random_monsters(&*monster_kinds_guard, monster_kinds_by_tier, params.tier);
 
         let mut len = map.available_walkable_cache.len();

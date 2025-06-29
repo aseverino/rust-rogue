@@ -21,9 +21,8 @@
 // SOFTWARE.
 
 use crate::creature::Creature;
-use crate::lua_interface::LuaScripted;
 use crate::maps::TILE_SIZE;
-use crate::monster_kind::MonsterKind;
+use crate::monster_kind::{MonsterKind, MonsterKindSprite};
 use crate::position::Position;
 use crate::ui::point_f::PointF;
 use macroquad::prelude::*;
@@ -32,7 +31,7 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct Monster {
@@ -88,23 +87,47 @@ impl Creature for Monster {
         if self.hp <= 0 {
             return; // Don't draw dead monsters
         }
-        draw_rectangle(
-            offset.x + self.position.x as f32 * TILE_SIZE + 8.0,
-            offset.y + self.position.y as f32 * TILE_SIZE + 8.0,
-            TILE_SIZE - 16.0,
-            TILE_SIZE - 16.0,
-            self.kind.color(),
-        );
 
-        // Optional glyph drawing
-        let glyph = self.kind.glyph.to_string();
-        draw_text(
-            &glyph,
-            offset.x + self.position.x as f32 * TILE_SIZE + 12.0,
-            offset.y + self.position.y as f32 * TILE_SIZE + 20.0,
-            16.0,
-            WHITE,
-        );
+        if let Some(sprite_arc) = &self.kind.sprite {
+            let sprite = sprite_arc.read().unwrap();
+            let sprite_size = Vec2::new(32.0, 32.0);
+
+            let draw_params = DrawTextureParams {
+                dest_size: Some(sprite_size),
+                source: Some(Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 16.0,
+                    h: 16.0,
+                }),
+                ..Default::default()
+            };
+
+            let x =
+                offset.x + self.position.x as f32 * TILE_SIZE + (TILE_SIZE - sprite_size.x) / 2.0;
+            let y =
+                offset.y + self.position.y as f32 * TILE_SIZE + (TILE_SIZE - sprite_size.y) / 2.0;
+
+            draw_texture_ex(&sprite, x, y, WHITE, draw_params);
+        } else {
+            draw_rectangle(
+                offset.x + self.position.x as f32 * TILE_SIZE + 8.0,
+                offset.y + self.position.y as f32 * TILE_SIZE + 8.0,
+                TILE_SIZE - 16.0,
+                TILE_SIZE - 16.0,
+                self.kind.color(),
+            );
+
+            // Optional glyph drawing
+            let glyph = self.kind.glyph.to_string();
+            draw_text(
+                &glyph,
+                offset.x + self.position.x as f32 * TILE_SIZE + 12.0,
+                offset.y + self.position.y as f32 * TILE_SIZE + 20.0,
+                16.0,
+                WHITE,
+            );
+        }
     }
 
     fn is_monster(&self) -> bool {

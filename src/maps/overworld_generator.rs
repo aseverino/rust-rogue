@@ -31,7 +31,7 @@ use crate::{
         map_generator::{GenerationParams, MapAssignment, MapGenerator, MapStatus},
         overworld::{OverworldPos, VisitedState},
     },
-    monster_kind::MonsterKinds,
+    monster_kind::{MonsterKinds, MonsterKindsVecArc},
     position::Position,
 };
 
@@ -92,7 +92,7 @@ impl OverworldGenerator {
 
     pub async fn new(
         lua_interface: &LuaInterfaceRc,
-        monster_kinds: &MonsterKinds,
+        monster_kinds: MonsterKindsVecArc,
         items: &ItemsArc,
     ) -> Arc<Mutex<Self>> {
         let generated_maps: Arc<Mutex<Vec<[[Option<Arc<Mutex<GeneratedMap>>>; 5]; 5]>>> =
@@ -100,7 +100,7 @@ impl OverworldGenerator {
                 std::array::from_fn(|_| None)
             })]));
 
-        let map_generator = MapGenerator::new(lua_interface, monster_kinds, items).await;
+        let map_generator = MapGenerator::new(lua_interface, &monster_kinds, items).await;
 
         let overworld = Arc::new(Mutex::new(Self {
             generated_maps: Arc::clone(&generated_maps),

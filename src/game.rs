@@ -435,15 +435,18 @@ pub async fn run() {
     let spell_types = spell_type::load_spell_types().await;
     spell_type::set_global_spell_types(spell_types);
 
-    let monster_kinds = Arc::new(Mutex::new(
-        monster_kind::load_monster_kinds(&lua_interface).await,
-    ));
+    let monster_kinds = monster_kind::load_monster_kinds(&lua_interface).await;
 
     let items = Arc::new(RwLock::new(Items::new()));
 
     let mut game = GameState {
         player: Player::new(Position::new(1, 1)),
-        overworld_generator: OverworldGenerator::new(&lua_interface, &monster_kinds, &items).await,
+        overworld_generator: OverworldGenerator::new(
+            &lua_interface,
+            monster_kinds.read().unwrap().vec.clone(),
+            &items,
+        )
+        .await,
         overworld: Overworld::new(),
         items: items,
         lua_interface: lua_interface,
@@ -489,7 +492,8 @@ pub async fn run() {
         let monster_kinds_clone = monster_kinds.clone();
         lua_interface.map_add_monster_callback = Some(Rc::new(
             move |map_rc, kind_id, pos: Position| -> MonsterRef {
-                let binding = monster_kinds_clone.lock().unwrap();
+                let binding = monster_kinds_clone.read().unwrap();
+                let binding = binding.vec.read().unwrap();
                 let kind = binding
                     .iter()
                     .find(|mt| mt.id == kind_id)
@@ -570,12 +574,19 @@ pub async fn run() {
             }
         }));
         let monster_kinds_clone = monster_kinds.clone();
-        let shared_map_ptr_clone = shared_map_ptr.clone();
+        //let shared_map_ptr_clone = shared_map_ptr.clone();
         lua_interface.get_monster_kind_by_id_callback =
             Some(Rc::new(move |id| -> Option<MonsterKind> {
-                let binding = shared_map_ptr_clone.borrow();
-                let map = binding.0.borrow();
-                if let Some(monster_kind) = monster_kinds_clone.lock().unwrap().get(id as usize) {
+                //let binding = shared_map_ptr_clone.borrow();
+                //let map = binding.0.borrow();
+                if let Some(monster_kind) = monster_kinds_clone
+                    .read()
+                    .unwrap()
+                    .vec
+                    .read()
+                    .unwrap()
+                    .get(id as usize)
+                {
                     let monster_kind_ref = monster_kind.as_ref();
                     let monster_kind_clone = (*monster_kind_ref).clone();
                     Some(monster_kind_clone)

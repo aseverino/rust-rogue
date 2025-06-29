@@ -12,3 +12,4 @@ pathfinding = "4.3"
 once_cell = "1.21.3"
 bitflags = "2.4"
 mlua = { version = "0.9", features = ["luajit", "vendored"] }
+futures = "0.3.31"

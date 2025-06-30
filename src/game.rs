@@ -1041,87 +1041,96 @@ pub fn update(
 
         while player.accumulated_speed < 100 {
             let map = map_ref.0.borrow_mut();
-            let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
-
             let mut monsters = map.monsters.clone(); // Clone the monsters to avoid borrowing conflicts
             drop(map);
 
-            for (id, monster_ref) in &mut monsters {
-                let monster = monster_ref.borrow_mut();
-                if monster.hp <= 0 {
-                    continue; // Skip dead monsters
-                }
+            let mut update_monsters_again = true;
+            let mut update_iteration = 0;
 
-                if monster.kind.is_scripted() {
-                    drop(monster); // Drop the immutable borrow before mutable borrow
-                    let mut clone = monster_ref.clone();
-                    let r = game.lua_interface.borrow_mut().on_update(&mut clone);
-                    if let Err(e) = r {
-                        eprintln!("Error calling Lua on_update: {}", e);
-                    } else {
-                        if r.unwrap() {
-                            // If the Lua script returned true, we skip the rest of the update for this monster
-                            // The update has already been handled in Lua
-                            continue;
-                        }
+            while update_monsters_again {
+                update_monsters_again = false;
+                for (id, monster_ref) in &mut monsters {
+                    let monster = monster_ref.borrow_mut();
+                    if monster.hp <= 0 {
+                        continue; // Skip dead monsters
                     }
-                    drop(clone);
-                } else {
-                    drop(monster); // Just drop the immutable borrow
-                }
 
-                let mut monster = monster_ref.borrow_mut();
-                let mut monster_speed = monster.kind.speed + monster.accumulated_speed;
-
-                while monster_speed >= 100 {
-                    monster_speed -= 100;
-
-                    let monster_pos = monster.pos();
-
-                    let path = Navigator::find_path(monster_pos, player.position, |pos| {
-                        if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
-                            return false;
-                        }
-                        // borrow the map _immutably_ each time to see current occupancy:
-                        let map = map_ref.0.borrow();
-
-                        if monster.kind.flying {
-                            return !map.generated_map.tiles[pos].is_blocking();
+                    if monster.kind.is_scripted() && update_iteration == 0 {
+                        drop(monster); // Drop the immutable borrow before mutable borrow
+                        let mut clone = monster_ref.clone();
+                        let r = game.lua_interface.borrow_mut().on_update(&mut clone);
+                        if let Err(e) = r {
+                            eprintln!("Error calling Lua on_update: {}", e);
                         } else {
-                            return map.generated_map.tiles[pos].is_walkable();
-                        }
-                    });
-
-                    if let Some(path) = path {
-                        if path.len() > 1 {
-                            let next_step = path[1];
-
-                            if next_step == player.position {
-                                println!(
-                                    "Monster {} hit player for {} damage!",
-                                    monster.name(),
-                                    monster.kind.melee_damage
-                                );
-                                player.add_health(-monster.kind.melee_damage);
-                                if player.hp <= 0 {
-                                    println!("Player has been defeated!");
-                                    game.last_player_event = PlayerEvent::Death;
-                                    return;
-                                }
+                            if r.unwrap() {
+                                // If the Lua script returned true, we skip the rest of the update for this monster
+                                // The update has already been handled in Lua
                                 continue;
                             }
+                        }
+                        drop(clone);
+                    } else {
+                        drop(monster); // Just drop the immutable borrow
+                    }
 
-                            //monster_moves.push((monster_pos, next_step, *id as usize));
-                            monster.set_pos(next_step);
+                    let mut monster = monster_ref.borrow_mut();
+                    let mut monster_speed = monster.kind.speed + monster.accumulated_speed;
 
-                            let mut map = map_ref.0.borrow_mut();
-                            map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
-                            map.generated_map.tiles[next_step].creature = *id;
+                    if monster_speed >= 100 {
+                        monster_speed -= 100;
+
+                        let monster_pos = monster.pos();
+
+                        let path = Navigator::find_path(monster_pos, player.position, |pos| {
+                            if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
+                                return false;
+                            }
+                            // borrow the map _immutably_ each time to see current occupancy:
+                            let map = map_ref.0.borrow();
+
+                            if monster.kind.flying {
+                                return !map.generated_map.tiles[pos].is_blocking();
+                            } else {
+                                return map.generated_map.tiles[pos].is_walkable();
+                            }
+                        });
+
+                        if let Some(path) = path {
+                            if path.len() > 1 {
+                                let next_step = path[1];
+
+                                if next_step == player.position {
+                                    println!(
+                                        "Monster {} hit player for {} damage!",
+                                        monster.name(),
+                                        monster.kind.melee_damage
+                                    );
+                                    player.add_health(-monster.kind.melee_damage);
+                                    if player.hp <= 0 {
+                                        println!("Player has been defeated!");
+                                        game.last_player_event = PlayerEvent::Death;
+                                        return;
+                                    }
+                                    continue;
+                                }
+
+                                //monster_moves.push((monster_pos, next_step, *id as usize));
+                                monster.set_pos(next_step);
+
+                                let mut map = map_ref.0.borrow_mut();
+                                map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
+                                map.generated_map.tiles[next_step].creature = *id;
+                            }
                         }
                     }
-                }
 
-                monster.accumulated_speed = monster_speed as u32;
+                    monster.accumulated_speed = monster_speed as u32;
+
+                    if monster_speed >= 100 {
+                        update_monsters_again = true;
+                    }
+                }
+                update_iteration += 1;
             }
 
             game.turn += 1;

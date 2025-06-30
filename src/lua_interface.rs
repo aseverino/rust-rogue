@@ -88,7 +88,8 @@ struct ScriptedFunctions {
 pub struct LuaInterface {
     pub lua: Lua,
     script_cache: HashMap<u32, ScriptedFunctions>,
-    pub find_monster_path_callback: Option<Rc<dyn Fn(&Monster) -> Option<Vec<Position>>>>,
+    pub teleport_creature_to_callback: Option<Rc<dyn Fn(u32, Position) -> Result<()>>>,
+    pub find_monster_path_callback: Option<Rc<dyn Fn(&Monster) -> Vec<Position>>>,
     pub get_player_callback: Option<Rc<dyn Fn() -> PlayerRc>>,
     pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRc> + 'static>>,
     pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterKind>>>,
@@ -105,6 +106,7 @@ impl LuaInterface {
         let i = Rc::new(RefCell::new(Self {
             lua: Lua::new(),
             script_cache: HashMap::new(),
+            teleport_creature_to_callback: None,
             find_monster_path_callback: None,
             get_player_callback: None,
             get_monster_by_id_callback: None,
@@ -132,9 +134,7 @@ impl LuaInterface {
                 let cb = cb_opt
                     .as_ref()
                     .ok_or_else(|| Error::external(concat!("No ", stringify!($cb), " set!")))?;
-                let out = cb(&monster).ok_or_else(|| {
-                    Error::external(concat!("Callback find_monster_path returned None"))
-                })?;
+                let out = cb(&monster);
                 // Convert Vec<Position> to Lua table
                 let table = lua.create_table()?;
                 for pos in &out {
@@ -147,7 +147,23 @@ impl LuaInterface {
             }
         })?;
 
-        //lua_fn_opt!(lua_if, "get_path", find_monster_path_callback, ());
+        lua_if.add_lua_fn("teleport_creature_to", {
+            let cb_opt = lua_if.teleport_creature_to_callback.clone();
+            move |_lua, (creature_id, position): (u32, Table)| {
+                let cb = cb_opt
+                    .as_ref()
+                    .ok_or_else(|| Error::external(concat!("No ", stringify!($cb), " set!")))?;
+
+                // Build the Position from Lua table
+                let position = Position {
+                    x: position.get("x")?,
+                    y: position.get("y")?,
+                };
+
+                let _out = cb(creature_id, position)?;
+                Ok(())
+            }
+        })?;
         lua_fn_opt!(lua_if, "get_player", get_player_callback, direct, ());
         lua_fn_opt!(lua_if, "get_monster_by_id", get_monster_by_id_callback,( id: u32 ));
         lua_fn_opt!(lua_if, "get_monster_kind_by_id", get_monster_kind_by_id_callback,( id: u32 ));

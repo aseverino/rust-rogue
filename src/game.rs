@@ -525,16 +525,31 @@ pub async fn run() {
 
         let shared_map_ptr_clone = shared_map_ptr.clone();
         let player_clone = game.player.clone();
+        lua_interface.teleport_creature_to_callback =
+            Some(Rc::new(move |creature_id, pos: Position| {
+                let map_rc = shared_map_ptr_clone.borrow();
+                teleport_creature_to(&player_clone, &map_rc, creature_id, pos);
+                Ok(())
+            }));
+
+        let shared_map_ptr_clone = shared_map_ptr.clone();
+        let player_clone = game.player.clone();
         lua_interface.find_monster_path_callback =
-            Some(Rc::new(move |monster: &Monster| -> Option<Vec<Position>> {
+            Some(Rc::new(move |monster: &Monster| -> Vec<Position> {
                 //let monster = monster_rc.borrow();
                 let player_pos = { player_clone.borrow().position };
-                find_monster_path(
+                let path = find_monster_path(
                     &shared_map_ptr_clone.borrow(),
                     monster.position,
                     player_pos,
                     monster.kind.flying,
-                )
+                );
+
+                if path.is_none() {
+                    return vec![];
+                }
+
+                path.unwrap()
             }));
 
         let shared_player_ptr_clone = game.player.clone();
@@ -1176,4 +1191,16 @@ fn find_monster_path(
             return map.generated_map.tiles[pos].is_walkable();
         }
     })
+}
+fn teleport_creature_to(player: &PlayerRc, map_rc: &MapRc, creature_id: u32, pos: Position) {
+    let mut map = map_rc.0.borrow_mut();
+    if creature_id == PLAYER_CREATURE_ID as u32 {
+        let mut player_ref = player.borrow_mut();
+        player_ref.position = pos;
+    } else if let Some(monster) = map.monsters.get(&creature_id) {
+        let mut monster_ref = monster.borrow_mut();
+        monster_ref.position = pos;
+        drop(monster_ref);
+        map.generated_map.tiles[pos].creature = creature_id;
+    }
 }

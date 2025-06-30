@@ -58,3 +58,7 @@ function get_monster_kind_by_id(id) end
 ---@param monster Monster
 ---@return Position[]
 function find_monster_path(monster) end
+
+---@param creature_id integer
+---@param position Position
+function teleport_creature_to(creature_id, position) end

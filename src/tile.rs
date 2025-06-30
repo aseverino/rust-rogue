@@ -438,128 +438,66 @@ impl Tile {
             },
         };
 
-        if self.sprite.is_some() {
-            if self.kind == TileKind::Chasm {
-                self.draw_edges(pos, offset);
-            } else if self.kind == TileKind::Floor {
-                if let Some(sprite_arc) = &self.sprite {
-                    let sprite = sprite_arc.read().unwrap();
-                    let draw_params = DrawTextureParams {
-                        dest_size: Some(Vec2::new(32.0, 32.0)),
-                        source: Some(Rect {
-                            x: 0.0,
-                            y: 0.0,
-                            w: 16.0,
-                            h: 16.0,
-                        }),
-                        ..Default::default()
-                    };
+        if self.creature == NO_CREATURE && self.items.is_empty() {
+            if self.sprite.is_some() {
+                if self.kind == TileKind::Chasm {
+                    self.draw_edges(pos, offset);
+                } else if self.kind == TileKind::Floor {
+                    if let Some(sprite_arc) = &self.sprite {
+                        let sprite = sprite_arc.read().unwrap();
+                        let draw_params = DrawTextureParams {
+                            dest_size: Some(Vec2::new(32.0, 32.0)),
+                            source: Some(Rect {
+                                x: 0.0,
+                                y: 0.0,
+                                w: 16.0,
+                                h: 16.0,
+                            }),
+                            ..Default::default()
+                        };
 
-                    let x = offset.x + pos.x as f32 * TILE_SIZE;
-                    let y = offset.y + pos.y as f32 * TILE_SIZE;
+                        let x = offset.x + pos.x as f32 * TILE_SIZE;
+                        let y = offset.y + pos.y as f32 * TILE_SIZE;
 
-                    draw_texture_ex(&sprite, x, y, WHITE, draw_params);
+                        draw_texture_ex(&sprite, x, y, WHITE, draw_params);
+                    }
                 }
-            }
-        } else {
-            draw_rectangle(
-                offset.x + pos.x as f32 * TILE_SIZE,
-                offset.y + pos.y as f32 * TILE_SIZE,
-                TILE_SIZE - 1.0,
-                TILE_SIZE - 1.0,
-                color,
-            );
-        }
-
-        if self.is_border(&pos) {
-            // Draw border
-            let border_color = if borders_locked {
-                Color {
-                    r: 0.8,
-                    g: 0.2,
-                    b: 0.2,
-                    a: 1.0,
-                } // Red for locked borders
             } else {
-                Color {
-                    r: 0.2,
-                    g: 0.8,
-                    b: 0.2,
-                    a: 1.0,
-                } // Green for unlocked borders
-            };
-            draw_rectangle(
-                offset.x + pos.x as f32 * TILE_SIZE,
-                offset.y + pos.y as f32 * TILE_SIZE,
-                TILE_SIZE - 1.0,
-                TILE_SIZE - 1.0,
-                border_color,
-            );
-        }
+                draw_rectangle(
+                    offset.x + pos.x as f32 * TILE_SIZE,
+                    offset.y + pos.y as f32 * TILE_SIZE,
+                    TILE_SIZE - 1.0,
+                    TILE_SIZE - 1.0,
+                    color,
+                );
+            }
 
-        // if self.has_edge(EdgeKind::TOP_RIGHT_CONCAVE) {
-        //     draw_text(
-        //         "6",
-        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         offset.y + pos.y as f32 * TILE_SIZE,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
-        // if self.has_edge(EdgeKind::BOTTOM_LEFT_CONCAVE) {
-        //     draw_text(
-        //         "7",
-        //         offset.x + pos.x as f32 * TILE_SIZE,
-        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
-        // if self.has_edge(EdgeKind::BOTTOM_RIGHT_CONCAVE) {
-        //     draw_text(
-        //         "8",
-        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
-        // if self.has_edge(EdgeKind::TOP_LEFT_CONVEX) {
-        //     draw_text(
-        //         "9",
-        //         offset.x + pos.x as f32 * TILE_SIZE,
-        //         offset.y + pos.y as f32 * TILE_SIZE,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
-        // if self.has_edge(EdgeKind::TOP_RIGHT_CONVEX) {
-        //     draw_text(
-        //         "10",
-        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         offset.y + pos.y as f32 * TILE_SIZE,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
-        // if self.has_edge(EdgeKind::BOTTOM_LEFT_CONVEX) {
-        //     draw_text(
-        //         "11",
-        //         offset.x + pos.x as f32 * TILE_SIZE,
-        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
-        // if self.has_edge(EdgeKind::BOTTOM_RIGHT_CONVEX) {
-        //     draw_text(
-        //         "12",
-        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
-        //         18.0,
-        //         WHITE,
-        //     );
-        // }
+            if self.is_border(&pos) {
+                // Draw border
+                let border_color = if borders_locked {
+                    Color {
+                        r: 0.8,
+                        g: 0.2,
+                        b: 0.2,
+                        a: 1.0,
+                    } // Red for locked borders
+                } else {
+                    Color {
+                        r: 0.2,
+                        g: 0.8,
+                        b: 0.2,
+                        a: 1.0,
+                    } // Green for unlocked borders
+                };
+                draw_rectangle(
+                    offset.x + pos.x as f32 * TILE_SIZE,
+                    offset.y + pos.y as f32 * TILE_SIZE,
+                    TILE_SIZE - 1.0,
+                    TILE_SIZE - 1.0,
+                    border_color,
+                );
+            }
+        }
 
         for item in &self.items {
             match item {

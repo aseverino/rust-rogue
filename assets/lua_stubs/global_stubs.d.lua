@@ -31,8 +31,9 @@ Position = {}
 function on_spawn(monster) end
 
 ---@param monster Monster
+---@param update_iteration integer -- The current update iteration for this turn, starting from 0.
 ---@return boolean
-function on_update(monster) end
+function on_update(monster, update_iteration) end
 
 ---@param monster Monster
 ---@return boolean
@@ -53,3 +54,7 @@ function get_current_map() end
 ---@param id integer
 ---@return MonsterKind
 function get_monster_kind_by_id(id) end
+
+---@param monster Monster
+---@return Position[]
+function find_monster_path(monster) end

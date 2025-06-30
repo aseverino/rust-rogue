@@ -20,6 +20,17 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
-function on_update(monster)
+---@param monster Monster
+---@param update_iteration integer
+---@return boolean
+function on_update(monster, update_iteration)
+    if update_iteration ~= 0 then
+        return false
+    end
+    
+    local path = find_monster_path(monster)
+    for i = 1, #path do
+        print(path[i].x, path[i].y)
+    end
     return true
 end

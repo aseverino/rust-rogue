@@ -501,7 +501,6 @@ pub async fn run() {
     let mut graphics_manager = GraphicsManager::new();
 
     {
-        //let shared_map_ptr_clone = shared_map_ptr.clone();
         let mut lua_interface = game.lua_interface.borrow_mut();
         let monster_kinds_clone = monster_kinds.clone();
         lua_interface.map_add_monster_callback = Some(Rc::new(
@@ -523,6 +522,20 @@ pub async fn run() {
                 monster
             },
         ));
+
+        let shared_map_ptr_clone = shared_map_ptr.clone();
+        let player_clone = game.player.clone();
+        lua_interface.find_monster_path_callback =
+            Some(Rc::new(move |monster: &Monster| -> Option<Vec<Position>> {
+                //let monster = monster_rc.borrow();
+                let player_pos = { player_clone.borrow().position };
+                find_monster_path(
+                    &shared_map_ptr_clone.borrow(),
+                    monster.position,
+                    player_pos,
+                    monster.kind.flying,
+                )
+            }));
 
         let shared_player_ptr_clone = game.player.clone();
         lua_interface.get_player_callback = Some(Rc::new(move || -> PlayerRc {
@@ -1038,8 +1051,12 @@ pub fn update(
             player.accumulated_speed -= 100;
             return;
         }
+        let mut player_accumulated_speed = player.accumulated_speed;
+        let player_speed = player.get_speed();
+        let player_pos = player.position.clone();
+        drop(player);
 
-        while player.accumulated_speed < 100 {
+        while player_accumulated_speed < 100 {
             let map = map_ref.0.borrow_mut();
             let mut monsters = map.monsters.clone(); // Clone the monsters to avoid borrowing conflicts
             drop(map);
@@ -1055,10 +1072,13 @@ pub fn update(
                         continue; // Skip dead monsters
                     }
 
-                    if monster.kind.is_scripted() && update_iteration == 0 {
-                        drop(monster); // Drop the immutable borrow before mutable borrow
+                    if monster.kind.is_scripted() {
+                        drop(monster);
                         let mut clone = monster_ref.clone();
-                        let r = game.lua_interface.borrow_mut().on_update(&mut clone);
+                        let r = game
+                            .lua_interface
+                            .borrow_mut()
+                            .on_update(&mut clone, update_iteration);
                         if let Err(e) = r {
                             eprintln!("Error calling Lua on_update: {}", e);
                         } else {
@@ -1080,37 +1100,33 @@ pub fn update(
                         monster_speed -= 100;
 
                         let monster_pos = monster.pos();
-
-                        let path = Navigator::find_path(monster_pos, player.position, |pos| {
-                            if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
-                                return false;
-                            }
-                            // borrow the map _immutably_ each time to see current occupancy:
-                            let map = map_ref.0.borrow();
-
-                            if monster.kind.flying {
-                                return !map.generated_map.tiles[pos].is_blocking();
-                            } else {
-                                return map.generated_map.tiles[pos].is_walkable();
-                            }
-                        });
+                        let path = find_monster_path(
+                            map_ref,
+                            monster_pos,
+                            player_pos,
+                            monster.kind.flying,
+                        );
 
                         if let Some(path) = path {
                             if path.len() > 1 {
                                 let next_step = path[1];
 
-                                if next_step == player.position {
+                                if next_step == player_pos {
                                     println!(
                                         "Monster {} hit player for {} damage!",
                                         monster.name(),
                                         monster.kind.melee_damage
                                     );
-                                    player.add_health(-monster.kind.melee_damage);
-                                    if player.hp <= 0 {
-                                        println!("Player has been defeated!");
-                                        game.last_player_event = PlayerEvent::Death;
-                                        return;
+                                    {
+                                        let mut player = game.player.borrow_mut();
+                                        player.add_health(-monster.kind.melee_damage);
+                                        if player.hp <= 0 {
+                                            println!("Player has been defeated!");
+                                            game.last_player_event = PlayerEvent::Death;
+                                            return;
+                                        }
                                     }
+
                                     continue;
                                 }
 
@@ -1134,8 +1150,30 @@ pub fn update(
             }
 
             game.turn += 1;
-            player.accumulated_speed += player.get_speed();
+            player_accumulated_speed += player_speed;
         }
-        player.accumulated_speed -= 100;
+        player_accumulated_speed -= 100;
+        game.player.borrow_mut().accumulated_speed = player_accumulated_speed;
     }
+}
+
+fn find_monster_path(
+    map_ref: &MapRc,
+    monster_pos: Position,
+    player_pos: Position,
+    flying: bool,
+) -> Option<Vec<Position>> {
+    Navigator::find_path(monster_pos, player_pos, |pos| {
+        if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
+            return false;
+        }
+        // borrow the map _immutably_ each time to see current occupancy:
+        let map = map_ref.0.borrow();
+
+        if flying {
+            return !map.generated_map.tiles[pos].is_blocking();
+        } else {
+            return map.generated_map.tiles[pos].is_walkable();
+        }
+    })
 }

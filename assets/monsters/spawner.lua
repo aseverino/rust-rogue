@@ -41,8 +41,9 @@ function on_spawn(monster)
 end
 
 ---@param monster Monster
+---@param update_iteration integer
 ---@return boolean
-function on_update(monster)
+function on_update(monster, update_iteration)
     if not spawner_type then return false end
     
     if turn_count % 3 == 0 then

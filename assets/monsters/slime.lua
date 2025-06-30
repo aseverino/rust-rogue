@@ -24,9 +24,12 @@ function on_spawn(monster)
     -- print("on_spawn")
 end
 
-function on_update(monster)
+---@param monster Monster
+---@param update_iteration integer
+---@return boolean
+function on_update(monster, update_iteration)
     -- print("on_update")
-    return true
+    return false
 end
 
 function on_death(monster)

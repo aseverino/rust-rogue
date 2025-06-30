@@ -32,9 +32,10 @@ use crate::maps::overworld::{Overworld, OverworldPos, VisitedState};
 use crate::maps::overworld_generator::OverworldGenerator;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH};
 use crate::maps::{TILE_SIZE, map::Map};
-use crate::monster::{Monster, MonsterRef};
+use crate::monster::{Monster, MonsterRc};
 use crate::monster_kind::MonsterKind;
-use crate::player::Player;
+use crate::player::{self, Player, PlayerRc};
+use crate::player_spell::PlayerSpell;
 use crate::position::{Direction, Position};
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::manager::{Ui, UiEvent};
@@ -71,7 +72,7 @@ pub enum PlayerEvent {
 
 pub struct GameState {
     pub turn: u32,
-    pub player: Player,
+    pub player: PlayerRc,
     pub overworld_generator: Arc<Mutex<OverworldGenerator>>,
     pub overworld: Overworld,
     pub items: ItemsArc,
@@ -94,11 +95,13 @@ enum MapTravelEvent {
 
 impl GameState {
     pub fn get_player_hp(&self) -> (u32, u32) {
-        (self.player.hp, self.player.max_hp)
+        let player = self.player.borrow();
+        (player.hp, player.max_hp)
     }
 
     pub fn get_player_mp(&self) -> (u32, u32) {
-        (self.player.mp, self.player.max_mp)
+        let player = self.player.borrow();
+        (player.mp, player.max_mp)
     }
 }
 
@@ -109,24 +112,26 @@ fn draw(
     map: &mut Map,
     game_interface_offset: PointF,
 ) {
+    let (hp, max_hp) = game.get_player_hp();
+    let (mp, max_mp) = game.get_player_mp();
+
+    let mut player = game.player.borrow_mut();
     if !ui.is_focused {
-        map.draw(graphics_manager, &mut game.player, game_interface_offset);
+        map.draw(graphics_manager, &mut player, game_interface_offset);
     }
 
     ui.update_geometry(SizeF::new(screen_width(), screen_height()));
 
-    let (hp, max_hp) = game.get_player_hp();
-    let (mp, max_mp) = game.get_player_mp();
     ui.set_player_hp(hp, max_hp);
     ui.set_player_mp(mp, max_mp);
 
-    ui.set_player_sp(game.player.sp);
-    ui.set_player_str(game.player.strength);
-    ui.set_player_dex(game.player.dexterity);
-    ui.set_player_int(game.player.intelligence);
+    ui.set_player_sp(player.sp);
+    ui.set_player_str(player.strength);
+    ui.set_player_dex(player.dexterity);
+    ui.set_player_int(player.intelligence);
 
     ui.set_player_weapon(
-        game.player
+        player
             .equipment
             .weapon
             .as_ref()
@@ -135,7 +140,7 @@ fn draw(
     );
 
     ui.set_player_armor(
-        game.player
+        player
             .equipment
             .armor
             .as_ref()
@@ -144,7 +149,7 @@ fn draw(
     );
 
     ui.set_player_shield(
-        game.player
+        player
             .equipment
             .shield
             .as_ref()
@@ -153,7 +158,7 @@ fn draw(
     );
 
     ui.set_player_helmet(
-        game.player
+        player
             .equipment
             .helmet
             .as_ref()
@@ -162,7 +167,7 @@ fn draw(
     );
 
     ui.set_player_boots(
-        game.player
+        player
             .equipment
             .boots
             .as_ref()
@@ -232,7 +237,7 @@ fn check_for_map_update(
 ) {
     if *map_update != MapTravelEvent::None {
         // Determine player's current border position
-        let mut player_pos = game.player.position;
+        let mut player_pos = { game.player.borrow().position };
         let new_opos = get_new_opos(&player_pos, overworld_pos, &map_update);
 
         let new_map_rc = get_map_ptr(game, new_opos);
@@ -287,7 +292,8 @@ fn check_for_map_update(
                 {
                     let mut map = current_map_rc.0.borrow_mut();
                     current_tier = map.generated_map.tier;
-                    map.remove_creature(&mut game.player);
+                    let mut player_ref = game.player.borrow_mut();
+                    map.remove_creature(&mut *player_ref);
                     map.remove_downstairs_teleport();
                 }
 
@@ -310,7 +316,7 @@ fn check_for_map_update(
 
                 update_map_visited_state(game, &mut map, new_opos, VisitedState::Visited);
 
-                map.add_player(&mut game.player, player_pos);
+                map.add_player(&mut game.player.borrow_mut(), player_pos);
                 peek_map_rc.take();
                 println!("Player moved to new map at position: {:?}", new_opos);
             }
@@ -447,7 +453,7 @@ pub async fn run() {
     let items = Arc::new(RwLock::new(Items::new()));
 
     let mut game = GameState {
-        player: Player::new(Position::new(1, 1)).await,
+        player: Rc::new(RefCell::new(Player::new(Position::new(1, 1)).await)),
         overworld_generator: OverworldGenerator::new(
             &lua_interface,
             monster_kinds.read().unwrap().vec.clone(),
@@ -481,7 +487,7 @@ pub async fn run() {
 
     {
         let mut map = current_map_rc.0.borrow_mut();
-        map.add_player_first_map(&mut game.player);
+        map.add_player_first_map(&mut game.player.borrow_mut());
         update_map_visited_state(&mut game, &mut map, overworld_pos, VisitedState::Visited);
     }
 
@@ -499,7 +505,7 @@ pub async fn run() {
         let mut lua_interface = game.lua_interface.borrow_mut();
         let monster_kinds_clone = monster_kinds.clone();
         lua_interface.map_add_monster_callback = Some(Rc::new(
-            move |map_rc, kind_id, pos: Position| -> MonsterRef {
+            move |map_rc, kind_id, pos: Position| -> MonsterRc {
                 let binding = monster_kinds_clone.read().unwrap();
                 let binding = binding.vec.read().unwrap();
                 let kind = binding
@@ -572,7 +578,7 @@ pub async fn run() {
         // }
 
         let shared_map_ptr_clone = shared_map_ptr.clone();
-        lua_interface.get_monster_by_id_callback = Some(Rc::new(move |id| -> Option<MonsterRef> {
+        lua_interface.get_monster_by_id_callback = Some(Rc::new(move |id| -> Option<MonsterRc> {
             let binding = shared_map_ptr_clone.borrow();
             let map = binding.0.borrow();
             if let Some(monster) = map.monsters.get(&id) {
@@ -639,24 +645,25 @@ pub async fn run() {
         }
 
         while ui.events.len() > 0 {
+            let mut player = game.player.borrow_mut();
             let event = ui.events.pop_front().unwrap();
             match event {
                 UiEvent::IncStrength => {
-                    if game.player.sp > 0 {
-                        game.player.strength += 1;
-                        game.player.sp -= 1;
+                    if player.sp > 0 {
+                        player.strength += 1;
+                        player.sp -= 1;
                     }
                 }
                 UiEvent::IncDexterity => {
-                    if game.player.sp > 0 {
-                        game.player.dexterity += 1;
-                        game.player.sp -= 1;
+                    if player.sp > 0 {
+                        player.dexterity += 1;
+                        player.sp -= 1;
                     }
                 }
                 UiEvent::IncIntelligence => {
-                    if game.player.sp > 0 {
-                        game.player.intelligence += 1;
-                        game.player.sp -= 1;
+                    if player.sp > 0 {
+                        player.intelligence += 1;
+                        player.sp -= 1;
                     }
                 }
                 UiEvent::ChestAction(item_id) => {
@@ -664,10 +671,10 @@ pub async fn run() {
                     let item = items_borrow.items_by_id.get(&item_id);
 
                     if let Some(item) = item {
-                        game.player.add_item(item.clone());
+                        player.add_item(item.clone());
                         {
                             let mut map = current_map_rc.0.borrow_mut();
-                            map.remove_chest(game.player.position);
+                            map.remove_chest(player.position);
                         }
                     } else {
                         println!("Item with ID {} not found.", item_id);
@@ -729,7 +736,7 @@ pub async fn run() {
                 peek_map_rc = None; // Reset peek map
             } else {
                 let mut map = peek_map_rc.as_mut().unwrap().0.borrow_mut();
-                map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
+                map.compute_player_fov(&mut game.player.borrow_mut(), max(GRID_WIDTH, GRID_HEIGHT));
                 draw(
                     &mut graphics_manager,
                     &mut game,
@@ -787,7 +794,7 @@ pub async fn run() {
                     input.spell,
                     goal_position,
                 );
-                let player_pos = game.player.position;
+                let player_pos = game.player.borrow().position;
 
                 if player_event == PlayerEvent::OpenChest {
                     if let Some(items_vec) =
@@ -845,21 +852,22 @@ pub fn update(
     player_goal_position: Option<Position>,
 ) {
     game.last_player_event = PlayerEvent::None;
-    let player_pos = game.player.position;
+    let player_pos = { game.player.borrow().position };
 
     let mut new_player_pos: Option<Position> = None;
     let mut update_turn = false;
 
     if let Some(player_goal) = player_goal_position {
-        let spell_index = game.player.selected_spell;
+        let spell_index = { game.player.borrow().selected_spell };
 
         if let Some(index) = spell_index {
             let mut should_cast = false;
             {
+                let mut player = game.player.borrow_mut();
+
                 let (in_line_of_sight, spell_range) = {
-                    let in_line_of_sight = game.player.line_of_sight.contains(&player_goal);
-                    let spell_range = game
-                        .player
+                    let in_line_of_sight = player.line_of_sight.contains(&player_goal);
+                    let spell_range = player
                         .spells
                         .get(index)
                         .expect("Selected spell index out of bounds")
@@ -872,9 +880,10 @@ pub fn update(
                     && (spell_range.is_none()
                         || player_pos.in_range(&player_goal, spell_range.unwrap() as usize))
                 {
-                    if let Some(spell) = game.player.spells.get_mut(index) {
-                        if game.player.mp > spell.spell_type.mp_cost {
-                            game.player.mp -= spell.spell_type.mp_cost;
+                    if let Some(spell) = player.spells.get_mut(index) {
+                        let mp_cost = spell.spell_type.mp_cost;
+                        if player.mp > mp_cost {
+                            player.mp -= mp_cost;
                             println!("Casting spell");
                             should_cast = true;
                         } else {
@@ -896,17 +905,19 @@ pub fn update(
                 update_turn = true;
             }
 
-            game.player.selected_spell = None;
-            game.player.goal_position = None; // Clear goal position
+            let mut player = game.player.borrow_mut();
+            player.selected_spell = None;
+            player.goal_position = None; // Clear goal position
             game.last_player_event = PlayerEvent::SpellCast;
         } else {
             let attack = {
-                if let Some(weapon) = &game.player.equipment.weapon {
+                let player = game.player.borrow();
+                if let Some(weapon) = &player.equipment.weapon {
                     let range = weapon.range.unwrap_or(1);
                     let map = map_ref.0.borrow();
                     if map.is_tile_enemy_occupied(player_goal) {
                         player_pos.distance_to(&player_goal) <= (range as usize)
-                            && game.player.line_of_sight.contains(&player_goal)
+                            && player.line_of_sight.contains(&player_goal)
                     } else {
                         false
                     }
@@ -937,41 +948,25 @@ pub fn update(
                     } else {
                         game.last_player_event = PlayerEvent::AutoMoveEnd;
                     }
-                    game.player.goal_position = player_goal_position;
+                    game.player.borrow_mut().goal_position = player_goal_position;
                 } else {
-                    game.player.goal_position = None; // Clear goal if no path found
+                    game.player.borrow_mut().goal_position = None; // Clear goal if no path found
                     game.last_player_event = PlayerEvent::AutoMoveEnd;
                 }
-
-                // if game.player.goal_position == None
-                //     && game.last_player_event == PlayerEvent::AutoMoveEnd
-                // {
-                //     let map = map_ref.0.borrow();
-                //     if map.is_tile_enemy_occupied(player_goal) {
-                //         update_turn = true; // Update monsters if player is at goal
-                //         drop(map);
-                //         combat::do_melee_combat(
-                //             &mut game.player,
-                //             map_ref,
-                //             player_pos,
-                //             player_goal,
-                //             &game.lua_interface,
-                //         );
-                //     }
-                // }
             }
         }
     } else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
         let index = spell_action as usize - 1;
+        let mut player = game.player.borrow_mut();
 
         let spell_name = {
-            game.player
+            player
                 .spells
                 .get(index)
                 .map(|spell| spell.spell_type.name.clone())
         };
         if let Some(name) = spell_name {
-            game.player.selected_spell = Some(index);
+            player.selected_spell = Some(index);
             println!("Spell selected: {}", name);
         } else {
             println!("No spell selected!");
@@ -979,8 +974,9 @@ pub fn update(
 
         game.last_player_event = PlayerEvent::SpellSelect;
     } else if player_action == KeyboardAction::Cancel {
-        game.player.selected_spell = None;
-        game.player.goal_position = None; // Clear goal position
+        let mut player = game.player.borrow_mut();
+        player.selected_spell = None;
+        player.goal_position = None; // Clear goal position
 
         game.last_player_event = PlayerEvent::Cancel;
     } else if player_action == KeyboardAction::Move {
@@ -1026,10 +1022,10 @@ pub fn update(
             }
         }
 
-        game.player.goal_position = None;
+        game.player.borrow_mut().goal_position = None;
     } else if player_action == KeyboardAction::Wait {
         new_player_pos = Some(player_pos); // Stay in place
-        game.player.goal_position = None; // Clear goal position
+        game.player.borrow_mut().goal_position = None; // Clear goal position
 
         game.last_player_event = PlayerEvent::Wait;
     }
@@ -1039,13 +1035,14 @@ pub fn update(
         map.generated_map.tiles[player_pos].creature = NO_CREATURE;
         map.generated_map.tiles[pos].creature = PLAYER_CREATURE_ID;
 
-        game.player.set_pos(pos);
+        let mut player = game.player.borrow_mut();
+        player.set_pos(pos);
 
-        if new_player_pos == game.player.goal_position {
-            game.player.goal_position = None; // Clear goal position if reached
+        if new_player_pos == player.goal_position {
+            player.goal_position = None; // Clear goal position if reached
         }
 
-        map.compute_player_fov(&mut game.player, max(GRID_WIDTH, GRID_HEIGHT));
+        map.compute_player_fov(&mut player, max(GRID_WIDTH, GRID_HEIGHT));
         update_turn = true;
 
         let mut to_remove: Vec<usize> = Vec::new();
@@ -1054,7 +1051,7 @@ pub fn update(
             match item {
                 ItemKind::Orb(_) => {
                     println!("Player picked up an orb at index {idx}!");
-                    game.player.sp += 1;
+                    player.sp += 1;
                     to_remove.push(idx); // Collect for removal
                 }
                 ItemKind::Teleport(_) => {
@@ -1084,21 +1081,13 @@ pub fn update(
     }
 
     if update_turn {
-        if game.player.accumulated_speed >= 200 {
-            game.player.accumulated_speed -= 100;
+        let mut player = game.player.borrow_mut();
+        if player.accumulated_speed >= 200 {
+            player.accumulated_speed -= 100;
             return;
         }
 
-        while game.player.accumulated_speed < 100 {
-            // let player_movements = game.player.accumulated_speed as f32 / 100.0;
-
-            // if player_movements > 1.0 {
-            //     game.player.accumulated_speed += ((player_movements - 1.0) * 100.0) as u32;
-            // }
-            // else if player_movements < 1.0 {
-            //     game.player.accumulated_speed += (player_movements * 100.0) as u32;
-            // }
-
+        while player.accumulated_speed < 100 {
             let map = map_ref.0.borrow_mut();
             let walkable_tiles = map.generated_map.tiles.clone(); // Clone the tiles to avoid borrowing conflicts
 
@@ -1137,7 +1126,7 @@ pub fn update(
 
                     let monster_pos = monster.pos();
 
-                    let path = Navigator::find_path(monster_pos, game.player.position, |pos| {
+                    let path = Navigator::find_path(monster_pos, player.position, |pos| {
                         if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
                             return false;
                         }
@@ -1155,14 +1144,14 @@ pub fn update(
                         if path.len() > 1 {
                             let next_step = path[1];
 
-                            if next_step == game.player.position {
+                            if next_step == player.position {
                                 println!(
                                     "Monster {} hit player for {} damage!",
                                     monster.name(),
                                     monster.kind.melee_damage
                                 );
-                                game.player.add_health(-monster.kind.melee_damage);
-                                if game.player.hp <= 0 {
+                                player.add_health(-monster.kind.melee_damage);
+                                if player.hp <= 0 {
                                     println!("Player has been defeated!");
                                     game.last_player_event = PlayerEvent::Death;
                                     return;
@@ -1184,8 +1173,8 @@ pub fn update(
             }
 
             game.turn += 1;
-            game.player.accumulated_speed += game.player.get_speed();
+            player.accumulated_speed += player.get_speed();
         }
-        game.player.accumulated_speed -= 100;
+        player.accumulated_speed -= 100;
     }
 }

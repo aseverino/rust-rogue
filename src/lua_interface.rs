@@ -34,9 +34,10 @@ use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 
 use crate::maps::map::{Map, MapRef};
-use crate::monster::MonsterRef;
+use crate::monster::MonsterRc;
 use crate::monster_kind::MonsterKind;
-use crate::{items::holdable::Weapon, player::Player, position::Position};
+use crate::player::PlayerRc;
+use crate::{items::holdable::Weapon, position::Position};
 
 pub trait LuaScripted {
     fn set_script_id(&mut self, id: u32);
@@ -59,11 +60,11 @@ struct ScriptedFunctions {
 pub struct LuaInterface {
     pub lua: Lua,
     script_cache: HashMap<u32, ScriptedFunctions>,
-    //pub add_monster_callback: Option<Rc<dyn Fn(u32, Position) -> MonsterRef>>,
-    pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRef> + 'static>>,
+    pub get_player_callback: Option<Rc<dyn Fn(u32) -> Option<PlayerRc> + 'static>>,
+    pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRc> + 'static>>,
     pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterKind>>>,
     pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRef>>,
-    pub map_add_monster_callback: Option<Rc<dyn Fn(MapRef, u32, Position) -> MonsterRef>>,
+    pub map_add_monster_callback: Option<Rc<dyn Fn(MapRef, u32, Position) -> MonsterRc>>,
     pub script_id_counter: u32,
 }
 
@@ -75,7 +76,7 @@ impl LuaInterface {
         let i = Rc::new(RefCell::new(Self {
             lua: Lua::new(),
             script_cache: HashMap::new(),
-            //add_monster_callback: None,
+            get_player_callback: None,
             get_monster_by_id_callback: None,
             get_monster_kind_by_id_callback: None,
             get_current_map_callback: None,
@@ -112,6 +113,21 @@ impl LuaInterface {
         //         }
         //     }
         // })?;
+
+        lua_if.add_lua_fn("get_player", {
+            let cb_opt = lua_if.get_player_callback.clone();
+            move |lua, id: u32| {
+                if let Some(cb) = &cb_opt {
+                    if let Some(monster_rc) = cb(id) {
+                        lua.create_userdata(monster_rc.clone()).map(Value::UserData)
+                    } else {
+                        Err(Error::external(format!("No monster with ID {}", id)))
+                    }
+                } else {
+                    Err(Error::external("No get_player callback set!"))
+                }
+            }
+        })?;
 
         lua_if.add_lua_fn("get_monster_by_id", {
             let cb_opt = lua_if.get_monster_by_id_callback.clone();
@@ -266,8 +282,8 @@ impl LuaInterface {
     pub fn on_get_attack_damage(
         &self,
         weapon: &mut Weapon,
-        player: &mut Player,
-        monster: &mut MonsterRef,
+        player: &mut PlayerRc,
+        monster: &mut MonsterRc,
     ) -> Result<f32> {
         let binding = &self.script_cache;
         let funcs = binding.get(&weapon.get_script_id()).ok_or_else(|| {
@@ -283,22 +299,20 @@ impl LuaInterface {
             .registry_value(&funcs.on_get_attack_damage.as_ref().unwrap())?;
 
         let lua_weapon = Rc::new(RefCell::new(weapon.clone()));
-        let lua_player = Rc::new(RefCell::new(player.clone()));
 
         let lua_weapon_ud = self.lua.create_userdata(lua_weapon.clone())?;
-        let lua_player_ud = self.lua.create_userdata(lua_player.clone())?;
+        let lua_player_ud = self.lua.create_userdata(player.clone())?;
         let lua_monster_ud = self.lua.create_userdata(monster.clone())?;
 
         // Invoke and return result
         let result = func.call((lua_weapon_ud, lua_player_ud, lua_monster_ud));
 
         *weapon = lua_weapon.borrow().clone();
-        *player = lua_player.borrow().clone();
 
         result
     }
 
-    pub fn on_spawn(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
+    pub fn on_spawn(&self, monster_ref: &mut MonsterRc) -> Result<bool> {
         let monster = monster_ref.borrow_mut();
         let binding = &self.script_cache;
         let funcs = binding.get(&monster.kind.get_script_id()).ok_or_else(|| {
@@ -324,7 +338,7 @@ impl LuaInterface {
         }
     }
 
-    pub fn on_update(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
+    pub fn on_update(&self, monster_ref: &mut MonsterRc) -> Result<bool> {
         let monster = monster_ref.borrow_mut();
         let binding = &self.script_cache;
         let funcs = binding.get(&monster.kind.get_script_id()).ok_or_else(|| {
@@ -350,7 +364,7 @@ impl LuaInterface {
         }
     }
 
-    pub fn on_death(&self, monster_ref: &mut MonsterRef) -> Result<bool> {
+    pub fn on_death(&self, monster_ref: &mut MonsterRc) -> Result<bool> {
         let monster = monster_ref.borrow_mut();
         let binding = &self.script_cache;
         let funcs = binding.get(&monster.kind.id).ok_or_else(|| {

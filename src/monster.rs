@@ -45,7 +45,7 @@ pub struct Monster {
     pub accumulated_speed: u32,
 }
 
-pub type MonsterRef = Rc<RefCell<Monster>>;
+pub type MonsterRc = Rc<RefCell<Monster>>;
 pub type MonsterArc = Arc<RwLock<Monster>>;
 
 static MONSTER_ID_COUNTER: AtomicU32 = AtomicU32::new(1);

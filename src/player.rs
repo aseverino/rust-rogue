@@ -73,6 +73,8 @@ pub struct Player {
     pub material_colors: [Color; 2],
 }
 
+pub type PlayerRc = Rc<RefCell<Player>>;
+
 impl Player {
     pub async fn new(pos: Position) -> Self {
         let first_spell = spell_type::get_spell_types()[2].clone();

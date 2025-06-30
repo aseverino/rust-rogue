@@ -36,7 +36,7 @@ use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::VisitedState;
 use crate::maps::{GRID_HEIGHT, GRID_WIDTH, TILE_SIZE, navigator::Navigator};
 use crate::monster::MonsterArc;
-use crate::monster::{Monster, MonsterRef};
+use crate::monster::{Monster, MonsterRc};
 use crate::player::Player;
 use crate::position::POSITION_INVALID;
 use crate::position::Position;
@@ -69,7 +69,7 @@ impl SpellFovCache {
 #[derive(Clone, Debug)]
 pub struct Map {
     pub generated_map: GeneratedMap,
-    pub monsters: HashMap<u32, MonsterRef>,
+    pub monsters: HashMap<u32, MonsterRc>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
     pub spell_fov_cache: SpellFovCache,
@@ -91,7 +91,7 @@ impl Map {
         m
     }
 
-    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, MonsterRef> {
+    fn convert_monsters(monsters: Vec<MonsterArc>) -> HashMap<u32, MonsterRc> {
         monsters
             .into_iter()
             .map(|arc_mutex| {

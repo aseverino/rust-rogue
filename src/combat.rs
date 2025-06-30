@@ -29,14 +29,14 @@ use crate::{
     lua_interface::{LuaInterfaceRc, LuaScripted},
     maps::map::{Map, MapRef},
     monster::Monster,
-    player::Player,
+    player::{Player, PlayerRc},
     position::Position,
     spell_type::SpellStrategy,
     tile::{NO_CREATURE, PLAYER_CREATURE_ID},
 };
 
 fn do_damage(
-    player: &mut Player,
+    player: &mut PlayerRc,
     map_ref: &MapRef,
     target_id: u32,
     damage: i32,
@@ -45,7 +45,7 @@ fn do_damage(
     let mut map = map_ref.0.borrow_mut();
     let mut _maybe_monster_guard: Option<RefMut<Monster>> = None;
     let target: &mut dyn Creature = if target_id == PLAYER_CREATURE_ID as u32 {
-        player as &mut dyn Creature
+        &mut *player.borrow_mut() as &mut dyn Creature
     } else {
         _maybe_monster_guard = Some(
             map.monsters
@@ -113,16 +113,16 @@ fn do_damage(
 }
 
 pub(crate) fn do_melee_combat(
-    player: &mut Player,
+    player: &mut PlayerRc,
     map_ref: &mut MapRef,
     _attacker_pos: Position,
     target_pos: Position,
     lua_interface: &LuaInterfaceRc,
 ) {
     let damage = {
-        if player.equipment.weapon.is_some() {
-            // Temporarily take the weapon out to avoid aliasing
-            let mut weapon = player.equipment.weapon.take().unwrap();
+        let weapon = { player.borrow().equipment.weapon.clone() };
+        if weapon.is_some() {
+            let mut weapon = weapon.unwrap();
 
             let mut damage: u32 = 0;
 
@@ -170,9 +170,6 @@ pub(crate) fn do_melee_combat(
                 }
             }
 
-            // Put the weapon back
-            player.equipment.weapon = Some(weapon);
-
             damage
         } else {
             1u32
@@ -192,31 +189,36 @@ pub(crate) fn do_melee_combat(
 }
 
 pub(crate) fn do_spell_combat(
-    player: &mut Player,
+    player: &mut PlayerRc,
     map_ref: &MapRef,
     attacker_pos: Position,
     target_pos: Position,
     spell_index: usize,
     lua_interface: &LuaInterfaceRc,
 ) {
-    let spell = player
-        .spells
-        .get_mut(spell_index)
-        .expect("Selected spell index out of bounds");
+    let spell_type = {
+        let mut player_ref = player.borrow_mut();
+        player_ref
+            .spells
+            .get_mut(spell_index)
+            .expect("Selected spell index out of bounds")
+            .spell_type
+            .clone()
+    };
 
     let map = map_ref.0.borrow_mut();
-    if spell.spell_type.strategy == SpellStrategy::Aim && map.is_tile_blocking(target_pos) {
+    if spell_type.strategy == SpellStrategy::Aim && map.is_tile_blocking(target_pos) {
         println!("Target position is blocked for spell casting.");
         return;
     }
 
-    let damage = spell.spell_type.basepower as i32;
+    let damage = spell_type.basepower as i32;
 
     let mut target_positions: Vec<Position> = Vec::new();
     let mut target_creatures: Vec<u32> = Vec::new();
 
     map.spell_fov_cache.area.iter().for_each(|&pos| {
-        if pos == attacker_pos && spell.spell_type.strategy == SpellStrategy::Fixed {
+        if pos == attacker_pos && spell_type.strategy == SpellStrategy::Fixed {
             return;
         }
         target_positions.push(pos);

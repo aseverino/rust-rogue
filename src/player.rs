@@ -30,7 +30,7 @@ use crate::position::Position;
 use crate::ui::point_f::PointF;
 use crate::{graphics, spell_type};
 use macroquad::prelude::*;
-use mlua::{UserData, UserDataMethods};
+use mlua::{Table, UserData, UserDataMethods};
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::collections::HashSet;
@@ -237,8 +237,17 @@ impl Creature for Player {
 
 impl UserData for Player {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method(
+            "get_position",
+            |lua_ctx, this, ()| -> mlua::Result<Table<'lua>> {
+                // `lua_ctx` is your Context<'lua>
+                let tbl = lua_ctx.create_table()?;
+                tbl.set("x", this.position.x)?;
+                tbl.set("y", this.position.y)?;
+                Ok(tbl)
+            },
+        );
         methods.add_method("get_mana", |_, this, ()| Ok(this.get_mana()));
-
         methods.add_method("get_soul_points", |_, this, ()| Ok(this.get_soul_points()));
     }
 }

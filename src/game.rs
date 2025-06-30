@@ -524,58 +524,10 @@ pub async fn run() {
             },
         ));
 
-        // lua_interface.add_monster_callback = Some(Rc::new(move |kind_id, pos| -> MonsterRef {
-        //     let binding = monster_types.lock().unwrap();
-        //     let kind = binding
-        //         .iter()
-        //         .find(|mt| mt.id == kind_id)
-        //         .expect("Monster type not found");
-
-        //     // Create a new monster and wrap it in Rc
-        //     let monster = Rc::new(RefCell::new(Monster::new(pos.clone(), kind.clone())));
-
-        //     let binding = shared_map_ptr_clone.borrow_mut();
-        //     let mut map = binding.borrow_mut();
-        //     map.generated_map.tiles[pos].creature = monster.borrow().id; // Set the creature ID in the tile
-        //     // Wrap the monster in Rc and push to creatures
-        //     map.monsters.insert(monster.borrow().id, monster.clone());
-        //     monster
-        // }));
-
-        // map:add_monster
-        // {
-        //     let lua = &lua_interface.lua;
-        //     let globals = lua.globals();
-
-        //     // Define the add_monster function
-        //     let monster_types = monster_types.clone();
-        //     let add_monster = lua.create_function(
-        //         move |_, (map, kind_id, pos): (mlua::AnyUserData, u32, Table)| {
-        //             let mut map = map.borrow_mut::<Map>()?;
-        //             let p = Position {
-        //                 x: pos.get("x")?,
-        //                 y: pos.get("y")?,
-        //             };
-
-        //             let kind = {
-        //                 let guard = monster_types.lock().unwrap();
-        //                 guard
-        //                     .iter()
-        //                     .find(|mt| mt.id == kind_id)
-        //                     .expect("Monster type not found")
-        //                     .clone()
-        //             };
-
-        //             let monster = Rc::new(RefCell::new(Monster::new(p, kind)));
-        //             let id = monster.borrow().id;
-        //             map.generated_map.tiles[p].creature = id;
-        //             map.monsters.insert(id, monster);
-        //             Ok(())
-        //         },
-        //     );
-
-        //     _ = globals.set("add_monster", add_monster.unwrap());
-        // }
+        let shared_player_ptr_clone = game.player.clone();
+        lua_interface.get_player_callback = Some(Rc::new(move || -> PlayerRc {
+            shared_player_ptr_clone.clone()
+        }));
 
         let shared_map_ptr_clone = shared_map_ptr.clone();
         lua_interface.get_monster_by_id_callback = Some(Rc::new(move |id| -> Option<MonsterRc> {

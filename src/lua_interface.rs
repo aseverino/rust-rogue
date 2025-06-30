@@ -39,6 +39,69 @@ use crate::monster_kind::MonsterKind;
 use crate::player::PlayerRc;
 use crate::{items::holdable::Weapon, position::Position};
 
+/// Register a Lua function whose Rust callback field is an `Option<impl Fn(Args)->Option<Ret>>`.
+/// - `$if`: your `lua_if` variable  
+/// - `$name`: the Lua‐side name (e.g. `"get_player"`)  
+/// - `$cb`: the field on `lua_if` that holds the callback (e.g. `get_player_callback`)  
+/// - `($arg: $ty)`: the parameter list for the closure you’re exposing  
+// macro_rules! lua_fn_opt {
+//     ($if:ident, $name:expr, $cb:ident, ( $arg:ident : $ty:ty )) => {
+//         $if.add_lua_fn($name, {
+//             let cb_opt = $if.$cb.clone();
+//             move |lua, $arg: $ty| {
+//                 let cb = cb_opt
+//                     .as_ref()
+//                     .ok_or_else(|| Error::external(concat!("No ", stringify!($cb), " set!")))?;
+//                 let result = cb($arg)
+//                     .ok_or_else(|| Error::external(format!("No {} with ID {}", $name, $arg)))?;
+//                 // clone the returned Rc or Arc, wrap in userdata
+//                 lua.create_userdata(result.clone()).map(Value::UserData)
+//             }
+//         })?;
+//     };
+//     // overload for zero‐arg callbacks that *always* return a T (not Option<T>)
+//     ($if:ident, $name:expr, $cb:ident) => {
+//         $if.add_lua_fn($name, {
+//             let cb_opt = $if.$cb.clone();
+//             move |lua, ()| {
+//                 let cb = cb_opt
+//                     .as_ref()
+//                     .ok_or_else(|| Error::external(concat!("No ", stringify!($cb), " set!")))?;
+//                 let result = cb();
+//                 lua.create_userdata(result.clone())
+//             }
+//         })?;
+//     };
+// }
+
+macro_rules! lua_fn_opt {
+    // Option-returning callbacks
+    ($if:ident, $name:expr, $cb:ident, ( $($arg:ident : $ty:ty),* )) => {
+        $if.add_lua_fn($name, {
+            let cb_opt = $if.$cb.clone();
+            move |lua, ( $($arg),* ): ( $($ty),* )| {
+                let cb = cb_opt.as_ref()
+                    .ok_or_else(|| Error::external(concat!("No ", stringify!($cb), " set!")))?;
+                let out = cb($($arg),*)
+                    .ok_or_else(|| Error::external(concat!("Callback ", $name, " returned None")))?;
+                lua.create_userdata(out.clone()).map(Value::UserData)
+            }
+        })?;
+    };
+    // Direct-return callbacks
+    ($if:ident, $name:expr, $cb:ident, direct, ( $($arg:ident : $ty:ty),* )) => {
+        $if.add_lua_fn($name, {
+            let cb_opt = $if.$cb.clone();
+            move |lua, ( $($arg),* ): ( $($ty),* )| {
+                let cb = cb_opt.as_ref()
+                    .ok_or_else(|| Error::external(concat!("No ", stringify!($cb), " set!")))?;
+                let out = cb($($arg),*);    // no Option unwrap
+                lua.create_userdata(out.clone()).map(Value::UserData)
+            }
+        })?;
+    };
+}
+
 pub trait LuaScripted {
     fn set_script_id(&mut self, id: u32);
     fn get_script_id(&self) -> u32;
@@ -60,7 +123,7 @@ struct ScriptedFunctions {
 pub struct LuaInterface {
     pub lua: Lua,
     script_cache: HashMap<u32, ScriptedFunctions>,
-    pub get_player_callback: Option<Rc<dyn Fn(u32) -> Option<PlayerRc> + 'static>>,
+    pub get_player_callback: Option<Rc<dyn Fn() -> PlayerRc>>,
     pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRc> + 'static>>,
     pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterKind>>>,
     pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRef>>,
@@ -94,84 +157,16 @@ impl LuaInterface {
     pub fn register_api(lua_if_rc: &LuaInterfaceRc) -> Result<()> {
         let lua_if = lua_if_rc.borrow();
 
-        // lua_if.add_lua_fn("add_monster", move |lua, (id, pos): (u32, Table)| {
-        //     /* … */
-        //     Ok(())
-        // })?;
-
-        // lua_if.add_lua_fn("add_monster", {
-        //     let cb_opt = lua_if.add_monster_callback.clone();
-        //     move |_lua, (id, pos): (u32, Table)| {
-        //         let p = Position {
-        //             x: pos.get("x")?,
-        //             y: pos.get("y")?,
-        //         };
-        //         if let Some(cb) = &cb_opt {
-        //             Ok(cb(id, p)) // returns u32
-        //         } else {
-        //             Err(Error::external("…"))
-        //         }
-        //     }
-        // })?;
-
-        lua_if.add_lua_fn("get_player", {
-            let cb_opt = lua_if.get_player_callback.clone();
-            move |lua, id: u32| {
-                if let Some(cb) = &cb_opt {
-                    if let Some(monster_rc) = cb(id) {
-                        lua.create_userdata(monster_rc.clone()).map(Value::UserData)
-                    } else {
-                        Err(Error::external(format!("No monster with ID {}", id)))
-                    }
-                } else {
-                    Err(Error::external("No get_player callback set!"))
-                }
-            }
-        })?;
-
-        lua_if.add_lua_fn("get_monster_by_id", {
-            let cb_opt = lua_if.get_monster_by_id_callback.clone();
-            move |lua, id: u32| {
-                if let Some(cb) = &cb_opt {
-                    if let Some(monster_rc) = cb(id) {
-                        lua.create_userdata(monster_rc.clone()).map(Value::UserData)
-                    } else {
-                        Err(Error::external(format!("No monster with ID {}", id)))
-                    }
-                } else {
-                    Err(Error::external("No get_monster_by_id callback set!"))
-                }
-            }
-        })?;
-
-        lua_if.add_lua_fn("get_monster_kind_by_id", {
-            let cb_opt = lua_if.get_monster_kind_by_id_callback.clone();
-            move |lua, id: u32| {
-                if let Some(cb) = &cb_opt {
-                    if let Some(monster_kind) = cb(id) {
-                        let lua_monster_kind = Rc::new(RefCell::new(monster_kind.clone()));
-                        lua.create_userdata(lua_monster_kind.clone())
-                            .map(Value::UserData)
-                    } else {
-                        Err(Error::external(format!("No monster kind with ID {}", id)))
-                    }
-                } else {
-                    Err(Error::external("No get_monster_by_id callback set!"))
-                }
-            }
-        })?;
-
-        lua_if.add_lua_fn("get_current_map", {
-            let cb_opt = lua_if.get_current_map_callback.clone();
-            move |lua, ()| {
-                if let Some(cb) = &cb_opt {
-                    let map_rc = cb();
-                    lua.create_userdata(map_rc.clone())
-                } else {
-                    Err(Error::external("No get_monster_by_id callback set!"))
-                }
-            }
-        })?;
+        lua_fn_opt!(lua_if, "get_player", get_player_callback, direct, ());
+        lua_fn_opt!(lua_if, "get_monster_by_id", get_monster_by_id_callback,( id: u32 ));
+        lua_fn_opt!(lua_if, "get_monster_kind_by_id", get_monster_kind_by_id_callback,( id: u32 ));
+        lua_fn_opt!(
+            lua_if,
+            "get_current_map",
+            get_current_map_callback,
+            direct,
+            ()
+        );
 
         Ok(())
     }

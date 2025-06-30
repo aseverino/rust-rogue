@@ -27,7 +27,7 @@ use rand::{Rng, thread_rng};
 use crate::{
     creature::Creature,
     lua_interface::{LuaInterfaceRc, LuaScripted},
-    maps::map::{Map, MapRef},
+    maps::map::{Map, MapRc},
     monster::Monster,
     player::{Player, PlayerRc},
     position::Position,
@@ -37,7 +37,7 @@ use crate::{
 
 fn do_damage(
     player: &mut PlayerRc,
-    map_ref: &MapRef,
+    map_ref: &MapRc,
     target_id: u32,
     damage: i32,
     lua_interface: &LuaInterfaceRc,
@@ -114,7 +114,7 @@ fn do_damage(
 
 pub(crate) fn do_melee_combat(
     player: &mut PlayerRc,
-    map_ref: &mut MapRef,
+    map_ref: &mut MapRc,
     _attacker_pos: Position,
     target_pos: Position,
     lua_interface: &LuaInterfaceRc,
@@ -190,7 +190,7 @@ pub(crate) fn do_melee_combat(
 
 pub(crate) fn do_spell_combat(
     player: &mut PlayerRc,
-    map_ref: &MapRef,
+    map_ref: &MapRc,
     attacker_pos: Position,
     target_pos: Position,
     spell_index: usize,

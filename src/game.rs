@@ -26,7 +26,7 @@ use crate::input::{Input, KeyboardAction};
 use crate::items::base_item::ItemKind;
 use crate::items::collection::{Items, ItemsArc};
 use crate::lua_interface::{self, LuaInterface, LuaInterfaceRc, LuaScripted};
-use crate::maps::map::MapRef;
+use crate::maps::map::MapRc;
 use crate::maps::navigator::Navigator;
 use crate::maps::overworld::{Overworld, OverworldPos, VisitedState};
 use crate::maps::overworld_generator::OverworldGenerator;
@@ -178,7 +178,7 @@ fn draw(
     ui.draw();
 }
 
-fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> MapRef {
+fn get_map_ptr(game: &mut GameState, overworld_pos: OverworldPos) -> MapRc {
     let current_map_rc = game.overworld.get_map_ptr(overworld_pos);
 
     if current_map_rc.is_none() {
@@ -230,8 +230,8 @@ fn check_for_map_update(
     game: &mut GameState,
     map_update: &mut MapTravelEvent,
     last_map_travel_kind: &mut MapTravelKind,
-    peek_map_rc: &mut Option<MapRef>,
-    current_map_rc: &mut MapRef,
+    peek_map_rc: &mut Option<MapRc>,
+    current_map_rc: &mut MapRc,
     current_downstair_teleport_pos: &mut Option<Position>,
     overworld_pos: &mut OverworldPos,
 ) {
@@ -481,9 +481,9 @@ pub async fn run() {
     let mut current_downstair_teleport_pos: Option<Position> = None;
 
     let mut current_map_rc = get_map_ptr(&mut game, overworld_pos);
-    let mut peek_map_rc: Option<MapRef> = None;
+    let mut peek_map_rc: Option<MapRc> = None;
 
-    let shared_map_ptr: Rc<RefCell<MapRef>> = Rc::new(RefCell::new(current_map_rc.clone()));
+    let shared_map_ptr: Rc<RefCell<MapRc>> = Rc::new(RefCell::new(current_map_rc.clone()));
 
     {
         let mut map = current_map_rc.0.borrow_mut();
@@ -561,7 +561,7 @@ pub async fn run() {
                 }
             }));
         let shared_map_ptr_clone = shared_map_ptr.clone();
-        lua_interface.get_current_map_callback = Some(Rc::new(move || -> MapRef {
+        lua_interface.get_current_map_callback = Some(Rc::new(move || -> MapRc {
             let binding = shared_map_ptr_clone.borrow();
             binding.clone()
         }));
@@ -797,7 +797,7 @@ pub async fn run() {
 
 pub fn update(
     game: &mut GameState,
-    map_ref: &mut MapRef,
+    map_ref: &mut MapRc,
     player_action: KeyboardAction,
     player_direction: Direction,
     spell_action: i32,

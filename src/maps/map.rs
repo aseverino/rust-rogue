@@ -375,9 +375,9 @@ impl Map {
 }
 
 #[derive(Clone)]
-pub struct MapRef(pub Rc<RefCell<Map>>);
+pub struct MapRc(pub Rc<RefCell<Map>>);
 
-impl UserData for MapRef {
+impl UserData for MapRc {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_tier", |_, this, ()| {
             Ok(this.0.borrow().generated_map.tier)

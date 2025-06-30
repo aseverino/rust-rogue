@@ -33,7 +33,7 @@ use std::fs;
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::maps::map::{Map, MapRef};
+use crate::maps::map::{Map, MapRc};
 use crate::monster::MonsterRc;
 use crate::monster_kind::MonsterKind;
 use crate::player::PlayerRc;
@@ -126,8 +126,8 @@ pub struct LuaInterface {
     pub get_player_callback: Option<Rc<dyn Fn() -> PlayerRc>>,
     pub get_monster_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterRc> + 'static>>,
     pub get_monster_kind_by_id_callback: Option<Rc<dyn Fn(u32) -> Option<MonsterKind>>>,
-    pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRef>>,
-    pub map_add_monster_callback: Option<Rc<dyn Fn(MapRef, u32, Position) -> MonsterRc>>,
+    pub get_current_map_callback: Option<Rc<dyn Fn() -> MapRc>>,
+    pub map_add_monster_callback: Option<Rc<dyn Fn(MapRc, u32, Position) -> MonsterRc>>,
     pub script_id_counter: u32,
 }
 
@@ -394,7 +394,7 @@ impl LuaInterface {
             self.lua.create_function(
                 move |lua_ctx, (lua_self, kind_id, pos): (AnyUserData, u32, Table)| {
                     // pull the MapRef back out of the userdata:
-                    let map_ref: MapRef = lua_self.borrow::<MapRef>()?.clone();
+                    let map_ref: MapRc = lua_self.borrow::<MapRc>()?.clone();
 
                     // build the Position
                     let p = Position {
@@ -418,7 +418,7 @@ impl LuaInterface {
         Ok(())
     }
 
-    pub fn on_map_peeked(&self, map: &MapRef) -> Result<bool> {
+    pub fn on_map_peeked(&self, map: &MapRc) -> Result<bool> {
         let binding = &self.script_cache;
         let funcs = binding
             .get(&0)

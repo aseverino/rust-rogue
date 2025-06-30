@@ -32,7 +32,6 @@ fn setup_color_replacement_material() -> Result<Material, macroquad::Error> {
             BlendFactor::Value(BlendValue::SourceAlpha),
             BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
         )),
-        // 2) disable depth writes so that transparent quads don't block later draws
         depth_write: false,
         ..Default::default()
     };

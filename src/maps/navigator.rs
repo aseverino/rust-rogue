@@ -87,7 +87,7 @@ impl Navigator {
             true // treat out-of-bounds as walls
         } else {
             matches!(
-                tiles[Position::new(x as usize, y as usize)].kind,
+                tiles[Position::new(x as usize, y as usize)].kind(),
                 TileKind::Wall
             )
         }

@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::sync::{Arc, RwLock};
+
 use macroquad::prelude::*;
 
 use crate::{
@@ -39,20 +41,88 @@ pub enum TileKind {
     Floor,
 }
 
+bitflags::bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct EdgeKind: u16 {
+        const NONE         = 0b0000_0000_0000;
+        const TOP          = 0b0000_0000_0001;
+        const RIGHT        = 0b0000_0000_0010;
+        const BOTTOM       = 0b0000_0000_0100;
+        const LEFT         = 0b0000_0000_1000;
+        const TOP_LEFT     = 0b0000_0001_0000;
+        const TOP_RIGHT    = 0b0000_0010_0000;
+        const BOTTOM_LEFT  = 0b0000_0100_0000;
+        const BOTTOM_RIGHT = 0b0000_1000_0000;
+    }
+}
+
+pub struct TileFactory {
+    chasm: Tile,
+    floor: Tile,
+    wall: Tile,
+}
+
+impl TileFactory {
+    pub fn new() -> Self {
+        Self {
+            chasm: Tile::new(TileKind::Chasm),
+            floor: Tile::new(TileKind::Floor),
+            wall: Tile::new(TileKind::Wall),
+        }
+    }
+    pub async fn init(&mut self) {
+        {
+            let texture = load_texture("assets/sprites/scenario/chasm.png")
+                .await
+                .unwrap();
+            texture.set_filter(FilterMode::Nearest);
+            self.chasm.sprite = Some(Arc::new(RwLock::new(texture)));
+        }
+        {
+            let texture_result = load_texture("assets/sprites/scenario/floor.png").await;
+            let mut texture = match texture_result {
+                Ok(tex) => tex,
+                Err(e) => {
+                    eprintln!("Failed to load floor texture: {}", e);
+                    return;
+                }
+            };
+
+            texture.set_filter(FilterMode::Nearest);
+            self.floor.sprite = Some(Arc::new(RwLock::new(texture)));
+        }
+    }
+    pub fn create_tile(&self, kind: TileKind) -> Tile {
+        match kind {
+            TileKind::Chasm => self.chasm.clone(),
+            TileKind::Wall => self.wall.clone(),
+            TileKind::Floor => self.floor.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Tile {
-    pub kind: TileKind,
+    kind: TileKind,
+    pub edge: EdgeKind,
     pub creature: u32,
     pub items: Vec<ItemKind>,
+    pub sprite: Option<Arc<RwLock<Texture2D>>>,
 }
 
 impl Tile {
-    pub fn new(kind: TileKind) -> Self {
+    pub(in crate::tile) fn new(kind: TileKind) -> Self {
         Self {
             kind,
             creature: NO_CREATURE,
             items: Vec::new(),
+            edge: EdgeKind::NONE,
+            sprite: None,
         }
+    }
+
+    pub fn kind(&self) -> TileKind {
+        self.kind
     }
 
     pub fn has_enemy(&self) -> bool {
@@ -89,6 +159,10 @@ impl Tile {
         self.items.push(ItemKind::Teleport(teleport));
     }
 
+    fn has_edge(&self, kind: EdgeKind) -> bool {
+        self.edge.contains(kind)
+    }
+
     pub fn remove_item(&mut self, index: usize) -> Option<ItemKind> {
         if index < self.items.len() {
             Some(self.items.remove(index))
@@ -100,6 +174,246 @@ impl Tile {
     pub fn is_border(&self, pos: &Position) -> bool {
         self.kind == TileKind::Floor
             && (pos.x == 0 || pos.y == 0 || pos.x == GRID_WIDTH - 1 || pos.y == GRID_HEIGHT - 1)
+    }
+
+    pub fn draw_edges(&self, pos: Position, offset: PointF) {
+        const TILE_PX: f32 = 16.0;
+        let mut px = 0.0 * TILE_PX;
+        let mut py = 1.0 * TILE_PX;
+        let dest = Vec2::new(32.0, 32.0);
+        let tex = &self.sprite.as_ref().unwrap().read().unwrap();
+        let mut drawn = EdgeKind::NONE;
+
+        if self.has_edge(EdgeKind::TOP) && self.has_edge(EdgeKind::RIGHT) {
+            let mut extra = PointF::new(0.0, 0.0);
+            let mut size = dest.clone();
+            let mut src = Rect {
+                x: px,
+                y: py + TILE_PX,
+                w: TILE_PX,
+                h: -TILE_PX,
+            };
+
+            if self.has_edge(EdgeKind::BOTTOM) && self.has_edge(EdgeKind::RIGHT) {
+                src.h += 8.0;
+                size.y -= 16.0;
+                extra.y -= 8.0;
+            }
+
+            if self.has_edge(EdgeKind::TOP) && self.has_edge(EdgeKind::LEFT) {
+                src.x += 8.0;
+                extra.x += 16.0;
+            }
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+            drawn |= EdgeKind::TOP | EdgeKind::RIGHT;
+        }
+        if self.has_edge(EdgeKind::TOP) && self.has_edge(EdgeKind::LEFT) {
+            let mut extra = PointF::new(0.0, 0.0);
+            let mut size = dest.clone();
+            let mut src = Rect {
+                x: px + TILE_PX,
+                y: py + TILE_PX,
+                w: -TILE_PX,
+                h: -TILE_PX,
+            };
+
+            if self.has_edge(EdgeKind::BOTTOM) && self.has_edge(EdgeKind::LEFT) {
+                src.h += 8.0; // -16 + 8 = -8
+                size.y -= 16.0; // 32 → 16
+                extra.y -= 8.0; // move up a bit
+            }
+            if self.has_edge(EdgeKind::TOP) && self.has_edge(EdgeKind::RIGHT) {
+                src.w += 8.0; // -16 + 8 = -8
+                size.x -= 16.0;
+                extra.x -= 8.0;
+            }
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+            drawn |= EdgeKind::TOP | EdgeKind::LEFT;
+        }
+        if self.has_edge(EdgeKind::BOTTOM) && self.has_edge(EdgeKind::RIGHT) {
+            let mut extra = PointF::new(0.0, 0.0);
+            let mut size = dest.clone();
+            let mut src = Rect {
+                x: px,
+                y: py,
+                w: TILE_PX,
+                h: TILE_PX,
+            };
+
+            if self.has_edge(EdgeKind::TOP) && self.has_edge(EdgeKind::RIGHT) {
+                src.y += 8.0;
+                src.h -= 8.0;
+                size.y -= 16.0;
+                extra.y += 8.0;
+            }
+            if self.has_edge(EdgeKind::BOTTOM) && self.has_edge(EdgeKind::LEFT) {
+                src.x += 8.0;
+                src.w -= 8.0;
+                size.x -= 16.0;
+                extra.x += 8.0;
+            }
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+            drawn |= EdgeKind::BOTTOM | EdgeKind::RIGHT;
+        }
+        if self.has_edge(EdgeKind::BOTTOM) && self.has_edge(EdgeKind::LEFT) {
+            let mut extra = PointF::new(0.0, 0.0);
+            let mut size = dest.clone();
+            let mut src = Rect {
+                x: px + TILE_PX,
+                y: py,
+                w: -TILE_PX,
+                h: TILE_PX,
+            };
+
+            if self.has_edge(EdgeKind::TOP) && self.has_edge(EdgeKind::LEFT) {
+                src.y += 8.0;
+                src.h -= 8.0;
+                size.y -= 16.0;
+                extra.y += 8.0;
+            }
+            if self.has_edge(EdgeKind::BOTTOM) && self.has_edge(EdgeKind::RIGHT) {
+                //src.x -= 8.0;
+                src.w += 8.0;
+                size.x -= 16.0;
+                extra.x -= 8.0;
+            }
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+            drawn |= EdgeKind::BOTTOM | EdgeKind::LEFT;
+        }
+
+        px = 1.0 * TILE_PX;
+        py = 0.0 * TILE_PX;
+
+        if self.has_edge(EdgeKind::TOP) && !drawn.contains(EdgeKind::TOP) {
+            let extra = PointF::new(0.0, 0.0);
+            let size = dest.clone();
+            let src = Rect {
+                x: px,
+                y: py + TILE_PX,
+                w: TILE_PX,
+                h: -TILE_PX,
+            };
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+        }
+
+        if self.has_edge(EdgeKind::BOTTOM) && !drawn.contains(EdgeKind::BOTTOM) {
+            let extra = PointF::new(0.0, 0.0);
+            let size = dest.clone();
+            let src = Rect {
+                x: px,
+                y: py,
+                w: TILE_PX,
+                h: TILE_PX,
+            };
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+        }
+
+        px = 1.0 * TILE_PX;
+        py = 1.0 * TILE_PX;
+
+        if self.has_edge(EdgeKind::RIGHT) && !drawn.contains(EdgeKind::RIGHT) {
+            let extra = PointF::new(0.0, 0.0);
+            let size = dest.clone();
+            let src = Rect {
+                x: px,
+                y: py,
+                w: TILE_PX,
+                h: TILE_PX,
+            };
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+        }
+
+        if self.has_edge(EdgeKind::LEFT) && !drawn.contains(EdgeKind::LEFT) {
+            let extra = PointF::new(0.0, 0.0);
+            let size = dest.clone();
+            let src = Rect {
+                x: px + TILE_PX,
+                y: py,
+                w: -TILE_PX,
+                h: TILE_PX,
+            };
+
+            let params = DrawTextureParams {
+                dest_size: Some(size),
+                source: Some(src),
+                ..Default::default()
+            };
+
+            let base_x = offset.x + pos.x as f32 * TILE_SIZE + (TILE_SIZE - size.x) / 2.0;
+            let base_y = offset.y + pos.y as f32 * TILE_SIZE + (TILE_SIZE - size.y) / 2.0;
+
+            draw_texture_ex(tex, base_x + extra.x, base_y + extra.y, WHITE, params);
+        }
     }
 
     pub fn draw(&self, pos: Position, offset: PointF, borders_locked: bool) {
@@ -124,13 +438,38 @@ impl Tile {
             },
         };
 
-        draw_rectangle(
-            offset.x + pos.x as f32 * TILE_SIZE,
-            offset.y + pos.y as f32 * TILE_SIZE,
-            TILE_SIZE - 1.0,
-            TILE_SIZE - 1.0,
-            color,
-        );
+        if self.sprite.is_some() {
+            if self.kind == TileKind::Chasm {
+                self.draw_edges(pos, offset);
+            } else if self.kind == TileKind::Floor {
+                if let Some(sprite_arc) = &self.sprite {
+                    let sprite = sprite_arc.read().unwrap();
+                    let draw_params = DrawTextureParams {
+                        dest_size: Some(Vec2::new(32.0, 32.0)),
+                        source: Some(Rect {
+                            x: 0.0,
+                            y: 0.0,
+                            w: 16.0,
+                            h: 16.0,
+                        }),
+                        ..Default::default()
+                    };
+
+                    let x = offset.x + pos.x as f32 * TILE_SIZE;
+                    let y = offset.y + pos.y as f32 * TILE_SIZE;
+
+                    draw_texture_ex(&sprite, x, y, WHITE, draw_params);
+                }
+            }
+        } else {
+            draw_rectangle(
+                offset.x + pos.x as f32 * TILE_SIZE,
+                offset.y + pos.y as f32 * TILE_SIZE,
+                TILE_SIZE - 1.0,
+                TILE_SIZE - 1.0,
+                color,
+            );
+        }
 
         if self.is_border(&pos) {
             // Draw border
@@ -157,6 +496,70 @@ impl Tile {
                 border_color,
             );
         }
+
+        // if self.has_edge(EdgeKind::TOP_RIGHT_CONCAVE) {
+        //     draw_text(
+        //         "6",
+        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         offset.y + pos.y as f32 * TILE_SIZE,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
+        // if self.has_edge(EdgeKind::BOTTOM_LEFT_CONCAVE) {
+        //     draw_text(
+        //         "7",
+        //         offset.x + pos.x as f32 * TILE_SIZE,
+        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
+        // if self.has_edge(EdgeKind::BOTTOM_RIGHT_CONCAVE) {
+        //     draw_text(
+        //         "8",
+        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
+        // if self.has_edge(EdgeKind::TOP_LEFT_CONVEX) {
+        //     draw_text(
+        //         "9",
+        //         offset.x + pos.x as f32 * TILE_SIZE,
+        //         offset.y + pos.y as f32 * TILE_SIZE,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
+        // if self.has_edge(EdgeKind::TOP_RIGHT_CONVEX) {
+        //     draw_text(
+        //         "10",
+        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         offset.y + pos.y as f32 * TILE_SIZE,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
+        // if self.has_edge(EdgeKind::BOTTOM_LEFT_CONVEX) {
+        //     draw_text(
+        //         "11",
+        //         offset.x + pos.x as f32 * TILE_SIZE,
+        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
+        // if self.has_edge(EdgeKind::BOTTOM_RIGHT_CONVEX) {
+        //     draw_text(
+        //         "12",
+        //         offset.x + pos.x as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         offset.y + pos.y as f32 * TILE_SIZE + TILE_SIZE - 18.0,
+        //         18.0,
+        //         WHITE,
+        //     );
+        // }
 
         for item in &self.items {
             match item {

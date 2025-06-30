@@ -22,7 +22,7 @@
 
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 
 use rand::rngs::ThreadRng;
@@ -36,10 +36,10 @@ use crate::lua_interface::LuaInterfaceRc;
 use crate::maps::generated_map::GeneratedMap;
 use crate::maps::overworld::OverworldPos;
 use crate::maps::{BorderFlags, GRID_HEIGHT, GRID_WIDTH, MapTheme};
-use crate::monster;
 use crate::monster_kind::{MonsterKind, MonsterKinds, MonsterKindsVecArc};
 use crate::position::Position;
-use crate::tile::{Tile, TileKind};
+use crate::tile::{EdgeKind, Tile, TileFactory, TileKind};
+use crate::{monster, tile};
 use rand::seq::SliceRandom;
 
 #[derive(Debug, Clone)]
@@ -114,6 +114,7 @@ pub struct MapGenerator {
     thread_handle: Option<JoinHandle<()>>,
     monster_kinds: MonsterKindsVecArc,
     monster_kinds_by_tier: Vec<Vec<u32>>,
+    tile_factory: Arc<RwLock<TileFactory>>,
     items: ItemsArc,
     pub map_statuses: Arc<Mutex<HashMap<OverworldPos, SharedMapStatus>>>,
 }
@@ -129,6 +130,7 @@ impl MapGenerator {
             thread_handle: None,
             monster_kinds: monster_kinds.clone(),
             monster_kinds_by_tier: Vec::new(),
+            tile_factory: Arc::new(RwLock::new(TileFactory::new())),
             items: items.clone(),
             map_statuses: Arc::new(Mutex::new(HashMap::new())),
         };
@@ -142,6 +144,9 @@ impl MapGenerator {
             }
             mg.monster_kinds_by_tier[mt.tier as usize].push(mt.id);
         }
+
+        mg.tile_factory.write().unwrap().init().await;
+
         mg
     }
 
@@ -159,6 +164,7 @@ impl MapGenerator {
         self.command_tx = Some(command_tx);
         let monster_kinds = Arc::clone(&self.monster_kinds);
         let monster_kinds_by_tier = self.monster_kinds_by_tier.clone();
+        let tile_factory = self.tile_factory.clone();
         let items = Arc::clone(&self.items);
 
         let statuses = Arc::clone(&self.map_statuses);
@@ -166,7 +172,70 @@ impl MapGenerator {
             for command in command_rx {
                 match command {
                     Command::Generate(pos, params) => {
-                        let mut map: GeneratedMap = Self::generate_map(&params);
+                        let mut map: GeneratedMap = Self::generate_map(&tile_factory, &params);
+
+                        // determine edges based on borders between floor and chasm tiles
+                        for x in 0..GRID_WIDTH {
+                            for y in 0..GRID_HEIGHT {
+                                if map.tiles[Position::new(x, y)].kind() == TileKind::Chasm {
+                                    if y > 0
+                                        && map.tiles[Position::new(x, y - 1)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |= EdgeKind::TOP;
+                                    }
+                                    if x + 1 < GRID_WIDTH
+                                        && map.tiles[Position::new(x + 1, y)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |= EdgeKind::RIGHT;
+                                    }
+                                    if y + 1 < GRID_HEIGHT
+                                        && map.tiles[Position::new(x, y + 1)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |= EdgeKind::BOTTOM;
+                                    }
+                                    if x > 0
+                                        && map.tiles[Position::new(x - 1, y)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |= EdgeKind::LEFT;
+                                    }
+                                    if x + 1 < GRID_WIDTH
+                                        && y > 0
+                                        && map.tiles[Position::new(x + 1, y - 1)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |= EdgeKind::TOP_RIGHT;
+                                    }
+                                    if x + 1 < GRID_WIDTH
+                                        && y + 1 < GRID_HEIGHT
+                                        && map.tiles[Position::new(x + 1, y + 1)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |=
+                                            EdgeKind::BOTTOM_RIGHT;
+                                    }
+                                    if x > 0
+                                        && y + 1 < GRID_HEIGHT
+                                        && map.tiles[Position::new(x - 1, y + 1)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |=
+                                            EdgeKind::BOTTOM_LEFT;
+                                    }
+                                    if x > 0
+                                        && y > 0
+                                        && map.tiles[Position::new(x - 1, y - 1)].kind()
+                                            == TileKind::Floor
+                                    {
+                                        map.tiles[Position::new(x, y)].edge |= EdgeKind::TOP_LEFT;
+                                    }
+                                }
+                            }
+                        }
+
                         Self::populate_map(
                             &mut map,
                             &params,
@@ -242,6 +311,7 @@ impl MapGenerator {
 
     fn carve_tile(
         tiles: &mut Vec<Vec<Tile>>,
+        tile_factory: &Arc<RwLock<TileFactory>>,
         x: usize,
         y: usize,
         walkable_cache: &mut Vec<Position>,
@@ -249,14 +319,15 @@ impl MapGenerator {
         if x >= GRID_WIDTH || y >= GRID_HEIGHT {
             return;
         }
-        if tiles[x][y].kind != TileKind::Floor {
-            tiles[x][y].kind = TileKind::Floor;
+        if tiles[x][y].kind() != TileKind::Floor {
+            tiles[x][y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
             walkable_cache.push(Position { x, y });
         }
     }
 
     fn carve_straight_path(
         tiles: &mut Vec<Vec<Tile>>,
+        tile_factory: &Arc<RwLock<TileFactory>>,
         start: Position,
         end: Position,
         walkable_cache: &mut Vec<Position>,
@@ -265,16 +336,16 @@ impl MapGenerator {
         let mut y = start.y;
 
         while x != end.x {
-            if tiles[x][y].kind != TileKind::Floor {
-                tiles[x][y].kind = TileKind::Floor;
+            if tiles[x][y].kind() != TileKind::Floor {
+                tiles[x][y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                 walkable_cache.push(Position { x, y });
             }
             x = if end.x > x { x + 1 } else { x - 1 };
         }
 
         while y != end.y {
-            if tiles[x][y].kind != TileKind::Floor {
-                tiles[x][y].kind = TileKind::Floor;
+            if tiles[x][y].kind() != TileKind::Floor {
+                tiles[x][y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                 walkable_cache.push(Position { x, y });
             }
             y = if end.y > y { y + 1 } else { y - 1 };
@@ -283,6 +354,7 @@ impl MapGenerator {
 
     fn carve_jagged_path(
         tiles: &mut Vec<Vec<Tile>>,
+        tile_factory: &Arc<RwLock<TileFactory>>,
         mut current: Position,
         goal: Position,
         walkable_cache: &mut Vec<Position>,
@@ -292,13 +364,31 @@ impl MapGenerator {
         while current != goal {
             if radius == 0 {
                 // Exact 1x1
-                Self::carve_tile(tiles, current.x, current.y, walkable_cache);
+                Self::carve_tile(tiles, tile_factory, current.x, current.y, walkable_cache);
             } else if radius == 1 {
                 // Exact 2x2 (square)
-                Self::carve_tile(tiles, current.x, current.y, walkable_cache);
-                Self::carve_tile(tiles, current.x + 1, current.y, walkable_cache);
-                Self::carve_tile(tiles, current.x, current.y + 1, walkable_cache);
-                Self::carve_tile(tiles, current.x + 1, current.y + 1, walkable_cache);
+                Self::carve_tile(tiles, tile_factory, current.x, current.y, walkable_cache);
+                Self::carve_tile(
+                    tiles,
+                    tile_factory,
+                    current.x + 1,
+                    current.y,
+                    walkable_cache,
+                );
+                Self::carve_tile(
+                    tiles,
+                    tile_factory,
+                    current.x,
+                    current.y + 1,
+                    walkable_cache,
+                );
+                Self::carve_tile(
+                    tiles,
+                    tile_factory,
+                    current.x + 1,
+                    current.y + 1,
+                    walkable_cache,
+                );
             } else {
                 // Circular area
                 for dx in -(radius as isize)..=(radius as isize) {
@@ -310,7 +400,13 @@ impl MapGenerator {
                             && nx < GRID_WIDTH as isize
                             && ny < GRID_HEIGHT as isize
                         {
-                            Self::carve_tile(tiles, nx as usize, ny as usize, walkable_cache);
+                            Self::carve_tile(
+                                tiles,
+                                tile_factory,
+                                nx as usize,
+                                ny as usize,
+                                walkable_cache,
+                            );
                         }
                     }
                 }
@@ -345,6 +441,7 @@ impl MapGenerator {
 
     fn place_border_anchors(
         tiles: &mut Vec<Vec<Tile>>,
+        tile_factory: &Arc<RwLock<TileFactory>>,
         params: &GenerationParams,
     ) -> Vec<(Position, Position)> {
         let mut anchors = Vec::new();
@@ -360,7 +457,7 @@ impl MapGenerator {
         if borders.contains(BorderFlags::TOP) {
             if !params.predefined_borders[0].is_empty() {
                 for &pos in &params.predefined_borders[0] {
-                    tiles[pos.x][pos.y].kind = TileKind::Floor;
+                    tiles[pos.x][pos.y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((pos, Position::new(pos.x, pos.y + 1)));
                 }
             } else {
@@ -369,7 +466,8 @@ impl MapGenerator {
                 for dx in 0..anchor_width {
                     let border = Position::new(start_x + dx, 0);
                     let neighbor = Position::new(border.x, border.y + 1);
-                    tiles[border.x][border.y].kind = TileKind::Floor;
+                    tiles[border.x][border.y] =
+                        tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((border, neighbor));
                 }
             }
@@ -377,7 +475,7 @@ impl MapGenerator {
         if borders.contains(BorderFlags::RIGHT) {
             if !params.predefined_borders[1].is_empty() {
                 for &pos in &params.predefined_borders[1] {
-                    tiles[pos.x][pos.y].kind = TileKind::Floor;
+                    tiles[pos.x][pos.y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((pos, Position::new(pos.x - 1, pos.y)));
                 }
             } else {
@@ -386,7 +484,8 @@ impl MapGenerator {
                 for dy in 0..anchor_height {
                     let border = Position::new(width - 1, start_y + dy);
                     let neighbor = Position::new(border.x - 1, border.y);
-                    tiles[border.x][border.y].kind = TileKind::Floor;
+                    tiles[border.x][border.y] =
+                        tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((border, neighbor));
                 }
             }
@@ -394,7 +493,7 @@ impl MapGenerator {
         if borders.contains(BorderFlags::BOTTOM) {
             if !params.predefined_borders[2].is_empty() {
                 for &pos in &params.predefined_borders[2] {
-                    tiles[pos.x][pos.y].kind = TileKind::Floor;
+                    tiles[pos.x][pos.y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((pos, Position::new(pos.x, pos.y - 1)));
                 }
             } else {
@@ -403,7 +502,8 @@ impl MapGenerator {
                 for dx in 0..anchor_width {
                     let border = Position::new(start_x + dx, height - 1);
                     let neighbor = Position::new(border.x, border.y - 1);
-                    tiles[border.x][border.y].kind = TileKind::Floor;
+                    tiles[border.x][border.y] =
+                        tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((border, neighbor));
                 }
             }
@@ -411,7 +511,7 @@ impl MapGenerator {
         if borders.contains(BorderFlags::LEFT) {
             if !params.predefined_borders[3].is_empty() {
                 for &pos in &params.predefined_borders[3] {
-                    tiles[pos.x][pos.y].kind = TileKind::Floor;
+                    tiles[pos.x][pos.y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((pos, Position::new(pos.x + 1, pos.y)));
                 }
             } else {
@@ -420,7 +520,8 @@ impl MapGenerator {
                 for dy in 0..anchor_height {
                     let border = Position::new(0, start_y + dy);
                     let neighbor = Position::new(border.x + 1, border.y);
-                    tiles[border.x][border.y].kind = TileKind::Floor;
+                    tiles[border.x][border.y] =
+                        tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     anchors.push((border, neighbor));
                 }
             }
@@ -429,7 +530,10 @@ impl MapGenerator {
         anchors
     }
 
-    fn generate_map(params: &GenerationParams) -> GeneratedMap {
+    fn generate_map(
+        tile_factory: &Arc<RwLock<TileFactory>>,
+        params: &GenerationParams,
+    ) -> GeneratedMap {
         let mut rng = thread_rng();
 
         let tile_type = match params.theme {
@@ -444,12 +548,15 @@ impl MapGenerator {
             MapTheme::Wall => TileKind::Wall,
         };
 
-        let mut tiles = vec![vec![Tile::new(tile_type); GRID_HEIGHT]; GRID_WIDTH];
+        let mut tiles = vec![
+            vec![tile_factory.read().unwrap().create_tile(tile_type); GRID_HEIGHT];
+            GRID_WIDTH
+        ];
         let mut walkable_cache = Vec::new();
         let mut visited = vec![vec![false; GRID_HEIGHT]; GRID_WIDTH];
 
         //let borders = Self::choose_border_exits(params.exits as usize);
-        let anchor_pairs = Self::place_border_anchors(&mut tiles, params);
+        let anchor_pairs = Self::place_border_anchors(&mut tiles, tile_factory, params);
 
         let num_walks: usize = params.num_walks;
         let walk_length: usize = params.walk_length;
@@ -467,7 +574,8 @@ impl MapGenerator {
 
         for &(_, neighbor) in &anchor_pairs {
             if !visited[neighbor.x][neighbor.y] {
-                tiles[neighbor.x][neighbor.y].kind = TileKind::Floor;
+                tiles[neighbor.x][neighbor.y] =
+                    tile_factory.read().unwrap().create_tile(TileKind::Floor);
                 walkable_cache.push(neighbor);
                 visited[neighbor.x][neighbor.y] = true;
             }
@@ -509,7 +617,7 @@ impl MapGenerator {
                 }
 
                 if !visited[x][y] {
-                    tiles[x][y].kind = TileKind::Floor;
+                    tiles[x][y] = tile_factory.read().unwrap().create_tile(TileKind::Floor);
                     walkable_cache.push(Position { x, y });
                     visited[x][y] = true;
                 }
@@ -549,6 +657,7 @@ impl MapGenerator {
             //carve_path_between(&mut tiles, prev, current, &mut walkable_cache);
             Self::carve_jagged_path(
                 &mut tiles,
+                tile_factory,
                 prev,
                 current,
                 &mut walkable_cache,
@@ -561,7 +670,7 @@ impl MapGenerator {
 
         // Exclude borders from available walkable positions
         for (pos, neighbor) in &anchor_pairs {
-            if tiles[pos.x][pos.y].kind == TileKind::Floor {
+            if tiles[pos.x][pos.y].kind() == TileKind::Floor {
                 available_walkable_cache.retain(|&p| p != *pos && p != *neighbor);
             }
         }
@@ -571,10 +680,10 @@ impl MapGenerator {
             GeneratedMap::new(params.tier, tiles, walkable_cache, available_walkable_cache);
 
         for x in 0..GRID_WIDTH {
-            if map.tiles[Position::new(x, 0)].kind == TileKind::Floor {
+            if map.tiles[Position::new(x, 0)].kind() == TileKind::Floor {
                 map.border_positions[0].push(Position { x, y: 0 });
             }
-            if map.tiles[Position::new(x, GRID_HEIGHT - 1)].kind == TileKind::Floor {
+            if map.tiles[Position::new(x, GRID_HEIGHT - 1)].kind() == TileKind::Floor {
                 map.border_positions[2].push(Position {
                     x,
                     y: GRID_HEIGHT - 1,
@@ -582,10 +691,10 @@ impl MapGenerator {
             }
         }
         for y in 0..GRID_HEIGHT {
-            if map.tiles[Position::new(0, y)].kind == TileKind::Floor {
+            if map.tiles[Position::new(0, y)].kind() == TileKind::Floor {
                 map.border_positions[3].push(Position { x: 0, y });
             }
-            if map.tiles[Position::new(GRID_WIDTH - 1, y)].kind == TileKind::Floor {
+            if map.tiles[Position::new(GRID_WIDTH - 1, y)].kind() == TileKind::Floor {
                 map.border_positions[1].push(Position {
                     x: GRID_WIDTH - 1,
                     y,

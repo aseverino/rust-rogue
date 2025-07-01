@@ -501,6 +501,8 @@ pub async fn run() {
     let mut map_update = MapTravelEvent::None;
     let mut last_map_travel_kind = MapTravelKind::BorderCross;
     let mut ui = Ui::new(get_spell_types());
+    ui.add_player_skills(&game.player.borrow().spells[0]);
+
     let mut graphics_manager = GraphicsManager::new();
 
     {

@@ -31,6 +31,7 @@ use macroquad::prelude::*;
 
 use crate::{
     items::holdable::HoldableGroupKind,
+    player_spell::PlayerSpell,
     spell_type::SpellType,
     ui::{
         point_f::PointF,
@@ -88,6 +89,7 @@ pub struct Ui {
     str_area_button_id: u32,
     dex_area_button_id: u32,
     int_area_button_id: u32,
+    left_panel_spells_area_id: u32,
     str_value_bound_ids: Vec<u32>,
     dex_value_bound_ids: Vec<u32>,
     int_value_bound_ids: Vec<u32>,
@@ -133,6 +135,7 @@ impl Ui {
             str_area_button_id: u32::MAX,
             dex_area_button_id: u32::MAX,
             int_area_button_id: u32::MAX,
+            left_panel_spells_area_id: u32::MAX,
             str_value_bound_ids: Vec::new(),
             dex_value_bound_ids: Vec::new(),
             int_value_bound_ids: Vec::new(),
@@ -795,36 +798,16 @@ impl Ui {
             self.create_equip_label(self.id_counter - 1, group, &parent_dyn);
         }
 
-        //self.create_attr_label("DEX", dex_ids, self.player_dex, &parent_dyn);
-        //self.create_attr_label("INT", dex_ids, self.player_int, &parent_dyn);
-
-        // let str_label = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
-        // {
-        //     let mut lbl = str_label.borrow_mut();
-        //     lbl.set_text(&"STR".to_string());
-        //     lbl.set_color(GREEN);
-        //     lbl.set_margin_top(10.0);
-        //     lbl.add_anchor(
-        //         AnchorKind::Top,
-        //         soul_label.borrow().get_id(),
-        //         AnchorKind::Bottom,
-        //     );
-        //     lbl.add_anchor(
-        //         AnchorKind::Left,
-        //         soul_label.borrow().get_id(),
-        //         AnchorKind::Left,
-        //     );
-        // }
-
-        // self.str_value_bound_ids.push(self.id_counter + 1);
-        // let str_value = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
-        // {
-        //     let mut lbl = str_value.borrow_mut();
-        //     lbl.set_color(GREEN);
-        //     lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
-        //     lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
-        //     lbl.set_text(&format!("{}", self.player_str));
-        // }
+        self.left_panel_spells_area_id = self.id_counter + 1;
+        let spells_area = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut spells_area_panel = spells_area.borrow_mut();
+            spells_area_panel.set_size(SizeF::new(0.0, 0.0));
+            spells_area_panel.set_border(WHITE, 2.0);
+            spells_area_panel.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+            spells_area_panel.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            spells_area_panel.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        }
     }
 
     fn create_right_panel(&mut self) {
@@ -1182,6 +1165,29 @@ impl Ui {
             lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
             lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
             lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        }
+    }
+
+    pub fn add_player_skills(&mut self, skill: &PlayerSpell) {
+        let area = &self.widgets[self.left_panel_spells_area_id as usize];
+        let children_len = area.borrow().get_children().len();
+        let skills_as_parent_dyn = Rc::clone(&area);
+
+        let title = self.create_widget::<WidgetText>(Some(Rc::downgrade(&skills_as_parent_dyn)));
+        {
+            let mut title = title.borrow_mut();
+            title.set_text(&format!(
+                "{}. {}",
+                (children_len + 1).to_string(),
+                skill.spell_type.name
+            ));
+            title.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            if children_len == 0 {
+                title.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            } else {
+                title.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+            }
+            title.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
     }
 

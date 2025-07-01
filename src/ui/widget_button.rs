@@ -42,7 +42,7 @@ use std::{
 pub struct WidgetButton {
     pub base: WidgetBase,
     pub text: Option<Weak<RefCell<WidgetText>>>,
-    pub click_callback: Option<Box<dyn FnMut(&mut Ui, PointF)>>,
+    pub click_callback: Option<Box<dyn FnMut(&mut Ui, &mut WidgetButton, PointF)>>,
     pub hovered: bool,
     pub hovered_color: Color,
     pub toggled: bool,
@@ -169,13 +169,15 @@ impl Widget for WidgetButton {
 
     fn on_click(&mut self, ui: &mut Ui, pos: PointF) {
         if self.is_visible() && self.contains_point(ui, pos) {
-            if let Some(cb) = self.click_callback.as_mut() {
-                cb(ui, pos);
+            let mut cb_opt = self.click_callback.take();
+            if let Some(ref mut cb) = cb_opt {
+                cb(ui, self, pos);
             }
+            self.click_callback = cb_opt;
         }
     }
 
-    fn set_on_click(&mut self, f: Box<dyn FnMut(&mut Ui, PointF)>) {
+    fn set_on_click(&mut self, f: Box<dyn FnMut(&mut Ui, &mut WidgetButton, PointF)>) {
         self.click_callback = Some(f);
     }
 }

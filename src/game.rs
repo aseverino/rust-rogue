@@ -37,6 +37,7 @@ use crate::monster_kind::MonsterKind;
 use crate::player::{self, Player, PlayerRc};
 use crate::player_spell::PlayerSpell;
 use crate::position::{Direction, Position};
+use crate::spell_type::get_spell_types;
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::manager::{Ui, UiEvent};
 use crate::ui::point_f::PointF;
@@ -499,7 +500,7 @@ pub async fn run() {
     let game_interface_offset = PointF::new(410.0, 10.0);
     let mut map_update = MapTravelEvent::None;
     let mut last_map_travel_kind = MapTravelKind::BorderCross;
-    let mut ui = Ui::new();
+    let mut ui = Ui::new(get_spell_types());
     let mut graphics_manager = GraphicsManager::new();
 
     {

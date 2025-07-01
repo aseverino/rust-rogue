@@ -29,7 +29,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::ui::manager::Ui;
+use crate::ui::{manager::Ui, widget_button::WidgetButton};
 
 use crate::ui::{point_f::PointF, quad_f::QuadF, size_f::SizeF};
 
@@ -130,6 +130,13 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         }
 
         w
+    }
+
+    fn as_button(&self) -> Option<&WidgetButton> {
+        self.as_any().downcast_ref::<WidgetButton>()
+    }
+    fn as_button_mut(&mut self) -> Option<&mut WidgetButton> {
+        self.as_any_mut().downcast_mut::<WidgetButton>()
     }
 
     fn set_manually_added(&mut self) {
@@ -265,7 +272,7 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         // Default implementation does nothing
     }
 
-    fn set_on_click(&mut self, _f: Box<dyn FnMut(&mut Ui, PointF)>) {
+    fn set_on_click(&mut self, _f: Box<dyn FnMut(&mut Ui, &mut WidgetButton, PointF)>) {
         // Default implementation does nothing
     }
 

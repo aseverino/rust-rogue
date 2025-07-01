@@ -24,12 +24,14 @@ use std::{
     cell::RefCell,
     collections::VecDeque,
     rc::{Rc, Weak},
+    sync::Arc,
 };
 
 use macroquad::prelude::*;
 
 use crate::{
     items::holdable::HoldableGroupKind,
+    spell_type::SpellType,
     ui::{
         point_f::PointF,
         quad_f::QuadF,
@@ -57,6 +59,7 @@ pub enum UiEvent {
     IncDexterity,
     IncIntelligence,
     ChestAction(u32),
+    SkillPurchase(u8),
 }
 
 #[derive(Debug)]
@@ -103,7 +106,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new() -> Self {
+    pub fn new(spell_types: &Vec<Option<Arc<SpellType>>>) -> Self {
         let mut ui = Ui {
             player_hp: 1,
             player_max_hp: 1,
@@ -149,7 +152,7 @@ impl Ui {
 
         ui.create_left_panel();
         ui.create_right_panel();
-        ui.create_character_sheet();
+        ui.create_character_sheet(spell_types);
         ui.create_chest_view();
         ui
     }
@@ -356,7 +359,7 @@ impl Ui {
                     item_button.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Left);
                     item_button.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
 
-                    item_button.set_on_click(Box::new(move |ui, _| {
+                    item_button.set_on_click(Box::new(move |ui, _, _| {
                         ui.events.push_back(UiEvent::ChestAction(item_id));
                     }));
                 }
@@ -380,7 +383,7 @@ impl Ui {
                             item_button.set_text(&format!("{}", item_name));
 
                             let item_id = *item_id;
-                            item_button.set_on_click(Box::new(move |ui, _| {
+                            item_button.set_on_click(Box::new(move |ui, _, _| {
                                 ui.events.push_back(UiEvent::ChestAction(item_id));
                             }));
                         }
@@ -458,7 +461,62 @@ impl Ui {
         widget
     }
 
-    pub fn create_attr_button(
+    fn create_skill_button(
+        &mut self,
+        event: UiEvent,
+        skill_name: &str,
+        sp_cost: u32,
+        parent: &Rc<RefCell<dyn Widget>>,
+        first: bool,
+    ) -> (Rc<RefCell<dyn Widget>>, u32) {
+        let button = self.create_widget::<WidgetButton>(Some(Rc::downgrade(parent)));
+        {
+            let mut attr_button = button.borrow_mut();
+            attr_button.set_on_click(Box::new(move |ui, _, _| {
+                ui.events.push_back(event.clone());
+            }));
+            //attr_panel.set_border(WHITE, 1.0);
+            attr_button.set_size(SizeF::new(150.0, 50.0));
+            // attr_button.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            // attr_button.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            // attr_button.set_margin_top(margin_top);
+
+            if first {
+                attr_button.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            } else {
+                attr_button.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+            }
+            attr_button.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            attr_button.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        }
+
+        let label_widget = self.create_widget::<WidgetText>(Some(Rc::downgrade(
+            &(button.clone() as Rc<RefCell<dyn Widget>>),
+        )));
+        {
+            let mut lbl = label_widget.borrow_mut();
+            lbl.set_text(&skill_name.to_string());
+            lbl.set_margin_left(30.0);
+            lbl.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
+            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+        }
+
+        let value_id = self.id_counter + 1;
+        let value_widget = self.create_widget::<WidgetText>(Some(Rc::downgrade(
+            &(button.clone() as Rc<RefCell<dyn Widget>>),
+        )));
+        {
+            let mut val = value_widget.borrow_mut();
+            val.set_text(&sp_cost.to_string());
+            val.set_margin_right(30.0);
+            val.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            val.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        }
+
+        (button, value_id)
+    }
+
+    fn create_attr_button(
         &mut self,
         event: UiEvent,
         label: &str,
@@ -469,7 +527,7 @@ impl Ui {
         let button = self.create_widget::<WidgetButton>(Some(Rc::downgrade(parent)));
         {
             let mut attr_button = button.borrow_mut();
-            attr_button.set_on_click(Box::new(move |ui, _| {
+            attr_button.set_on_click(Box::new(move |ui, _, _| {
                 ui.events.push_back(event.clone());
             }));
             //attr_panel.set_border(WHITE, 1.0);
@@ -783,7 +841,7 @@ impl Ui {
         }
     }
 
-    fn create_character_sheet(&mut self) {
+    fn create_character_sheet(&mut self, spell_types: &Vec<Option<Arc<SpellType>>>) {
         self.character_sheet_id = self.id_counter + 1;
         let character_sheet_rc =
             self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&self.widgets[ROOT_ID as usize])));
@@ -805,22 +863,22 @@ impl Ui {
         let attributes_tab_id = self.id_counter + 1;
         let attributes_tab = self.create_widget::<WidgetButton>(Some(Rc::downgrade(&parent_dyn)));
         {
-            let mut lbl = attributes_tab.borrow_mut();
-            lbl.toggled = true;
-            lbl.set_text(&"Attrib".to_string());
-            lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
-            lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-            lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            let mut btn = attributes_tab.borrow_mut();
+            btn.toggled = true;
+            btn.set_text(&"Attrib".to_string());
+            btn.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            btn.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            btn.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
 
         let skills_tab_id = self.id_counter + 1;
         let skills_tab = self.create_widget::<WidgetButton>(Some(Rc::downgrade(&parent_dyn)));
         {
-            let mut lbl = skills_tab.borrow_mut();
-            lbl.set_text(&"Skills".to_string());
-            lbl.set_margin(QuadF::new(30.0, 0.0, 0.0, 0.0));
-            lbl.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
-            lbl.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
+            let mut btn = skills_tab.borrow_mut();
+            btn.set_text(&"Skills".to_string());
+            btn.set_margin(QuadF::new(30.0, 0.0, 0.0, 0.0));
+            btn.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Top);
+            btn.add_anchor_to_prev(AnchorKind::Left, AnchorKind::Right);
         }
 
         let abilities_tab_id = self.id_counter + 1;
@@ -864,6 +922,147 @@ impl Ui {
             attr_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
             attr_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
         }
+
+        let skills_sheet_id = self.id_counter + 1;
+        let skills_sheet_rc = self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut skills_sheet = skills_sheet_rc.borrow_mut();
+            skills_sheet.set_border(WHITE, 2.0);
+            skills_sheet.add_anchor(AnchorKind::Top, skills_tab_id, AnchorKind::Bottom);
+            skills_sheet.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            skills_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+            skills_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            skills_sheet.set_visible(false);
+        }
+
+        let abilities_sheet_id = self.id_counter + 1;
+        let abilities_sheet_rc =
+            self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut abilities_sheet = abilities_sheet_rc.borrow_mut();
+            abilities_sheet.set_border(WHITE, 2.0);
+            abilities_sheet.add_anchor(AnchorKind::Top, abilities_tab_id, AnchorKind::Bottom);
+            abilities_sheet.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            abilities_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+            abilities_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            abilities_sheet.set_visible(false);
+        }
+
+        let equipment_sheet_id = self.id_counter + 1;
+        let equipment_sheet_rc =
+            self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut equipment_sheet = equipment_sheet_rc.borrow_mut();
+            equipment_sheet.set_border(WHITE, 2.0);
+            equipment_sheet.add_anchor(AnchorKind::Top, equipment_tab_id, AnchorKind::Bottom);
+            equipment_sheet.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            equipment_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+            equipment_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            equipment_sheet.set_visible(false);
+        }
+
+        let inventory_sheet_id = self.id_counter + 1;
+        let inventory_sheet_rc =
+            self.create_widget::<WidgetPanel>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut inventory_sheet = inventory_sheet_rc.borrow_mut();
+            inventory_sheet.set_border(WHITE, 2.0);
+            inventory_sheet.add_anchor(AnchorKind::Top, inventory_tab_id, AnchorKind::Bottom);
+            inventory_sheet.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+            inventory_sheet.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+            inventory_sheet.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
+            inventory_sheet.set_visible(false);
+        }
+
+        attributes_tab
+            .borrow_mut()
+            .set_on_click(Box::new(move |ui, this, _| {
+                ui.widgets[skills_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[skills_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[abilities_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[abilities_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[equipment_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[equipment_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[inventory_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[inventory_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[attributes_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(true);
+                this.toggled = true;
+            }));
+
+        skills_tab
+            .borrow_mut()
+            .set_on_click(Box::new(move |ui, this, _| {
+                ui.widgets[attributes_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[attributes_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[abilities_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[abilities_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[equipment_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[equipment_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[inventory_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(false);
+                if let Some(btn) = ui.widgets[inventory_tab_id as usize]
+                    .borrow_mut()
+                    .as_button_mut()
+                {
+                    btn.toggled = false;
+                }
+                ui.widgets[skills_sheet_id as usize]
+                    .borrow_mut()
+                    .set_visible(true);
+                this.toggled = true;
+            }));
 
         let attr_as_parent_dyn = Rc::clone(&self.widgets[attributes_sheet_id as usize]);
 
@@ -923,49 +1122,39 @@ impl Ui {
             self.int_area_button_id = int_area_button.get_id();
         }
         self.int_value_bound_ids.push(int_value_id);
-        // let dex_title = self.create_widget::<WidgetText>(
-        //     Some(Rc::downgrade(&attr_as_parent_dyn))
-        // );
-        // {
-        //     let mut lbl = dex_title.borrow_mut();
-        //     lbl.set_text(&"DEX".to_string());
-        //     lbl.add_anchor_to_parent(AnchorKind::VerticalCenter, AnchorKind::VerticalCenter);
-        //     lbl.add_anchor_to_parent(AnchorKind::HorizontalCenter, AnchorKind::HorizontalCenter);
-        // }
 
-        // let spells_learn = self.create_widget::<WidgetText>(
-        //     Some(Rc::downgrade(&parent_dyn))
-        // );
-        // {
-        //     let mut lbl = spells_learn.borrow_mut();
-        //     lbl.set_text(&"Learn New Spell (S)".to_string());
-        //     lbl.set_margin_top(30.0);
-        //     lbl.add_anchor(AnchorKind::Top, spell_title_id, AnchorKind::Top);
-        //     lbl.add_anchor(AnchorKind::Left, spell_title_id, AnchorKind::Left);
-        // }
+        let skills_as_parent_dyn = Rc::clone(&self.widgets[skills_sheet_id as usize]);
 
-        // let skills_title_id = self.id_counter;
-        // let skills_title = self.create_widget::<WidgetText>(
-        //     Some(Rc::downgrade(&parent_dyn))
-        // );
-        // {
-        //     let mut lbl = skills_title.borrow_mut();
-        //     lbl.set_text(&"Skills".to_string());
-        //     lbl.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
-        //     lbl.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
-        //     lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::HorizontalCenter);
-        // }
-
-        // let skills_learn = self.create_widget::<WidgetText>(
-        //     Some(Rc::downgrade(&parent_dyn))
-        // );
-        // {
-        //     let mut lbl = skills_learn.borrow_mut();
-        //     lbl.set_text(&"Learn New Skill (K)".to_string());
-        //     lbl.set_margin_top(30.0);
-        //     lbl.add_anchor(AnchorKind::Top, skills_title_id, AnchorKind::Top);
-        //     lbl.add_anchor(AnchorKind::Left, skills_title_id, AnchorKind::Left);
-        // }
+        for (index, spell_type) in spell_types.iter().enumerate() {
+            if let Some(spell_type) = spell_type {
+                let (spell_id, spell_cost) = { (spell_type.index, spell_type.cost) };
+                self.create_skill_button(
+                    UiEvent::SkillPurchase(spell_id as u8),
+                    &spell_type.name,
+                    spell_cost,
+                    &skills_as_parent_dyn,
+                    index == 0,
+                );
+                // let skill_button_id = self.id_counter + 1;
+                // let skill_button =
+                //     self.create_widget::<WidgetButton>(Some(Rc::downgrade(&skills_as_parent_dyn)));
+                // {
+                //     let mut btn = skill_button.borrow_mut();
+                //     btn.set_text(&spell_type.name);
+                //     btn.set_margin_top(10.0);
+                //     if index == 0 {
+                //         btn.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+                //     } else {
+                //         btn.add_anchor_to_prev(AnchorKind::Top, AnchorKind::Bottom);
+                //     }
+                //     btn.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
+                //     btn.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+                //     // btn.set_on_click(Box::new(move |ui, _, _| {
+                //     //     ui.events.push_back(UiEvent::CastSpell(spell_type.id));
+                //     // }));
+                // }
+            }
+        }
     }
 
     fn create_chest_view(&mut self) {
@@ -995,20 +1184,6 @@ impl Ui {
             lbl.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
     }
-
-    // pub fn set_on_click_attr_button(&mut self, attr: &str, callback: Box<dyn FnMut(&mut Ui, PointF)>) {
-    //     let button_id = match attr {
-    //         "str" => self.str_area_button_id,
-    //         "dex" => self.dex_area_button_id,
-    //         "int" => self.int_area_button_id,
-    //         _ => return, // Invalid attribute
-    //     };
-
-    //     if let Some(button) = self.widgets.get(button_id as usize) {
-    //         let mut button_ref = button.borrow_mut();
-    //         button_ref.set_on_click(callback);
-    //     }
-    // }
 
     pub fn draw(&mut self) {
         let ui_ref = self as &Ui;

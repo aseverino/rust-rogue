@@ -1,5 +1,5 @@
 [package]
-name = "rustrogue"
+name = "rust-rogue"
 version = "0.0.1"
 authors = ["Alexandre Severino <alexandre.a.severino@gmail.com>"]
 edition = "2024"

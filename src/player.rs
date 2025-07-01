@@ -181,6 +181,9 @@ impl Creature for Player {
 
     fn draw(&self, material: &mut Material, offset: PointF) {
         if let Some(sprite_arc) = &self.sprite {
+            let time = get_time();
+            let frame = ((time * 3.0) as usize) % 2; // 3 fps
+
             let sprite = sprite_arc.read().unwrap();
             let sprite_size = Vec2::new(32.0, 32.0);
             graphics::graphics_manager::set_color_replacement_uniforms(
@@ -193,7 +196,7 @@ impl Creature for Player {
                 dest_size: Some(sprite_size),
                 source: Some(Rect {
                     x: 0.0,
-                    y: 0.0,
+                    y: frame as f32 * 16.0,
                     w: 16.0,
                     h: 16.0,
                 }),

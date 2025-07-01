@@ -207,7 +207,7 @@ pub(crate) fn do_spell_combat(
     };
 
     let map = map_ref.0.borrow_mut();
-    if spell_type.strategy == SpellStrategy::Aim && map.is_tile_blocking(target_pos) {
+    if spell_type.strategy == SpellStrategy::Aim && map.is_tile_blocking_by_object(target_pos) {
         println!("Target position is blocked for spell casting.");
         return;
     }

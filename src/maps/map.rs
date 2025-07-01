@@ -378,6 +378,12 @@ impl Map {
         pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT || self.generated_map.tiles[pos].is_blocking()
     }
 
+    pub fn is_tile_blocking_by_object(&self, pos: Position) -> bool {
+        pos.x >= GRID_WIDTH
+            || pos.y >= GRID_HEIGHT
+            || self.generated_map.tiles[pos].is_solid_blocking()
+    }
+
     pub fn get_chest_items(&self, position: &Position) -> Option<&Vec<u32>> {
         if position.x < GRID_WIDTH && position.y < GRID_HEIGHT {
             let tile = &self.generated_map.tiles[*position];

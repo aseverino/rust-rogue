@@ -33,6 +33,8 @@ pub enum KeyboardAction {
     Cancel,
     Confirm,
     SpellSelect,
+    AttackChooseTarget,
+    AttackConfirm,
     OpenCharacterSheet,
 }
 
@@ -104,6 +106,9 @@ impl Input {
         if is_key_pressed(KeyCode::Key1) {
             keyboard_action = KeyboardAction::SpellSelect;
             spell_action = 1;
+        }
+        if is_key_pressed(KeyCode::A) {
+            keyboard_action = KeyboardAction::AttackChooseTarget;
         }
         if is_key_pressed(KeyCode::C) {
             keyboard_action = KeyboardAction::OpenCharacterSheet;

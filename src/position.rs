@@ -56,6 +56,18 @@ impl Position {
         (dx * dx + dy * dy).sqrt().floor() as usize
     }
 
+    pub fn is_neighbor(&self, other: &Position) -> bool {
+        let dx = (self.x as isize - other.x as isize).abs();
+        let dy = (self.y as isize - other.y as isize).abs();
+        (dx <= 1 && dy <= 1) && !(dx == 0 && dy == 0)
+    }
+
+    pub fn euclidean_distance_squared(&self, other: &Position) -> f64 {
+        let dx = self.x as f64 - other.x as f64;
+        let dy = self.y as f64 - other.y as f64;
+        dx * dx + dy * dy
+    }
+
     pub fn in_range(&self, other: &Position, range: usize) -> bool {
         let dx = (self.x as isize - other.x as isize) as f64;
         let dy = (self.y as isize - other.y as isize) as f64;

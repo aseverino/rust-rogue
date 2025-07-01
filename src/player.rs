@@ -64,7 +64,7 @@ pub struct Player {
     pub position: Position,
     pub goal_position: Option<Position>,
     pub spells: Vec<PlayerSpell>,
-    pub selected_spell: Option<usize>,
+    pub selected_spell: Option<u8>,
     pub line_of_sight: HashSet<Position>,
 
     pub equipment: Equipment,

@@ -66,14 +66,21 @@ impl SpellFovCache {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum FovToShow {
+    None,
+    Attack,
+    Spell,
+}
+
 #[derive(Clone, Debug)]
 pub struct Map {
     pub generated_map: GeneratedMap,
     pub monsters: HashMap<u32, MonsterRc>,
     pub hovered_tile: Option<Position>,
     pub hovered_tile_changed: bool,
-    pub spell_fov_cache: SpellFovCache,
-    pub should_draw_spell_fov: bool,
+    pub spell_or_attack_fov_cache: SpellFovCache,
+    pub shown_fov: FovToShow,
 }
 
 impl Map {
@@ -83,8 +90,8 @@ impl Map {
             monsters: HashMap::new(),
             hovered_tile: None,
             hovered_tile_changed: false,
-            spell_fov_cache: SpellFovCache::new(),
-            should_draw_spell_fov: false,
+            spell_or_attack_fov_cache: SpellFovCache::new(),
+            shown_fov: FovToShow::None,
         };
 
         m.monsters = Self::convert_monsters(m.generated_map.monsters.clone());
@@ -183,30 +190,45 @@ impl Map {
         player.line_of_sight = visible;
     }
 
-    fn update_spell_fov_cache(&mut self, player: &mut Player) {
-        self.should_draw_spell_fov = false;
+    fn update_fov_caches(&mut self, player: &mut Player) {
+        self.shown_fov = FovToShow::None;
+
         let mut spell_fov_needs_update = false;
         if let Some(selected_spell) = player.selected_spell {
-            if let Some(player_spell) = player.spells.get(selected_spell) {
+            if selected_spell == u8::MAX {
+                if let Some(weapon) = player.equipment.weapon.as_ref() {
+                    if weapon.range.unwrap_or(1u32) != self.spell_or_attack_fov_cache.radius {
+                        spell_fov_needs_update = true;
+                    } else {
+                        if self.spell_or_attack_fov_cache.radius != 1 {
+                            spell_fov_needs_update = true;
+                        }
+                    }
+                } else if self.spell_or_attack_fov_cache.radius != 1 {
+                    spell_fov_needs_update = true;
+                }
+                self.shown_fov = FovToShow::Attack;
+            } else if let Some(player_spell) = player.spells.get(selected_spell as usize) {
                 if player_spell.spell_type.strategy == crate::spell_type::SpellStrategy::Aim {
                     if let Some(hovered) = self.hovered_tile {
                         let spell_type = &player_spell.spell_type;
-                        let radius = self.spell_fov_cache.radius;
+                        let radius = self.spell_or_attack_fov_cache.radius;
                         if spell_type.area_radius != Some(radius) {
                             spell_fov_needs_update = true;
-                        } else if hovered != self.spell_fov_cache.origin {
+                        } else if hovered != self.spell_or_attack_fov_cache.origin {
                             spell_fov_needs_update = true;
                         }
-                        self.should_draw_spell_fov = true;
+                        self.shown_fov = FovToShow::Spell;
                     }
                 } else {
-                    self.should_draw_spell_fov = true;
-                    self.spell_fov_cache.origin = player.pos();
-                    self.spell_fov_cache.radius = player_spell.spell_type.area_radius.unwrap_or(0);
-                    self.spell_fov_cache.area = Navigator::compute_fov(
+                    self.shown_fov = FovToShow::Spell;
+                    self.spell_or_attack_fov_cache.origin = player.pos();
+                    self.spell_or_attack_fov_cache.radius =
+                        player_spell.spell_type.area_radius.unwrap_or(0);
+                    self.spell_or_attack_fov_cache.area = Navigator::compute_fov(
                         &self.generated_map.tiles,
-                        self.spell_fov_cache.origin,
-                        self.spell_fov_cache.radius as usize,
+                        self.spell_or_attack_fov_cache.origin,
+                        self.spell_or_attack_fov_cache.radius as usize,
                     );
                     return;
                 }
@@ -214,16 +236,34 @@ impl Map {
         }
 
         if spell_fov_needs_update {
-            self.spell_fov_cache.radius = player.spells[player.selected_spell.unwrap()]
-                .spell_type
-                .area_radius
-                .unwrap_or(0);
-            self.spell_fov_cache.origin = self.hovered_tile.unwrap_or(POSITION_INVALID);
-            self.spell_fov_cache.area = Navigator::compute_fov(
-                &self.generated_map.tiles,
-                self.spell_fov_cache.origin,
-                self.spell_fov_cache.radius as usize,
-            );
+            if player.selected_spell.unwrap() == u8::MAX {
+                self.spell_or_attack_fov_cache.radius = player
+                    .equipment
+                    .weapon
+                    .as_ref()
+                    .and_then(|w| w.range)
+                    .unwrap_or(1);
+                self.spell_or_attack_fov_cache.origin = player.pos();
+                self.spell_or_attack_fov_cache.area = Navigator::compute_fov(
+                    &self.generated_map.tiles,
+                    self.spell_or_attack_fov_cache.origin,
+                    self.spell_or_attack_fov_cache.radius as usize,
+                );
+            } else {
+                self.spell_or_attack_fov_cache.radius = player.spells
+                    [player.selected_spell.unwrap() as usize]
+                    .spell_type
+                    .area_radius
+                    .unwrap_or(0);
+                self.spell_or_attack_fov_cache.origin =
+                    self.hovered_tile.unwrap_or(POSITION_INVALID);
+                self.spell_or_attack_fov_cache.area = Navigator::compute_fov(
+                    &self.generated_map.tiles,
+                    self.spell_or_attack_fov_cache.origin,
+                    self.spell_or_attack_fov_cache.radius as usize,
+                );
+            }
+        } else {
         }
     }
 
@@ -233,17 +273,38 @@ impl Map {
         player: &mut Player,
         offset: PointF,
     ) {
-        self.update_spell_fov_cache(player);
+        self.update_fov_caches(player);
 
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
                 let tile = &self.generated_map.tiles[Position::new(x, y)];
                 tile.draw(Position::new(x, y), offset, !self.monsters.is_empty());
 
-                if self.should_draw_spell_fov {
+                if self.shown_fov != FovToShow::None {
                     let player_pos = player.pos();
                     let tile_pos = Position { x, y };
-                    if let Some(spell) = player.spells.get(player.selected_spell.unwrap()) {
+                    if player.selected_spell.unwrap() == u8::MAX
+                        && self.spell_or_attack_fov_cache.radius > 0
+                        && (player_pos
+                            .in_range(&tile_pos, self.spell_or_attack_fov_cache.radius as usize)
+                            || player_pos.is_neighbor(&tile_pos))
+                        && player.line_of_sight.contains(&tile_pos)
+                    {
+                        draw_rectangle(
+                            offset.x + x as f32 * TILE_SIZE,
+                            offset.y + y as f32 * TILE_SIZE,
+                            TILE_SIZE - 1.0,
+                            TILE_SIZE - 1.0,
+                            Color {
+                                r: 1.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 0.2,
+                            },
+                        );
+                    } else if let Some(spell) =
+                        player.spells.get(player.selected_spell.unwrap() as usize)
+                    {
                         if spell.spell_type.strategy == SpellStrategy::Fixed {
                             if tile_pos == player_pos {
                                 continue;
@@ -267,37 +328,27 @@ impl Map {
                                 },
                             );
                         }
-                    }
 
-                    if self.spell_fov_cache.area.contains(&Position { x, y }) {
-                        draw_rectangle(
-                            offset.x + x as f32 * TILE_SIZE,
-                            offset.y + y as f32 * TILE_SIZE,
-                            TILE_SIZE - 1.0,
-                            TILE_SIZE - 1.0,
-                            Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 1.0,
-                                a: 0.5,
-                            },
-                        );
+                        if self
+                            .spell_or_attack_fov_cache
+                            .area
+                            .contains(&Position { x, y })
+                        {
+                            draw_rectangle(
+                                offset.x + x as f32 * TILE_SIZE,
+                                offset.y + y as f32 * TILE_SIZE,
+                                TILE_SIZE - 1.0,
+                                TILE_SIZE - 1.0,
+                                Color {
+                                    r: 0.0,
+                                    g: 0.0,
+                                    b: 1.0,
+                                    a: 0.5,
+                                },
+                            );
+                        }
                     }
                 }
-
-                // if self.player.selected_spell.is_some() {
-                //     self.in_spell_area(Position { x, y });
-                //     if let Some(pos) = self.hovered {
-                //         draw_rectangle_lines(
-                //             offset.0 + x as f32 * TILE_SIZE,
-                //             offset.1 + y as f32 * TILE_SIZE,
-                //             TILE_SIZE,
-                //             TILE_SIZE,
-                //             2.0,
-                //             YELLOW,
-                //         );
-                //     }
-                // }
             }
         }
 

@@ -217,7 +217,7 @@ pub(crate) fn do_spell_combat(
     let mut target_positions: Vec<Position> = Vec::new();
     let mut target_creatures: Vec<u32> = Vec::new();
 
-    map.spell_fov_cache.area.iter().for_each(|&pos| {
+    map.spell_or_attack_fov_cache.area.iter().for_each(|&pos| {
         if pos == attacker_pos && spell_type.strategy == SpellStrategy::Fixed {
             return;
         }

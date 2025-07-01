@@ -64,6 +64,8 @@ pub enum PlayerEvent {
     MeleeAttack,
     SpellSelect,
     SpellCast,
+    AttackChooseTarget,
+    AttackConfirm,
     OpenChest,
     Death,
     ReachBorder,
@@ -841,54 +843,89 @@ pub fn update(
         let spell_index = { game.player.borrow().selected_spell };
 
         if let Some(index) = spell_index {
-            let mut should_cast = false;
-            {
-                let mut player = game.player.borrow_mut();
-
-                let (in_line_of_sight, spell_range) = {
-                    let in_line_of_sight = player.line_of_sight.contains(&player_goal);
-                    let spell_range = player
-                        .spells
-                        .get(index)
-                        .expect("Selected spell index out of bounds")
-                        .spell_type
-                        .range;
-                    (in_line_of_sight, spell_range)
+            if index == u8::MAX {
+                game.last_player_event = PlayerEvent::AttackChooseTarget;
+                let can_attack = {
+                    let weapon = { game.player.borrow().equipment.weapon.clone() };
+                    let range = {
+                        if let Some(weapon) = weapon {
+                            weapon.range.unwrap_or(1)
+                        } else {
+                            1 // Default range if no weapon
+                        }
+                    };
+                    map_ref.0.borrow().is_tile_enemy_occupied(player_goal)
+                        && (player_pos.euclidean_distance_squared(&player_goal)
+                            <= (range * range) as f64
+                            || player_pos.is_neighbor(&player_goal))
+                        && game
+                            .player
+                            .borrow_mut()
+                            .line_of_sight
+                            .contains(&player_goal)
                 };
 
-                if in_line_of_sight
-                    && (spell_range.is_none()
-                        || player_pos.in_range(&player_goal, spell_range.unwrap() as usize))
+                if can_attack {
+                    combat::do_melee_combat(
+                        &mut game.player,
+                        map_ref,
+                        player_pos,
+                        player_goal,
+                        &game.lua_interface,
+                    );
+                    update_turn = true;
+                    game.last_player_event = PlayerEvent::AttackConfirm;
+                }
+            } else {
+                let mut should_cast = false;
                 {
-                    if let Some(spell) = player.spells.get_mut(index) {
-                        let mp_cost = spell.spell_type.mp_cost;
-                        if player.mp > mp_cost {
-                            player.mp -= mp_cost;
-                            println!("Casting spell");
-                            should_cast = true;
-                        } else {
-                            println!("Not enough mp for this spell!");
+                    let mut player = game.player.borrow_mut();
+
+                    let (in_line_of_sight, spell_range) = {
+                        let in_line_of_sight = player.line_of_sight.contains(&player_goal);
+                        let spell_range = player
+                            .spells
+                            .get(index as usize)
+                            .expect("Selected spell index out of bounds")
+                            .spell_type
+                            .range;
+                        (in_line_of_sight, spell_range)
+                    };
+
+                    if in_line_of_sight
+                        && (spell_range.is_none()
+                            || player_pos.in_range(&player_goal, spell_range.unwrap() as usize))
+                    {
+                        if let Some(spell) = player.spells.get_mut(index as usize) {
+                            let mp_cost = spell.spell_type.mp_cost;
+                            if player.mp > mp_cost {
+                                player.mp -= mp_cost;
+                                println!("Casting spell");
+                                should_cast = true;
+                            } else {
+                                println!("Not enough mp for this spell!");
+                            }
                         }
                     }
                 }
-            }
 
-            if should_cast {
-                combat::do_spell_combat(
-                    &mut game.player,
-                    map_ref,
-                    player_pos,
-                    player_goal,
-                    index,
-                    &game.lua_interface,
-                );
-                update_turn = true;
+                if should_cast {
+                    combat::do_spell_combat(
+                        &mut game.player,
+                        map_ref,
+                        player_pos,
+                        player_goal,
+                        index as usize,
+                        &game.lua_interface,
+                    );
+                    update_turn = true;
+                }
+                game.last_player_event = PlayerEvent::SpellCast;
             }
 
             let mut player = game.player.borrow_mut();
             player.selected_spell = None;
             player.goal_position = None; // Clear goal position
-            game.last_player_event = PlayerEvent::SpellCast;
         } else {
             let attack = {
                 let player = game.player.borrow();
@@ -896,7 +933,9 @@ pub fn update(
                     let range = weapon.range.unwrap_or(1);
                     let map = map_ref.0.borrow();
                     if map.is_tile_enemy_occupied(player_goal) {
-                        player_pos.distance_to(&player_goal) <= (range as usize)
+                        (player_pos.euclidean_distance_squared(&player_goal)
+                            <= (range * range) as f64
+                            || player_pos.is_neighbor(&player_goal))
                             && player.line_of_sight.contains(&player_goal)
                     } else {
                         false
@@ -935,6 +974,9 @@ pub fn update(
                 }
             }
         }
+    } else if player_action == KeyboardAction::AttackChooseTarget {
+        game.last_player_event = PlayerEvent::AttackChooseTarget;
+        game.player.borrow_mut().selected_spell = Some(u8::MAX);
     } else if player_action == KeyboardAction::SpellSelect && spell_action > 0 {
         let index = spell_action as usize - 1;
         let mut player = game.player.borrow_mut();
@@ -946,7 +988,7 @@ pub fn update(
                 .map(|spell| spell.spell_type.name.clone())
         };
         if let Some(name) = spell_name {
-            player.selected_spell = Some(index);
+            player.selected_spell = Some(index as u8);
             println!("Spell selected: {}", name);
         } else {
             println!("No spell selected!");

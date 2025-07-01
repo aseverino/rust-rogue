@@ -501,7 +501,7 @@ pub async fn run() {
     let mut map_update = MapTravelEvent::None;
     let mut last_map_travel_kind = MapTravelKind::BorderCross;
     let mut ui = Ui::new(get_spell_types());
-    ui.add_player_skills(&game.player.borrow().spells[0]);
+    //ui.add_player_skills(&game.player.borrow().spells[0]);
 
     let mut graphics_manager = GraphicsManager::new();
 
@@ -650,6 +650,23 @@ pub async fn run() {
                         player.intelligence += 1;
                         player.sp -= 1;
                     }
+                }
+                UiEvent::SkillPurchase(skill) => {
+                    get_spell_types()
+                        .get(skill as usize)
+                        .and_then(|spell_opt| spell_opt.clone())
+                        .map(|spell| {
+                            if player.sp >= spell.cost {
+                                let player_spell = PlayerSpell {
+                                    spell_type: spell.clone(),
+                                };
+                                ui.add_player_skills(&player_spell);
+                                player.spells.push(player_spell);
+                                player.sp -= spell.cost;
+                            } else {
+                                println!("Not enough SP to purchase this skill.");
+                            }
+                        });
                 }
                 UiEvent::ChestAction(item_id) => {
                     let items_borrow = game.items.read().unwrap();

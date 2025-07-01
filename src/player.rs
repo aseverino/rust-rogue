@@ -77,12 +77,12 @@ pub type PlayerRc = Rc<RefCell<Player>>;
 
 impl Player {
     pub async fn new(pos: Position) -> Self {
-        let first_spell = spell_type::get_spell_types()[2].clone();
-        let mut spells: Vec<PlayerSpell> = Vec::new();
+        // let first_spell = spell_type::get_spell_types()[2].clone();
+        // let mut spells: Vec<PlayerSpell> = Vec::new();
 
-        if let Some(spell) = first_spell {
-            spells = vec![PlayerSpell { spell_type: spell }];
-        }
+        // if let Some(spell) = first_spell {
+        //     spells = vec![PlayerSpell { spell_type: spell }];
+        // }
 
         let mut p = Self {
             hp: 100,
@@ -96,7 +96,7 @@ impl Player {
             accumulated_speed: 0,
             position: pos,
             goal_position: None,
-            spells: spells,
+            spells: vec![],
             selected_spell: None,
             line_of_sight: HashSet::new(),
             equipment: Equipment {

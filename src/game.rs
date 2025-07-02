@@ -987,7 +987,7 @@ pub fn update(
                         &spell_type,
                         &game.lua_interface,
                     );
-                    game.animate_for = 0.25;
+                    game.animate_for = 0.2;
 
                     if let Some(sprite) = &spell_type.sprite {
                         for pos in positions {

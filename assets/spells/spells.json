@@ -8,7 +8,8 @@
     "mp_cost": 1,
     "range": 12,
     "basepower": 11,
-    "cost": 1
+    "cost": 1,
+    "sprite_path": "magic_missile"
   },
   {
     "index": 1,

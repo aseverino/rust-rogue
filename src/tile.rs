@@ -577,7 +577,7 @@ impl Tile {
 
         if let Some(effect) = animating_effect {
             let texture = effect.read().unwrap();
-            let frame = ((0.25 - animate_for) * 12.0).floor() as usize;
+            let frame = ((0.2 - animate_for) * 20.0).floor() as usize;
             let draw_params = DrawTextureParams {
                 dest_size: Some(Vec2::new(32.0, 32.0)),
                 source: Some(Rect {

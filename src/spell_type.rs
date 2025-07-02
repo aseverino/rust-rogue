@@ -24,9 +24,9 @@ use macroquad::prelude::*;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde_json::from_str;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+
+use crate::ui::point_f::PointF;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 pub enum SpellKind {
@@ -55,6 +55,16 @@ pub struct SpellType {
     pub range: Option<u32>, // Range in tiles
     pub basepower: u32,     // Base Power of the spell
     pub cost: u32,          // Cost to buy
+    #[serde(default)]
+    pub sprite_path: String,
+    #[serde(skip)]
+    pub sprite: Option<Arc<RwLock<Texture2D>>>,
+}
+
+impl SpellType {
+    fn draw(&self, offset: PointF) {
+        if let Some(sprite_arc) = &self.sprite {}
+    }
 }
 
 pub async fn load_spell_types() -> Vec<Option<Arc<SpellType>>> {
@@ -68,7 +78,20 @@ pub async fn load_spell_types() -> Vec<Option<Arc<SpellType>>> {
     let mut spell_vec: Vec<Option<Arc<SpellType>>> = vec![None; (max_index + 1) as usize];
 
     // Insert spells at their index positions
-    for spell in list {
+    for mut spell in list {
+        if !spell.sprite_path.is_empty() {
+            let sprite_path = format!("assets/sprites/effects/{}.png", spell.sprite_path);
+            match macroquad::texture::load_texture(&sprite_path).await {
+                Ok(texture) => {
+                    texture.set_filter(FilterMode::Nearest);
+                    spell.sprite = Some(Arc::new(RwLock::new(texture)));
+                }
+                Err(e) => {
+                    eprintln!("Failed to load texture from {}: {}", sprite_path, e);
+                }
+            };
+        }
+
         let index = spell.index as usize;
         spell_vec[index] = Some(Arc::new(spell));
     }

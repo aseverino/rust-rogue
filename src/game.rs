@@ -37,7 +37,7 @@ use crate::monster_kind::MonsterKind;
 use crate::player::{self, Player, PlayerRc};
 use crate::player_spell::PlayerSpell;
 use crate::position::{Direction, Position};
-use crate::spell_type::get_spell_types;
+use crate::spell_type::{SpellKind, get_spell_types};
 use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
 use crate::ui::manager::{Ui, UiEvent};
 use crate::ui::point_f::PointF;
@@ -50,6 +50,7 @@ use macroquad::time::get_time;
 
 use std::cell::{RefCell, RefMut};
 use std::cmp::max;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -81,6 +82,8 @@ pub struct GameState {
     pub items: ItemsArc,
     pub lua_interface: LuaInterfaceRc,
     pub last_player_event: PlayerEvent,
+    pub animate_for: f32,
+    pub animating_effects: HashMap<Position, Arc<RwLock<Texture2D>>>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -120,7 +123,13 @@ fn draw(
 
     let mut player = game.player.borrow_mut();
     if !ui.is_focused {
-        map.draw(graphics_manager, &mut player, game_interface_offset);
+        map.draw(
+            graphics_manager,
+            &mut player,
+            game_interface_offset,
+            &game.animating_effects,
+            game.animate_for,
+        );
     }
 
     ui.update_geometry(SizeF::new(screen_width(), screen_height()));
@@ -468,6 +477,8 @@ pub async fn run() {
         lua_interface: lua_interface,
         last_player_event: PlayerEvent::None,
         turn: 1,
+        animating_effects: HashMap::new(),
+        animate_for: 0.0,
     };
 
     game.items
@@ -606,8 +617,37 @@ pub async fn run() {
         .on_map_peeked(&current_map_rc);
 
     let _ = LuaInterface::register_api(&game.lua_interface);
+    let mut just_update_turn = false;
 
     loop {
+        if game.animate_for > 0.0 {
+            game.animate_for -= get_frame_time();
+            if game.animate_for <= 0.0 {
+                game.animate_for = 0.0;
+                just_update_turn = true;
+            }
+            let mut map = current_map_rc.0.borrow_mut();
+            draw(
+                &mut graphics_manager,
+                &mut game,
+                &mut ui,
+                &mut map,
+                game_interface_offset,
+            );
+
+            next_frame().await;
+            continue;
+        }
+        game.animating_effects.clear();
+
+        if just_update_turn {
+            just_update_turn = false;
+            game.last_player_event = PlayerEvent::None;
+            update_turn(&mut game, &mut current_map_rc);
+            //next_frame().await;
+            continue;
+        }
+
         {
             let mut map = current_map_rc.0.borrow_mut();
             for monster_ref in map.monsters.values_mut() {
@@ -857,7 +897,7 @@ pub fn update(
     let player_pos = { game.player.borrow().position };
 
     let mut new_player_pos: Option<Position> = None;
-    let mut update_turn = false;
+    let mut should_update_turn = false;
 
     if let Some(player_goal) = player_goal_position {
         let spell_index = { game.player.borrow().selected_spell };
@@ -893,7 +933,7 @@ pub fn update(
                         player_goal,
                         &game.lua_interface,
                     );
-                    update_turn = true;
+                    should_update_turn = true;
                     game.last_player_event = PlayerEvent::AttackConfirm;
                 }
             } else {
@@ -930,17 +970,37 @@ pub fn update(
                 }
 
                 if should_cast {
-                    combat::do_spell_combat(
+                    let spell_type = {
+                        let mut player_ref = game.player.borrow_mut();
+                        player_ref
+                            .spells
+                            .get_mut(index as usize)
+                            .expect("Selected spell index out of bounds")
+                            .spell_type
+                            .clone()
+                    };
+                    let positions = combat::do_spell_combat(
                         &mut game.player,
                         map_ref,
                         player_pos,
                         player_goal,
-                        index as usize,
+                        &spell_type,
                         &game.lua_interface,
                     );
-                    update_turn = true;
+                    game.animate_for = 0.25;
+
+                    if let Some(sprite) = &spell_type.sprite {
+                        for pos in positions {
+                            game.animating_effects.insert(pos, sprite.clone());
+                        }
+                    }
+
+                    game.last_player_event = PlayerEvent::SpellCast;
+                    let mut player = game.player.borrow_mut();
+                    player.selected_spell = None;
+                    player.goal_position = None;
+                    return;
                 }
-                game.last_player_event = PlayerEvent::SpellCast;
             }
 
             let mut player = game.player.borrow_mut();
@@ -966,7 +1026,7 @@ pub fn update(
             };
 
             if attack {
-                update_turn = true; // Update monsters if player attacks
+                should_update_turn = true; // Update monsters if player attacks
                 combat::do_melee_combat(
                     &mut game.player,
                     map_ref,
@@ -1043,7 +1103,7 @@ pub fn update(
             let map = map_ref.0.borrow();
             if map.is_tile_enemy_occupied(pos) {
                 game.last_player_event = PlayerEvent::MeleeAttack;
-                update_turn = true; // Update monsters if player attacks
+                should_update_turn = true; // Update monsters if player attacks
                 drop(map);
                 combat::do_melee_combat(
                     &mut game.player,
@@ -1057,7 +1117,7 @@ pub fn update(
             } else {
                 if map.is_tile_walkable(pos) {
                     new_player_pos = Some(pos);
-                    update_turn = true; // Update monsters if player moves
+                    should_update_turn = true; // Update monsters if player moves
                 }
 
                 game.last_player_event = PlayerEvent::Move;
@@ -1085,7 +1145,7 @@ pub fn update(
         }
 
         map.compute_player_fov(&mut player, max(GRID_WIDTH, GRID_HEIGHT));
-        update_turn = true;
+        should_update_turn = true;
 
         let mut to_remove: Vec<usize> = Vec::new();
 
@@ -1122,116 +1182,116 @@ pub fn update(
         }
     }
 
-    if update_turn {
-        let mut player = game.player.borrow_mut();
-        if player.accumulated_speed >= 200 {
-            player.accumulated_speed -= 100;
-            return;
-        }
-        let mut player_accumulated_speed = player.accumulated_speed;
-        let player_speed = player.get_speed();
-        let player_pos = player.position.clone();
-        drop(player);
+    if should_update_turn {
+        update_turn(game, map_ref);
+    }
+}
 
-        while player_accumulated_speed < 100 {
-            let map = map_ref.0.borrow_mut();
-            let mut monsters = map.monsters.clone(); // Clone the monsters to avoid borrowing conflicts
-            drop(map);
+pub fn update_turn(game: &mut GameState, map_ref: &MapRc) {
+    let mut player = game.player.borrow_mut();
+    if player.accumulated_speed >= 200 {
+        player.accumulated_speed -= 100;
+        return;
+    }
+    let mut player_accumulated_speed = player.accumulated_speed;
+    let player_speed = player.get_speed();
+    let player_pos = player.position.clone();
+    drop(player);
 
-            let mut update_monsters_again = true;
-            let mut update_iteration = 0;
+    while player_accumulated_speed < 100 {
+        let map = map_ref.0.borrow_mut();
+        let mut monsters = map.monsters.clone(); // Clone the monsters to avoid borrowing conflicts
+        drop(map);
 
-            while update_monsters_again {
-                update_monsters_again = false;
-                for (id, monster_ref) in &mut monsters {
-                    let monster = monster_ref.borrow_mut();
-                    if monster.hp <= 0 {
-                        continue; // Skip dead monsters
-                    }
+        let mut update_monsters_again = true;
+        let mut update_iteration = 0;
 
-                    if monster.kind.is_scripted() {
-                        drop(monster);
-                        let mut clone = monster_ref.clone();
-                        let r = game
-                            .lua_interface
-                            .borrow_mut()
-                            .on_update(&mut clone, update_iteration);
-                        if let Err(e) = r {
-                            eprintln!("Error calling Lua on_update: {}", e);
-                        } else {
-                            if r.unwrap() {
-                                // If the Lua script returned true, we skip the rest of the update for this monster
-                                // The update has already been handled in Lua
-                                continue;
-                            }
-                        }
-                        drop(clone);
+        while update_monsters_again {
+            update_monsters_again = false;
+            for (id, monster_ref) in &mut monsters {
+                let monster = monster_ref.borrow_mut();
+                if monster.hp <= 0 {
+                    continue; // Skip dead monsters
+                }
+
+                if monster.kind.is_scripted() {
+                    drop(monster);
+                    let mut clone = monster_ref.clone();
+                    let r = game
+                        .lua_interface
+                        .borrow_mut()
+                        .on_update(&mut clone, update_iteration);
+                    if let Err(e) = r {
+                        eprintln!("Error calling Lua on_update: {}", e);
                     } else {
-                        drop(monster); // Just drop the immutable borrow
+                        if r.unwrap() {
+                            // If the Lua script returned true, we skip the rest of the update for this monster
+                            // The update has already been handled in Lua
+                            continue;
+                        }
                     }
+                    drop(clone);
+                } else {
+                    drop(monster); // Just drop the immutable borrow
+                }
 
-                    let mut monster = monster_ref.borrow_mut();
-                    let mut monster_speed = monster.kind.speed + monster.accumulated_speed;
+                let mut monster = monster_ref.borrow_mut();
+                let mut monster_speed = monster.kind.speed + monster.accumulated_speed;
 
-                    if monster_speed >= 100 {
-                        monster_speed -= 100;
+                if monster_speed >= 100 {
+                    monster_speed -= 100;
 
-                        let monster_pos = monster.pos();
-                        let path = find_monster_path(
-                            map_ref,
-                            monster_pos,
-                            player_pos,
-                            monster.kind.flying,
-                        );
+                    let monster_pos = monster.pos();
+                    let path =
+                        find_monster_path(map_ref, monster_pos, player_pos, monster.kind.flying);
 
-                        if let Some(path) = path {
-                            if path.len() > 1 {
-                                let next_step = path[1];
+                    if let Some(path) = path {
+                        if path.len() > 1 {
+                            let next_step = path[1];
 
-                                if next_step == player_pos {
-                                    println!(
-                                        "Monster {} hit player for {} damage!",
-                                        monster.name(),
-                                        monster.kind.melee_damage
-                                    );
-                                    {
-                                        let mut player = game.player.borrow_mut();
-                                        player.add_health(-monster.kind.melee_damage);
-                                        if player.hp <= 0 {
-                                            println!("Player has been defeated!");
-                                            game.last_player_event = PlayerEvent::Death;
-                                            return;
-                                        }
+                            if next_step == player_pos {
+                                println!(
+                                    "Monster {} hit player for {} damage!",
+                                    monster.name(),
+                                    monster.kind.melee_damage
+                                );
+                                {
+                                    let mut player = game.player.borrow_mut();
+                                    player.add_health(-monster.kind.melee_damage);
+                                    if player.hp <= 0 {
+                                        println!("Player has been defeated!");
+                                        game.last_player_event = PlayerEvent::Death;
+                                        return;
                                     }
-
-                                    continue;
                                 }
 
-                                //monster_moves.push((monster_pos, next_step, *id as usize));
-                                monster.set_pos(next_step);
-
-                                let mut map = map_ref.0.borrow_mut();
-                                map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
-                                map.generated_map.tiles[next_step].creature = *id;
+                                continue;
                             }
+
+                            //monster_moves.push((monster_pos, next_step, *id as usize));
+                            monster.set_pos(next_step);
+
+                            let mut map = map_ref.0.borrow_mut();
+                            map.generated_map.tiles[monster_pos].creature = NO_CREATURE;
+                            map.generated_map.tiles[next_step].creature = *id;
                         }
                     }
-
-                    monster.accumulated_speed = monster_speed as u32;
-
-                    if monster_speed >= 100 {
-                        update_monsters_again = true;
-                    }
                 }
-                update_iteration += 1;
-            }
 
-            game.turn += 1;
-            player_accumulated_speed += player_speed;
+                monster.accumulated_speed = monster_speed as u32;
+
+                if monster_speed >= 100 {
+                    update_monsters_again = true;
+                }
+            }
+            update_iteration += 1;
         }
-        player_accumulated_speed -= 100;
-        game.player.borrow_mut().accumulated_speed = player_accumulated_speed;
+
+        game.turn += 1;
+        player_accumulated_speed += player_speed;
     }
+    player_accumulated_speed -= 100;
+    game.player.borrow_mut().accumulated_speed = player_accumulated_speed;
 }
 
 fn find_monster_path(

@@ -31,7 +31,7 @@ use crate::{
     monster::Monster,
     player::{Player, PlayerRc},
     position::Position,
-    spell_type::SpellStrategy,
+    spell_type::{SpellStrategy, SpellType},
     tile::{NO_CREATURE, PLAYER_CREATURE_ID},
 };
 
@@ -193,23 +193,13 @@ pub(crate) fn do_spell_combat(
     map_ref: &MapRc,
     attacker_pos: Position,
     target_pos: Position,
-    spell_index: usize,
+    spell_type: &SpellType,
     lua_interface: &LuaInterfaceRc,
-) {
-    let spell_type = {
-        let mut player_ref = player.borrow_mut();
-        player_ref
-            .spells
-            .get_mut(spell_index)
-            .expect("Selected spell index out of bounds")
-            .spell_type
-            .clone()
-    };
-
+) -> Vec<Position> {
     let map = map_ref.0.borrow_mut();
     if spell_type.strategy == SpellStrategy::Aim && map.is_tile_blocking_by_object(target_pos) {
         println!("Target position is blocked for spell casting.");
-        return;
+        return Vec::new();
     }
 
     let damage = spell_type.basepower as i32;
@@ -233,17 +223,5 @@ pub(crate) fn do_spell_combat(
         do_damage(player, &map_ref, target_creature, damage, lua_interface);
     }
 
-    // let target = self.monsters.get_mut(target_creature as usize)
-    //     .expect("Target creature not found");
-    // target.hp -= damage;
-    // println!("{} takes {} damage!", target.name(), damage);
-
-    // if target.hp <= 0 {
-    //     self.tiles[target_pos].creature = NO_CREATURE; // Remove monster from tile
-    //     println!("{} has been defeated!", target.name());
-    //     // Optionally, remove the monster from the list
-    //     // self.monsters.remove(target_creature as usize);
-    // } else {
-    //     println!("{} has {} HP left.", target.name(), target.hp);
-    // }
+    target_positions
 }

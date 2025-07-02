@@ -20,7 +20,8 @@
     "mp_cost": 2,
     "range": 8,
     "basepower": 9,
-    "cost": 1
+    "cost": 1,
+    "sprite_path": "fire"
   },
   {
     "index": 2,

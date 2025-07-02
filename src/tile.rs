@@ -420,7 +420,14 @@ impl Tile {
         }
     }
 
-    pub fn draw(&self, pos: Position, offset: PointF, borders_locked: bool) {
+    pub fn draw(
+        &self,
+        pos: Position,
+        offset: PointF,
+        borders_locked: bool,
+        animating_effect: Option<&Arc<RwLock<Texture2D>>>,
+        animate_for: f32,
+    ) {
         let color = match self.kind {
             TileKind::Floor => Color {
                 r: 0.5,
@@ -568,33 +575,24 @@ impl Tile {
             }
         }
 
-        // if let Some(item) = &self.item {
-        //     match item {
-        //         ItemKind::Orb(_) => {
-        //             draw_circle(
-        //                 offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 2.0,
-        //                 offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 2.0,
-        //                 TILE_SIZE / 4.0,
-        //                 Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 },
-        //             );
-        //         }
-        //         _ => {
+        if let Some(effect) = animating_effect {
+            let texture = effect.read().unwrap();
+            let frame = ((0.25 - animate_for) * 12.0).floor() as usize;
+            let draw_params = DrawTextureParams {
+                dest_size: Some(Vec2::new(32.0, 32.0)),
+                source: Some(Rect {
+                    x: 0.0,
+                    y: frame as f32 * 16.0,
+                    w: 16.0,
+                    h: 16.0,
+                }),
+                ..Default::default()
+            };
 
-        //         }
-        //         // ItemKind::Portal(_) => {
-        //         //     draw_rectangle(
-        //         //         offset.0 + pos.x as f32 * TILE_SIZE + TILE_SIZE / 4.0,
-        //         //         offset.1 + pos.y as f32 * TILE_SIZE + TILE_SIZE / 4.0,
-        //         //         TILE_SIZE / 2.0,
-        //         //         TILE_SIZE / 2.0,
-        //         //         Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 },
-        //         //     );
-        //         // }
-        //         //ItemKind::Holdable(holdable) => {
-        //             // Assuming Holdable has a draw method
-        //             //holdable.draw(offset, pos);
-        //         //}
-        //     }
-        // }
+            let x = offset.x + pos.x as f32 * TILE_SIZE;
+            let y = offset.y + pos.y as f32 * TILE_SIZE;
+
+            draw_texture_ex(&texture, x, y, WHITE, draw_params);
+        }
     }
 }

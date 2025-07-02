@@ -48,6 +48,7 @@ use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct SpellFovCache {
@@ -272,15 +273,23 @@ impl Map {
         graphics_manager: &mut GraphicsManager,
         player: &mut Player,
         offset: PointF,
+        animating_effects: &HashMap<Position, Arc<RwLock<Texture2D>>>,
+        animate_for: f32,
     ) {
         self.update_fov_caches(player);
 
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
                 let tile = &self.generated_map.tiles[Position::new(x, y)];
-                tile.draw(Position::new(x, y), offset, !self.monsters.is_empty());
+                tile.draw(
+                    Position::new(x, y),
+                    offset,
+                    !self.monsters.is_empty(),
+                    animating_effects.get(&Position::new(x, y)),
+                    animate_for,
+                );
 
-                if self.shown_fov != FovToShow::None {
+                if self.shown_fov != FovToShow::None && animate_for == 0.0 {
                     let player_pos = player.pos();
                     let tile_pos = Position { x, y };
                     if player.selected_spell.unwrap() == u8::MAX

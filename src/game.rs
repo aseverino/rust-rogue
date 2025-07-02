@@ -291,7 +291,7 @@ fn check_for_map_update(
                     }
                 }
 
-                print_overworld(game);
+                //print_overworld(game);
                 return;
             }
         }
@@ -363,7 +363,7 @@ fn check_for_map_update(
         };
         *map_update = MapTravelEvent::None;
 
-        print_overworld(game);
+        //print_overworld(game);
     }
 }
 

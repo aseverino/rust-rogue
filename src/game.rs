@@ -38,7 +38,7 @@ use crate::player::{self, Player, PlayerRc};
 use crate::player_spell::PlayerSpell;
 use crate::position::{Direction, Position};
 use crate::spell_type::{SpellKind, get_spell_types};
-use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID};
+use crate::tile::{NO_CREATURE, PLAYER_CREATURE_ID, TileKind};
 use crate::ui::manager::{Ui, UiEvent};
 use crate::ui::point_f::PointF;
 use crate::ui::size_f::SizeF;
@@ -808,6 +808,25 @@ pub async fn run() {
             let mut map = current_map_rc.0.borrow_mut();
             map.hovered_tile_changed = map.hovered_tile != Some(current_tile);
             map.hovered_tile = Some(current_tile);
+
+            if map.hovered_tile_changed {
+                if let Some(pos) = map.hovered_tile {
+                    if pos.x >= GRID_WIDTH || pos.y >= GRID_HEIGHT {
+                        ui.update_tile_info(None);
+                        continue; // Skip if out of bounds
+                    }
+                    let tile = &map.generated_map.tiles[pos];
+                    let tile_description = match tile.kind() {
+                        TileKind::Floor => "Floor",
+                        TileKind::Wall => "Wall",
+                        TileKind::Chasm => "Chasm",
+                        _ => "Unknown Tile",
+                    };
+                    ui.update_tile_info(Some(tile_description.to_string()));
+                } else {
+                    ui.update_tile_info(None);
+                }
+            }
         }
 
         ui.update_mouse_position(global_mouse_pos);

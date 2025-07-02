@@ -81,6 +81,7 @@ pub struct Ui {
 
     left_panel_id: u32,
     right_panel_id: u32,
+    right_panel_tile_description_id: u32,
     character_sheet_id: u32,
     chest_view_id: u32,
     hp_bar_id: u32,
@@ -127,6 +128,7 @@ impl Ui {
             id_counter: 0,
             left_panel_id: u32::MAX,
             right_panel_id: u32::MAX,
+            right_panel_tile_description_id: u32::MAX,
             character_sheet_id: u32::MAX,
             chest_view_id: u32::MAX,
             hp_bar_id: u32::MAX,
@@ -178,6 +180,18 @@ impl Ui {
             widget
                 .borrow_mut()
                 .on_mouse_position_update(self, mouse_position);
+        }
+    }
+
+    pub fn update_tile_info(&mut self, tile_description: Option<String>) {
+        if let Some(w) = self
+            .widgets
+            .get(self.right_panel_tile_description_id as usize)
+        {
+            let mut text_widget_ref = w.borrow_mut();
+            if let Some(text_widget) = text_widget_ref.as_any_mut().downcast_mut::<WidgetText>() {
+                text_widget.set_text(&tile_description.unwrap_or_default());
+            }
         }
     }
 
@@ -825,6 +839,18 @@ impl Ui {
             right_panel.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
             right_panel.add_anchor_to_parent(AnchorKind::Bottom, AnchorKind::Bottom);
             right_panel.add_anchor_to_parent(AnchorKind::Right, AnchorKind::Right);
+        }
+
+        let parent_dyn = Rc::clone(&self.widgets[self.right_panel_id as usize]);
+
+        self.right_panel_tile_description_id = self.id_counter + 1;
+        let tile_description = self.create_widget::<WidgetText>(Some(Rc::downgrade(&parent_dyn)));
+        {
+            let mut text = tile_description.borrow_mut();
+            text.set_color(WHITE);
+            text.set_margin(QuadF::new(10.0, 30.0, 0.0, 0.0));
+            text.add_anchor_to_parent(AnchorKind::Top, AnchorKind::Top);
+            text.add_anchor_to_parent(AnchorKind::Left, AnchorKind::Left);
         }
     }
 

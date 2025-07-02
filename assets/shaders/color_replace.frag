@@ -29,6 +29,10 @@ uniform vec4 SourceColor1;
 uniform vec4 TargetColor1;
 uniform vec4 SourceColor2;
 uniform vec4 TargetColor2;
+uniform vec4 SourceColor3;
+uniform vec4 TargetColor3;
+uniform vec4 SourceColor4;
+uniform vec4 TargetColor4;
 
 void main() {
     vec4 tex_color = texture2D(Texture, uv);
@@ -37,6 +41,10 @@ void main() {
         gl_FragColor = vec4(TargetColor1.rgb, tex_color.a);
     } else if (distance(tex_color.rgb, SourceColor2.rgb) < 0.01) {
         gl_FragColor = vec4(TargetColor2.rgb, tex_color.a);
+    } else if (distance(tex_color.rgb, SourceColor3.rgb) < 0.01) {
+        gl_FragColor = vec4(TargetColor3.rgb, tex_color.a);
+    } else if (distance(tex_color.rgb, SourceColor4.rgb) < 0.01) {
+        gl_FragColor = vec4(TargetColor4.rgb, tex_color.a);
     } else {
         gl_FragColor = tex_color;
     }

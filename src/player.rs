@@ -190,6 +190,8 @@ impl Creature for Player {
                 material,
                 self.material_colors[0],
                 self.material_colors[1],
+                self.material_colors[1],
+                self.material_colors[1],
             );
 
             let draw_params = DrawTextureParams {

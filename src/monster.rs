@@ -100,6 +100,8 @@ impl Creature for Monster {
                 material,
                 self.kind.material_colors[0],
                 self.kind.material_colors[1],
+                self.kind.material_colors[2],
+                self.kind.material_colors[3],
             );
 
             let draw_params = DrawTextureParams {

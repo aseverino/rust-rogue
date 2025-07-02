@@ -48,6 +48,10 @@ fn setup_color_replacement_material() -> Result<Material, macroquad::Error> {
                 UniformDesc::new("TargetColor1", UniformType::Float4),
                 UniformDesc::new("SourceColor2", UniformType::Float4),
                 UniformDesc::new("TargetColor2", UniformType::Float4),
+                UniformDesc::new("SourceColor3", UniformType::Float4),
+                UniformDesc::new("TargetColor3", UniformType::Float4),
+                UniformDesc::new("SourceColor4", UniformType::Float4),
+                UniformDesc::new("TargetColor4", UniformType::Float4),
             ],
             ..Default::default()
         },
@@ -56,11 +60,21 @@ fn setup_color_replacement_material() -> Result<Material, macroquad::Error> {
     Ok(palette_material)
 }
 
-pub fn set_color_replacement_uniforms(material: &mut Material, target1: Color, target2: Color) {
+pub fn set_color_replacement_uniforms(
+    material: &mut Material,
+    target1: Color,
+    target2: Color,
+    target3: Color,
+    target4: Color,
+) {
     material.set_uniform("SourceColor1", Vec4::new(1.0, 0.0, 0.0, 1.0)); // red
     material.set_uniform("TargetColor1", target1);
     material.set_uniform("SourceColor2", Vec4::new(0.0, 1.0, 0.0, 1.0)); // green
     material.set_uniform("TargetColor2", target2);
+    material.set_uniform("SourceColor3", Vec4::new(0.0, 0.0, 1.0, 1.0)); // blue
+    material.set_uniform("TargetColor3", target3);
+    material.set_uniform("SourceColor4", Vec4::new(1.0, 1.0, 0.0, 1.0)); // yellow
+    material.set_uniform("TargetColor4", target4);
 }
 
 pub struct GraphicsManager {

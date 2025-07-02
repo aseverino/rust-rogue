@@ -107,7 +107,7 @@ pub struct MonsterKind {
     pub glyph: char,
     pub colors: Vec<[u8; 3]>,
     #[serde(skip)]
-    pub material_colors: [Color; 2],
+    pub material_colors: [Color; 4],
     pub max_hp: u32,
     pub speed: u32,
     pub melee_damage: i32,
@@ -155,9 +155,13 @@ fn to_color(rgb: &[u8; 3]) -> Color {
 impl From<MonsterKindHelper> for MonsterKind {
     fn from(helper: MonsterKindHelper) -> Self {
         let color1 = &helper.colors.get(0).copied().unwrap_or([255, 0, 0]);
+        let color2 = &helper.colors.get(1).copied().unwrap_or(*color1);
+        let color3 = &helper.colors.get(2).copied().unwrap_or(*color2);
         let material_colors = [
             to_color(color1),
-            to_color(&helper.colors.get(1).copied().unwrap_or(*color1)),
+            to_color(color2),
+            to_color(color3),
+            to_color(&helper.colors.get(3).copied().unwrap_or(*color3)),
         ];
 
         Self {

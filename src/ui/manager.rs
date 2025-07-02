@@ -184,7 +184,11 @@ impl Ui {
     pub fn handle_click(&mut self, mouse_position: PointF) {
         let widgets: Vec<_> = self.widgets.iter().cloned().collect();
         for widget in widgets {
-            widget.borrow_mut().on_click(self, mouse_position);
+            let mut widget = widget.borrow_mut();
+            if widget.is_visible() && widget.contains_point(self, mouse_position) {
+                widget.on_click(self, mouse_position);
+                return;
+            }
         }
     }
 

@@ -268,8 +268,16 @@ pub trait Widget: WidgetBasicConstructor + Any + Debug + 'static {
         // Default implementation does nothing
     }
 
-    fn on_click(&mut self, _ui: &mut Ui, _pos: PointF) {
-        // Default implementation does nothing
+    fn on_click(&mut self, ui: &mut Ui, mouse_position: PointF) {
+        for child in self.get_children() {
+            if let Some(child_rc) = child.upgrade() {
+                let mut widget = child_rc.borrow_mut();
+                if widget.is_visible() && widget.contains_point(ui, mouse_position) {
+                    widget.on_click(ui, mouse_position);
+                    return;
+                }
+            }
+        }
     }
 
     fn set_on_click(&mut self, _f: Box<dyn FnMut(&mut Ui, &mut WidgetButton, PointF)>) {
